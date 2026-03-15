@@ -1,0 +1,14 @@
+vio_to_mavros_bridge:
+  ros__parameters:
+    input_odom_topic: /ov_msckf/odomimu
+    output_odom_topic: /mavros/odometry/out
+    companion_status_topic: /mavros/companion_process/status
+
+    output_parent_frame_id: odom
+    output_child_frame_id: base_link
+
+    keep_input_stamp: true
+    status_rate_hz: 2.0
+    stale_timeout_sec: 0.5
+    termination_timeout_sec: 2.0
+    startup_boot_sec: 1.5
