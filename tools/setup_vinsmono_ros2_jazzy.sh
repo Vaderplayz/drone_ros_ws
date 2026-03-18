@@ -68,7 +68,10 @@ if [[ ! -f "$VINS_DIR/feature_tracker/launch/px4_downcam.launch.py" ]] || [[ ! -
 fi
 
 echo "[6/7] Build VINS-Mono + bridge"
+# Avoid AMENT_TRACE_SETUP_FILES unbound variable when caller has `set -u`.
+set +u
 source /opt/ros/jazzy/setup.bash
+set -u
 cd "$WS_DIR"
 colcon build --symlink-install --cmake-args -DBUILD_TESTING=OFF
 
