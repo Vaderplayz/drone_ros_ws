@@ -354,7 +354,11 @@ int main(int argc, char **argv)
 
     registerPub(n);
 
-    auto sub_imu = n->create_subscription<sensor_msgs::msg::Imu>(IMU_TOPIC, rclcpp::QoS(rclcpp::KeepLast(2000)), imu_callback);
+    // MAVROS IMU topics are commonly published as best-effort sensor data.
+    // Use best-effort here to avoid QoS incompatibility and dropped connection.
+    rclcpp::QoS imu_qos(rclcpp::KeepLast(2000));
+    imu_qos.best_effort();
+    auto sub_imu = n->create_subscription<sensor_msgs::msg::Imu>(IMU_TOPIC, imu_qos, imu_callback);
     auto sub_image = n->create_subscription<sensor_msgs::msg::PointCloud>("/feature_tracker/feature", rclcpp::QoS(rclcpp::KeepLast(2000)), feature_callback);
     auto sub_restart = n->create_subscription<std_msgs::msg::Bool>("/feature_tracker/restart", rclcpp::QoS(rclcpp::KeepLast(2000)), restart_callback);
     auto sub_relo_points = n->create_subscription<sensor_msgs::msg::PointCloud>("/pose_graph/match_points", rclcpp::QoS(rclcpp::KeepLast(2000)), relocalization_callback);
