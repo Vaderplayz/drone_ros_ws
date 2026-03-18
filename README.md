@@ -136,15 +136,43 @@ ros2 run obs_avoid mavros_trajectory_3d_node --ros-args \
   -p frame_id:=map
 ```
 
-## 6) Run: Optional VINS-Mono Integration
+## 6) Run: Full VINS-Mono System (Pi / Jazzy)
 
-### Terminal F: VINS-Mono -> PX4 bridge
+### 6.1 One-time setup
+
+Use the helper script to install dependencies, clone a ROS2 Jazzy VINS-Mono port, generate a PX4-downcam config, and build:
+
+```bash
+cd ~/drone_ros_ws_repo
+./tools/setup_vinsmono_ros2_jazzy.sh ~/drone_ros_ws
+```
+
+### 6.2 Runtime
+
+Terminal A (MAVROS):
 
 ```bash
 source /opt/ros/jazzy/setup.bash
-source ~/drone_ros_ws_repo/install/setup.bash
-ros2 launch px4_vio_bridge vinsmono_to_px4_vio.launch.py \
-  input_odom_topic:=/vins_estimator/odometry
+source ~/drone_ros_ws/install/setup.bash
+ros2 launch mavros px4.launch fcu_url:=serial:///dev/ttyACM0:115200
+```
+
+Terminal B (camera):
+
+```bash
+source /opt/ros/jazzy/setup.bash
+ros2 run v4l2_camera v4l2_camera_node --ros-args \
+  -p video_device:=/dev/video0 \
+  -p image_size:=[640,480] \
+  -p output_encoding:=rgb8
+```
+
+Terminal C (VINS-Mono + bridge full stack):
+
+```bash
+source /opt/ros/jazzy/setup.bash
+source ~/drone_ros_ws/install/setup.bash
+ros2 launch px4_vio_bridge vinsmono_full_stack.launch.py
 ```
 
 Quick checks:
@@ -155,18 +183,26 @@ ros2 topic hz /mavros/odometry/out
 ros2 topic echo --once /mavros/companion_process/status
 ```
 
+Config file used by setup:
+- `~/drone_ros_ws/src/VINS-MONO-ROS2/config_pkg/config/px4_downcam/px4_downcam_config.yaml`
+- seeded from [vinsmono_px4_downcam_template.yaml](/home/lehaitrung/drone_ros_ws_repo/src/px4_vio_bridge/config/vinsmono_px4_downcam_template.yaml)
+
 Note:
-- VINS-Mono upstream is ROS 1 (Noetic-style). On Jazzy, run it in a ROS 1 environment and bridge odometry into ROS 2, or use a ROS 2 compatible port.
+- Upstream HKUST VINS-Mono is ROS 1; this workflow targets a ROS 2 Jazzy port for direct integration.
 - `px4_vio_bridge` can ingest either:
   - `nav_msgs/Odometry` on `/vins_estimator/odometry` (preferred), or
   - `geometry_msgs/PoseStamped` via `input_pose_topic` (optional fallback).
 
 ## 7) VINS-Mono Suitability Check (Current Workflow)
 
-For your current stack (`ROS 2 Jazzy + MAVROS + camera on Pi`):
-- Bridge compatibility: **Yes** (`px4_vio_bridge` is compatible with VINS-Mono odom output).
-- Direct build of upstream VINS-Mono in Jazzy: **No** (upstream is ROS 1).
-- Practical integration path: **ROS1 VINS-Mono runtime + ROS1<->ROS2 bridge**, then feed `/vins_estimator/odometry` into `px4_vio_bridge`.
+For your current stack (`ROS 2 Jazzy + MAVROS + USB downcam on Pi`):
+- `px4_vio_bridge` compatibility: **Yes**.
+- ROS2-port VINS-Mono compatibility: **Yes**, provided the port publishes `/vins_estimator/odometry`.
+- Still required for good performance:
+  - accurate camera intrinsics,
+  - camera-IMU extrinsics,
+  - stable timestamps (low transport jitter),
+  - good floor texture and lighting for monocular tracking.
 
 ## 8) PX4 VIO Parameter Baseline
 
