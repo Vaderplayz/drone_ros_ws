@@ -44,13 +44,13 @@ init_imu_thresh: 0.2
 init_max_disparity: 8.0
 init_max_features: 60
 
-init_dyn_use: true
+init_dyn_use: false
 init_dyn_mle_opt_calib: false
 init_dyn_mle_max_iter: 50
 init_dyn_mle_max_time: 0.05
 init_dyn_mle_max_threads: 2
 init_dyn_num_pose: 6
-init_dyn_min_deg: 8.0
+init_dyn_min_deg: 10.0
 
 init_dyn_inflation_ori: 10
 init_dyn_inflation_vel: 100
