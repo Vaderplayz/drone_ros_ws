@@ -1,0 +1,80 @@
+%YAML:1.0
+# Starter config for VINS-Mono ROS2 port on PX4 + downward webcam.
+# Calibrate camera and tune IMU noise for production use.
+
+# common parameters
+imu_topic: "/mavros/imu/data_raw"
+image_topic: "/image_raw"
+output_path: "/tmp/vinsmono_output/"
+
+# camera calibration
+model_type: PINHOLE
+camera_name: px4_downcam
+image_width: 640
+image_height: 480
+
+distortion_parameters:
+  k1: 0.0
+  k2: 0.0
+  p1: 0.0
+  p2: 0.0
+
+projection_parameters:
+  fx: 395.0
+  fy: 395.0
+  cx: 320.0
+  cy: 240.0
+
+# extrinsic parameters between IMU and camera
+# 0: trust given extrinsic, 1: optimize around guess, 2: estimate online
+estimate_extrinsic: 2
+extrinsicRotation: !!opencv-matrix
+  rows: 3
+  cols: 3
+  dt: d
+  data: [1,0,0,0,1,0,0,0,1]
+extrinsicTranslation: !!opencv-matrix
+  rows: 3
+  cols: 1
+  dt: d
+  data: [0,0,0]
+
+# feature tracker
+max_cnt: 120
+min_dist: 25
+freq: 20
+F_threshold: 1.0
+show_track: 1
+equalize: 1
+fisheye: 0
+
+# optimization
+max_solver_time: 0.04
+max_num_iterations: 8
+keyframe_parallax: 10.0
+
+# imu parameters (starter values)
+acc_n: 0.08
+gyr_n: 0.004
+acc_w: 0.00004
+gyr_w: 2.0e-6
+g_norm: 9.8065
+
+# loop closure
+loop_closure: 0
+load_previous_pose_graph: 0
+fast_relocalization: 0
+pose_graph_save_path: "/tmp/vinsmono_output/pose_graph/"
+
+# camera/imu unsync
+estimate_td: 1
+td: 0.0
+
+# rolling shutter
+rolling_shutter: 1
+rolling_shutter_tr: 0.033
+
+# visualization
+save_image: 0
+visualize_imu_forward: 0
+visualize_camera_size: 0.4

@@ -16,7 +16,7 @@ Main packages under `src/`:
 - `obs_avoid`: obstacle avoidance, trajectory path publisher, mission/planner nodes
 - `rplidar_ros`: LiDAR driver
 - `odom_flatten`: odometry/TF flatten helper
-- `open_vins`: retained for reference, disabled from build (`COLCON_IGNORE`)
+- `VINS-MONO-ROS2`: monocular visual-inertial stack (camera_model, feature_tracker, vins_estimator, pose_graph, config_pkg)
 - `px4_vio_bridge`: bridges VIO odometry (e.g. VINS-Mono) to MAVROS/PX4
 - `apriltag_precision_landing`: AprilTag detection + precision landing nodes
 - `AAAAAAAAAAAAAAAAAAAAA`: reference-only package (`COLCON_IGNORE` is present)
