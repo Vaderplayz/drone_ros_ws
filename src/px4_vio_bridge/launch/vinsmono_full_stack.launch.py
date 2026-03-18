@@ -42,7 +42,12 @@ def generate_launch_description():
 
     ft_launch = _find_launch_file(
         ft_pkg,
-        ["launch/px4_downcam.launch.py", "launch/feature_tracker.launch.py", "launch/euroc.launch.py"],
+        [
+            "launch/px4_downcam.launch.py",
+            "launch/vins_feature_tracker.launch.py",
+            "launch/feature_tracker.launch.py",
+            "launch/euroc.launch.py",
+        ],
     )
     ve_launch = _find_launch_file(
         ve_pkg,

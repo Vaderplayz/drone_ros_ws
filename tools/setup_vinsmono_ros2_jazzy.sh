@@ -54,6 +54,8 @@ patch_launch() {
 
 patch_launch "$VINS_DIR/feature_tracker/launch/feature_tracker.launch.py" \
              "$VINS_DIR/feature_tracker/launch/px4_downcam.launch.py"
+patch_launch "$VINS_DIR/feature_tracker/launch/vins_feature_tracker.launch.py" \
+             "$VINS_DIR/feature_tracker/launch/px4_downcam.launch.py"
 patch_launch "$VINS_DIR/feature_tracker/launch/euroc.launch.py" \
              "$VINS_DIR/feature_tracker/launch/px4_downcam.launch.py"
 patch_launch "$VINS_DIR/vins_estimator/launch/vins_estimator.launch.py" \
