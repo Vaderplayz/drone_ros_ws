@@ -14,6 +14,7 @@ def generate_launch_description():
         [
             DeclareLaunchArgument("bridge_config", default_value=bridge_cfg),
             DeclareLaunchArgument("input_odom_topic", default_value="/vins_estimator/odometry"),
+            DeclareLaunchArgument("input_pose_topic", default_value=""),
             DeclareLaunchArgument("output_odom_topic", default_value="/mavros/odometry/out"),
             DeclareLaunchArgument("companion_status_topic", default_value="/mavros/companion_process/status"),
             Node(
@@ -25,6 +26,7 @@ def generate_launch_description():
                     LaunchConfiguration("bridge_config"),
                     {
                         "input_odom_topic": LaunchConfiguration("input_odom_topic"),
+                        "input_pose_topic": LaunchConfiguration("input_pose_topic"),
                         "output_odom_topic": LaunchConfiguration("output_odom_topic"),
                         "companion_status_topic": LaunchConfiguration("companion_status_topic"),
                     },

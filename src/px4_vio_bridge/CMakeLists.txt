@@ -7,6 +7,7 @@ endif()
 
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(geometry_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(mavros_msgs REQUIRED)
 
@@ -31,7 +32,7 @@ if(NOT COMMAND ament_target_dependencies)
 endif()
 
 add_executable(vio_to_mavros_bridge_node src/vio_to_mavros_bridge_node.cpp)
-ament_target_dependencies(vio_to_mavros_bridge_node rclcpp nav_msgs mavros_msgs)
+ament_target_dependencies(vio_to_mavros_bridge_node rclcpp geometry_msgs nav_msgs mavros_msgs)
 
 install(TARGETS
   vio_to_mavros_bridge_node
