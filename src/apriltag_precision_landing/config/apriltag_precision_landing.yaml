@@ -54,39 +54,3 @@ apriltag_precision_landing:
 
     publish_debug_tf: true
     debug_tag_child_frame: apriltag_detected
-
-precision_landing_controller:
-  ros__parameters:
-    drone_pose_topic: /mavros/local_position/pose
-    landing_target_topic: /mavros/landing_target/pose
-    mavros_state_topic: /mavros/state
-    cmd_vel_topic: /mavros/setpoint_velocity/cmd_vel
-    command_frame: map
-
-    publish_rate_hz: 20.0
-    heartbeat_when_idle: true
-
-    pose_timeout_sec: 0.40
-    target_timeout_sec: 0.35
-    require_offboard_mode: true
-
-    kp_xy: 0.65
-    kp_z: 0.85
-    max_xy_speed: 0.60
-    max_z_up_speed: 0.40
-    max_z_down_speed: 0.45
-
-    approach_height_m: 1.8
-    enter_descend_xy_tol_m: 0.20
-    enter_descend_height_tol_m: 0.35
-    break_descend_xy_tol_m: 0.35
-
-    descent_rate_mps: 0.22
-    final_xy_tol_m: 0.12
-    land_trigger_height_m: 0.55
-    stable_before_land_sec: 1.0
-
-    lost_target_behavior: hover
-    auto_land_mode: AUTO.LAND
-    enable_auto_land_request: true
-    mode_request_retry_sec: 1.0
