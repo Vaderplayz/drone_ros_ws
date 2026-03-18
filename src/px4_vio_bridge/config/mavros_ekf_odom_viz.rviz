@@ -1,0 +1,47 @@
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+  - Class: rviz_common/Views
+    Name: Views
+Visualization Manager:
+  Class: ""
+  Displays:
+    - Class: rviz_default_plugins/Grid
+      Name: Grid
+      Enabled: true
+      Plane Cell Count: 60
+      Cell Size: 1
+    - Class: rviz_default_plugins/Odometry
+      Name: MAVROS EKF Odom
+      Enabled: true
+      Topic:
+        Value: /mavros/local_position/odom
+      Shape:
+        Value: Arrow
+      Keep: 200
+    - Class: rviz_default_plugins/Path
+      Name: MAVROS EKF Path
+      Enabled: true
+      Topic:
+        Value: /mavros/ekf_path
+      Line Style: Lines
+      Line Width: 0.07
+      Color: 255; 180; 0
+      Buffer Length: 1
+  Enabled: true
+  Fixed Frame: odom
+  Name: root
+  Tools:
+    - Class: rviz_default_plugins/MoveCamera
+    - Class: rviz_default_plugins/Select
+  Value: true
+  Views:
+    Current:
+      Class: rviz_default_plugins/Orbit
+      Distance: 10
+      Focal Point:
+        X: 0
+        Y: 0
+        Z: 0
+      Pitch: 0.85
+      Yaw: 0.7

@@ -34,8 +34,12 @@ endif()
 add_executable(vio_to_mavros_bridge_node src/vio_to_mavros_bridge_node.cpp)
 ament_target_dependencies(vio_to_mavros_bridge_node rclcpp geometry_msgs nav_msgs mavros_msgs)
 
+add_executable(vins_odom_viz_node src/vins_odom_viz_node.cpp)
+ament_target_dependencies(vins_odom_viz_node rclcpp geometry_msgs nav_msgs)
+
 install(TARGETS
   vio_to_mavros_bridge_node
+  vins_odom_viz_node
   DESTINATION lib/${PROJECT_NAME}
 )
 
