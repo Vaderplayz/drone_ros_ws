@@ -147,6 +147,13 @@ cd ~/drone_ros_ws_repo
 ./tools/setup_vinsmono_ros2_jazzy.sh ~/drone_ros_ws
 ```
 
+If you previously had partial/failed builds, clean first:
+
+```bash
+cd ~/drone_ros_ws
+rm -rf build install log
+```
+
 ### 6.2 Runtime
 
 Terminal A (MAVROS):
@@ -173,6 +180,15 @@ Terminal C (VINS-Mono + bridge full stack):
 source /opt/ros/jazzy/setup.bash
 source ~/drone_ros_ws/install/setup.bash
 ros2 launch px4_vio_bridge vinsmono_full_stack.launch.py
+```
+
+If your shell has `set -u` enabled, source safely:
+
+```bash
+set +u
+source /opt/ros/jazzy/setup.bash
+source ~/drone_ros_ws/install/setup.bash
+set -u
 ```
 
 Quick checks:
