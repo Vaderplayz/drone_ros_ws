@@ -9,9 +9,7 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(cv_bridge REQUIRED)
 find_package(geometry_msgs REQUIRED)
-find_package(mavros_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
-find_package(std_msgs REQUIRED)
 find_package(tf2_msgs REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
@@ -39,18 +37,9 @@ target_link_libraries(apriltag_precision_landing_node PUBLIC
   ${tf2_ros_TARGETS}
 )
 
-add_executable(precision_landing_controller_node src/precision_landing_controller_node.cpp)
-target_link_libraries(precision_landing_controller_node PUBLIC
-  rclcpp::rclcpp
-  ${geometry_msgs_TARGETS}
-  ${mavros_msgs_TARGETS}
-  ${std_msgs_TARGETS}
-)
-
 install(TARGETS
   apriltag_camera_detector_node
   apriltag_precision_landing_node
-  precision_landing_controller_node
   DESTINATION lib/${PROJECT_NAME}
 )
 
