@@ -61,7 +61,7 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
     dist_coeffs_vec_ = declare_parameter<std::vector<double>>("dist_coeffs", std::vector<double>{});
 
     tag_pose_topic_ = declare_parameter<std::string>("tag_pose_topic", "/precision_landing/tag_pose_camera");
-    tag_size_m_ = declare_parameter<double>("tag_size_m", 0.16);
+    tag_size_m_ = declare_parameter<double>("tag_size_m", 0.12);
     target_tag_id_ = declare_parameter<int>("target_tag_id", -1);
     min_tag_area_px_ = declare_parameter<double>("min_tag_area_px", 80.0);
     dictionary_name_ = declare_parameter<std::string>("dictionary", "36h11");
