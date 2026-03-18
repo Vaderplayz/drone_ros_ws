@@ -7,7 +7,7 @@ It is focused on:
 - 1x RPLIDAR input (`/scan`)
 - 2D SLAM with `slam_toolbox`
 - Obstacle-avoidance planner (`local_planner_mode_a`)
-- Optional OpenVINS integration to PX4 (external vision odometry)
+- Optional VINS-Mono integration to PX4 (external vision odometry)
 - Optional AprilTag precision-landing stack
 
 ## 1) Workspace Layout
@@ -16,8 +16,8 @@ Main packages under `src/`:
 - `obs_avoid`: obstacle avoidance, trajectory path publisher, mission/planner nodes
 - `rplidar_ros`: LiDAR driver
 - `odom_flatten`: odometry/TF flatten helper
-- `open_vins`: OpenVINS packages (`ov_core`, `ov_init`, `ov_msckf`, etc.)
-- `px4_vio_bridge`: bridges OpenVINS odometry to MAVROS/PX4
+- `open_vins`: retained for reference, disabled from build (`COLCON_IGNORE`)
+- `px4_vio_bridge`: bridges VIO odometry (e.g. VINS-Mono) to MAVROS/PX4
 - `apriltag_precision_landing`: AprilTag detection + precision landing nodes
 - `AAAAAAAAAAAAAAAAAAAAA`: reference-only package (`COLCON_IGNORE` is present)
 
@@ -35,12 +35,9 @@ Main packages under `src/`:
    - `/mavros/setpoint_velocity/cmd_vel`
 6. `mavros_trajectory_3d_node` can convert odometry into a Path topic for visualization.
 
-### 2.2 Optional VIO stack (OpenVINS -> PX4)
-1. OpenVINS (`ov_msckf`) uses:
-   - IMU: `/mavros/imu/data`
-   - down-facing camera image: `/image_raw`
-2. OpenVINS publishes odometry (`/ov_msckf/odomimu`).
-3. `px4_vio_bridge` republishes to:
+### 2.2 Optional VIO stack (VINS-Mono -> PX4)
+1. VINS-Mono publishes odometry on `/vins_estimator/odometry`.
+2. `px4_vio_bridge` republishes to:
    - `/mavros/odometry/out`
    - `/mavros/companion_process/status`
 4. PX4 EKF fuses external vision odometry when PX4 EV params are enabled.
@@ -139,25 +136,27 @@ ros2 run obs_avoid mavros_trajectory_3d_node --ros-args \
   -p frame_id:=map
 ```
 
-## 6) Run: Optional OpenVINS Integration
+## 6) Run: Optional VINS-Mono Integration
 
-### Terminal F: OpenVINS + PX4 bridge
+### Terminal F: VINS-Mono -> PX4 bridge
 
 ```bash
 source /opt/ros/jazzy/setup.bash
 source ~/drone_ros_ws_repo/install/setup.bash
-ros2 launch px4_vio_bridge openvins_to_px4_vio.launch.py \
-  topic_imu:=/mavros/imu/data \
-  topic_camera0:=/image_raw
+ros2 launch px4_vio_bridge vinsmono_to_px4_vio.launch.py \
+  input_odom_topic:=/vins_estimator/odometry
 ```
 
 Quick checks:
 
 ```bash
-ros2 topic hz /ov_msckf/odomimu
+ros2 topic hz /vins_estimator/odometry
 ros2 topic hz /mavros/odometry/out
 ros2 topic echo --once /mavros/companion_process/status
 ```
+
+Note:
+- VINS-Mono upstream is ROS 1 (Noetic-style). On Jazzy, run it in a ROS 1 environment and bridge odometry into ROS 2, or use a ROS 2 compatible port.
 
 ## 7) PX4 VIO Parameter Baseline
 
@@ -174,7 +173,6 @@ Start with VIO-only fusion first, then re-enable additional sources (for example
 Package available:
 - `apriltag_camera_detector_node`
 - `apriltag_precision_landing_node`
-- `precision_landing_controller_node`
 
 Use this after base flight + SLAM + planner are stable.
 
@@ -191,4 +189,3 @@ ros2 topic echo --once /mavros/state
 
 - `src/AAAAAAAAAAAAAAAAAAAAA` is intentionally ignored by colcon (`COLCON_IGNORE`) and kept as reference-only.
 - This repo stores source only. Build outputs (`build/`, `install/`, `log/`) are excluded.
-
