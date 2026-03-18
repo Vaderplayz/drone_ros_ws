@@ -157,8 +157,18 @@ ros2 topic echo --once /mavros/companion_process/status
 
 Note:
 - VINS-Mono upstream is ROS 1 (Noetic-style). On Jazzy, run it in a ROS 1 environment and bridge odometry into ROS 2, or use a ROS 2 compatible port.
+- `px4_vio_bridge` can ingest either:
+  - `nav_msgs/Odometry` on `/vins_estimator/odometry` (preferred), or
+  - `geometry_msgs/PoseStamped` via `input_pose_topic` (optional fallback).
 
-## 7) PX4 VIO Parameter Baseline
+## 7) VINS-Mono Suitability Check (Current Workflow)
+
+For your current stack (`ROS 2 Jazzy + MAVROS + camera on Pi`):
+- Bridge compatibility: **Yes** (`px4_vio_bridge` is compatible with VINS-Mono odom output).
+- Direct build of upstream VINS-Mono in Jazzy: **No** (upstream is ROS 1).
+- Practical integration path: **ROS1 VINS-Mono runtime + ROS1<->ROS2 bridge**, then feed `/vins_estimator/odometry` into `px4_vio_bridge`.
+
+## 8) PX4 VIO Parameter Baseline
 
 Set in PX4 before flight testing VIO fusion:
 - `EKF2_EV_CTRL`: enable horizontal pos + vertical pos + velocity + yaw fusion
@@ -168,7 +178,7 @@ Set in PX4 before flight testing VIO fusion:
 
 Start with VIO-only fusion first, then re-enable additional sources (for example optical flow) after VIO is stable.
 
-## 8) Optional AprilTag Precision Landing
+## 9) Optional AprilTag Precision Landing
 
 Package available:
 - `apriltag_camera_detector_node`
@@ -176,7 +186,7 @@ Package available:
 
 Use this after base flight + SLAM + planner are stable.
 
-## 9) Common Checks
+## 10) Common Checks
 
 ```bash
 ros2 topic list | sort
@@ -185,7 +195,7 @@ ros2 topic hz /mavros/local_position/odom
 ros2 topic echo --once /mavros/state
 ```
 
-## 10) Notes
+## 11) Notes
 
 - `src/AAAAAAAAAAAAAAAAAAAAA` is intentionally ignored by colcon (`COLCON_IGNORE`) and kept as reference-only.
 - This repo stores source only. Build outputs (`build/`, `install/`, `log/`) are excluded.

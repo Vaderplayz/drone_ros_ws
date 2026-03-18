@@ -3,6 +3,7 @@
 #include <memory>
 #include <string>
 
+#include "geometry_msgs/msg/pose_stamped.hpp"
 #include "mavros_msgs/msg/companion_process_status.hpp"
 #include "nav_msgs/msg/odometry.hpp"
 #include "rclcpp/rclcpp.hpp"
@@ -16,7 +17,8 @@ inline bool stamp_is_zero(const builtin_interfaces::msg::Time &stamp) {
 class VioToMavrosBridgeNode : public rclcpp::Node {
  public:
   VioToMavrosBridgeNode() : Node("vio_to_mavros_bridge") {
-    input_odom_topic_ = declare_parameter<std::string>("input_odom_topic", "/ov_msckf/odomimu");
+    input_odom_topic_ = declare_parameter<std::string>("input_odom_topic", "/vins_estimator/odometry");
+    input_pose_topic_ = declare_parameter<std::string>("input_pose_topic", "");
     output_odom_topic_ = declare_parameter<std::string>("output_odom_topic", "/mavros/odometry/out");
     companion_status_topic_ = declare_parameter<std::string>("companion_status_topic", "/mavros/companion_process/status");
 
@@ -42,6 +44,12 @@ class VioToMavrosBridgeNode : public rclcpp::Node {
         input_odom_topic_, rclcpp::SensorDataQoS(),
         std::bind(&VioToMavrosBridgeNode::odomCallback, this, std::placeholders::_1));
 
+    if (!input_pose_topic_.empty()) {
+      sub_pose_in_ = create_subscription<geometry_msgs::msg::PoseStamped>(
+          input_pose_topic_, rclcpp::SensorDataQoS(),
+          std::bind(&VioToMavrosBridgeNode::poseCallback, this, std::placeholders::_1));
+    }
+
     const auto status_period = std::chrono::duration<double>(1.0 / status_rate_hz_);
     status_timer_ = create_wall_timer(
         std::chrono::duration_cast<std::chrono::milliseconds>(status_period),
@@ -51,9 +59,10 @@ class VioToMavrosBridgeNode : public rclcpp::Node {
 
     RCLCPP_INFO(
         get_logger(),
-        "px4_vio_bridge started in=%s out=%s status=%s frame=[%s -> %s]",
-        input_odom_topic_.c_str(), output_odom_topic_.c_str(), companion_status_topic_.c_str(),
-        output_parent_frame_id_.c_str(), output_child_frame_id_.c_str());
+        "px4_vio_bridge started odom_in=%s pose_in=%s out=%s status=%s frame=[%s -> %s]",
+        input_odom_topic_.c_str(), input_pose_topic_.empty() ? "(disabled)" : input_pose_topic_.c_str(),
+        output_odom_topic_.c_str(), companion_status_topic_.c_str(), output_parent_frame_id_.c_str(),
+        output_child_frame_id_.c_str());
 
     RCLCPP_INFO(
         get_logger(),
@@ -73,6 +82,24 @@ class VioToMavrosBridgeNode : public rclcpp::Node {
     // We force explicit frame ids so upstream VIO frame naming is consistent.
     out.header.frame_id = output_parent_frame_id_;
     out.child_frame_id = output_child_frame_id_;
+
+    pub_odom_out_->publish(out);
+
+    last_input_rx_time_ = now();
+    got_odom_ = true;
+  }
+
+  void poseCallback(const geometry_msgs::msg::PoseStamped::SharedPtr msg) {
+    nav_msgs::msg::Odometry out;
+
+    if (!keep_input_stamp_ || stamp_is_zero(msg->header.stamp)) {
+      out.header.stamp = now();
+    } else {
+      out.header.stamp = msg->header.stamp;
+    }
+    out.header.frame_id = output_parent_frame_id_;
+    out.child_frame_id = output_child_frame_id_;
+    out.pose.pose = msg->pose;
 
     pub_odom_out_->publish(out);
 
@@ -118,6 +145,7 @@ class VioToMavrosBridgeNode : public rclcpp::Node {
   }
 
   std::string input_odom_topic_;
+  std::string input_pose_topic_;
   std::string output_odom_topic_;
   std::string companion_status_topic_;
   std::string output_parent_frame_id_;
@@ -136,6 +164,7 @@ class VioToMavrosBridgeNode : public rclcpp::Node {
   rclcpp::Time last_input_rx_time_{0, 0, RCL_ROS_TIME};
 
   rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr sub_odom_in_;
+  rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr sub_pose_in_;
   rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr pub_odom_out_;
   rclcpp::Publisher<mavros_msgs::msg::CompanionProcessStatus>::SharedPtr pub_companion_status_;
   rclcpp::TimerBase::SharedPtr status_timer_;
