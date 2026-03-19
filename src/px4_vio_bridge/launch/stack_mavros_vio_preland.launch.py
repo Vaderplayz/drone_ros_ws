@@ -1,6 +1,6 @@
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
-from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.launch_description_sources import AnyLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch.actions import IncludeLaunchDescription
 from launch_ros.actions import Node
@@ -43,7 +43,7 @@ def generate_launch_description():
         DeclareLaunchArgument("companion_status_topic", default_value="/mavros/companion_process/status"),
 
         IncludeLaunchDescription(
-            PythonLaunchDescriptionSource(mavros_launch),
+            AnyLaunchDescriptionSource(mavros_launch),
             launch_arguments={
                 "fcu_url": LaunchConfiguration("fcu_url"),
                 "use_sim_time": "false",
