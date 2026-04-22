@@ -345,6 +345,7 @@ cd ~/ros2_ws/src/obs_avoid
 
 This workflow does not use `slam_navigation_mode` or `local_planner_mode_a`.
 Nav2 handles global planning + local obstacle avoidance, and a command bridge forwards Nav2 `/cmd_vel` to `/planner_cmd_vel` for PX4 OFFBOARD forwarding.
+If GPS is not available, the launcher automatically falls back to `start_real_basic_2d.sh` (SLAM + local planner) unless disabled.
 
 ```bash
 cd ~/ros2_ws/src/obs_avoid
@@ -364,6 +365,9 @@ ENABLE_RPLIDAR=1 RPLIDAR_SERIAL_PORT=/dev/ttyUSB0 ./scripts/start_real_nav2_gps.
 NAV2_PARAMS_FILE=~/ros2_ws/src/obs_avoid/config/nav2_gps_nav2_params.yaml \
 RL_PARAMS_FILE=~/ros2_ws/src/obs_avoid/config/nav2_gps_dual_ekf.yaml \
 ./scripts/start_real_nav2_gps.sh
+
+# Disable automatic SLAM fallback on missing GPS:
+GPS_FALLBACK_TO_SLAM=0 ./scripts/start_real_nav2_gps.sh
 ```
 
 ## 7) Script Reference
@@ -456,6 +460,9 @@ Key env vars:
 - `NAV2_USE_COMPOSITION` (default `false`)
 - `CMD_BRIDGE_INPUT_TOPIC` (default `/cmd_vel`)
 - `CMD_BRIDGE_OUTPUT_TOPIC` (default `/planner_cmd_vel`)
+- `GPS_TOPIC` (default `/mavros/global_position/global`)
+- `GPS_FALLBACK_TO_SLAM` (default `1`)
+- `SLAM_FALLBACK_SCRIPT` (default `scripts/start_real_basic_2d.sh`)
 
 ### 7.7 Utility Scripts
 
