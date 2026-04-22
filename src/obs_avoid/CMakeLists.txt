@@ -113,4 +113,18 @@ target_link_libraries(mavros_trajectory_3d_node PUBLIC
 )
 install(TARGETS mavros_trajectory_3d_node DESTINATION lib/${PROJECT_NAME})
 
+add_executable(nav2_cmd_vel_bridge src/nav2_cmd_vel_bridge.cpp)
+target_link_libraries(nav2_cmd_vel_bridge PUBLIC
+  rclcpp::rclcpp
+  ${geometry_msgs_TARGETS}
+)
+install(TARGETS nav2_cmd_vel_bridge DESTINATION lib/${PROJECT_NAME})
+
+install(DIRECTORY
+  config
+  launch
+  scripts
+  DESTINATION share/${PROJECT_NAME}
+)
+
 ament_package()
