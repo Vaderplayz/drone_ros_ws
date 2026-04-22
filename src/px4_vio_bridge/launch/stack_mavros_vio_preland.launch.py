@@ -5,44 +5,24 @@ from launch.launch_description_sources import AnyLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch.actions import IncludeLaunchDescription
 from launch_ros.actions import Node
-from ament_index_python.packages import get_package_share_directory, get_packages_with_prefixes
+from ament_index_python.packages import get_package_share_directory
 import os
 
 
-def _find_pkg(candidates):
-    installed = get_packages_with_prefixes()
-    for name in candidates:
-        if name in installed:
-            return name
-    return None
-
-
 def generate_launch_description():
-    px4_vio_share = get_package_share_directory("px4_vio_bridge")
     apriltag_share = get_package_share_directory("apriltag_precision_landing")
-    config_pkg_share = get_package_share_directory("config_pkg")
-
-    # Allow running this stack without VIO components.
-    ft_pkg = _find_pkg(["feature_tracker", "vins_feature_tracker"]) or "feature_tracker"
-    ve_pkg = _find_pkg(["vins_estimator", "vins_estimator_ros2"]) or "vins_estimator"
 
     mavros_launch = os.path.join(get_package_share_directory("mavros"), "launch", "px4.launch")
-    bridge_cfg = os.path.join(px4_vio_share, "config", "vins_mono_bridge.yaml")
     apriltag_cfg = os.path.join(apriltag_share, "config", "apriltag_precision_landing.yaml")
-    vins_cfg = os.path.join(config_pkg_share, "config", "px4_downcam", "px4_downcam_config.yaml")
 
     return LaunchDescription([
         DeclareLaunchArgument("fcu_url", default_value="serial:///dev/ttyACM0:115200"),
-        DeclareLaunchArgument("start_vio", default_value="true"),
         DeclareLaunchArgument("start_camera", default_value="true"),
         DeclareLaunchArgument("video_device", default_value="/dev/video0"),
         DeclareLaunchArgument("output_encoding", default_value="mono8"),
         DeclareLaunchArgument("image_topic", default_value="/image_raw"),
         DeclareLaunchArgument("camera_info_topic", default_value="/camera_info"),
         DeclareLaunchArgument("camera_frame", default_value="camera_link"),
-        DeclareLaunchArgument("input_odom_topic", default_value="/vins_estimator/odometry"),
-        DeclareLaunchArgument("output_odom_topic", default_value="/mavros/odometry/out"),
-        DeclareLaunchArgument("companion_status_topic", default_value="/mavros/companion_process/status"),
 
         IncludeLaunchDescription(
             AnyLaunchDescriptionSource(mavros_launch),
@@ -62,48 +42,6 @@ def generate_launch_description():
                 "output_encoding": LaunchConfiguration("output_encoding"),
             }],
             condition=IfCondition(LaunchConfiguration("start_camera")),
-        ),
-
-        Node(
-            package=ft_pkg,
-            executable="feature_tracker",
-            namespace="feature_tracker",
-            name="feature_tracker",
-            output="screen",
-            parameters=[{
-                "config_file": vins_cfg,
-                "vins_folder": config_pkg_share + "/",
-            }],
-            condition=IfCondition(LaunchConfiguration("start_vio")),
-        ),
-
-        Node(
-            package=ve_pkg,
-            executable="vins_estimator",
-            namespace="vins_estimator",
-            name="vins_estimator",
-            output="screen",
-            parameters=[{
-                "config_file": vins_cfg,
-                "vins_folder": config_pkg_share + "/",
-            }],
-            condition=IfCondition(LaunchConfiguration("start_vio")),
-        ),
-
-        Node(
-            package="px4_vio_bridge",
-            executable="vio_to_mavros_bridge_node",
-            name="vio_to_mavros_bridge",
-            output="screen",
-            parameters=[
-                bridge_cfg,
-                {
-                    "input_odom_topic": LaunchConfiguration("input_odom_topic"),
-                    "output_odom_topic": LaunchConfiguration("output_odom_topic"),
-                    "companion_status_topic": LaunchConfiguration("companion_status_topic"),
-                },
-            ],
-            condition=IfCondition(LaunchConfiguration("start_vio")),
         ),
 
         Node(
