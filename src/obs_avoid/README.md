@@ -341,6 +341,31 @@ cd ~/ros2_ws/src/obs_avoid
 ./mission_obs_avoid/scripts/start_mission_obs_avoid.sh
 ```
 
+### Workflow G: Real PX4 + Nav2-only navigation/obstacle avoidance + GPS fusion
+
+This workflow does not use `slam_navigation_mode` or `local_planner_mode_a`.
+Nav2 handles global planning + local obstacle avoidance, and a command bridge forwards Nav2 `/cmd_vel` to `/planner_cmd_vel` for PX4 OFFBOARD forwarding.
+
+```bash
+cd ~/ros2_ws/src/obs_avoid
+./scripts/start_real_nav2_gps.sh
+```
+
+Common overrides:
+
+```bash
+# Use onboard UART telemetry:
+FCU_URL=serial:///dev/ttyAMA0:921600 ./scripts/start_real_nav2_gps.sh
+
+# If you also want this script to start RPLIDAR:
+ENABLE_RPLIDAR=1 RPLIDAR_SERIAL_PORT=/dev/ttyUSB0 ./scripts/start_real_nav2_gps.sh
+
+# Override nav2 and robot_localization params:
+NAV2_PARAMS_FILE=~/ros2_ws/src/obs_avoid/config/nav2_gps_nav2_params.yaml \
+RL_PARAMS_FILE=~/ros2_ws/src/obs_avoid/config/nav2_gps_dual_ekf.yaml \
+./scripts/start_real_nav2_gps.sh
+```
+
 ## 7) Script Reference
 
 ### 7.1 `scripts/start_sim_stack_terminator.sh`
@@ -416,7 +441,23 @@ Key env vars:
 - `PLANNER_NODE` (`local_planner_mode_a|local_planner_sector_mode|local_planner_hybrid_mode`)
 - `USE_SIM_TIME` (default `false`)
 
-### 7.6 Utility Scripts
+### 7.6 `scripts/start_real_nav2_gps.sh`
+
+Purpose:
+- Real drone workflow using official Nav2 + `robot_localization` GPS fusion.
+- Keeps `user_ctrl` only as PX4 OFFBOARD bridge and arm/mode helper.
+- Does not launch internal planners (`local_planner_*`) or `slam_navigation_mode`.
+
+Key env vars:
+- `FCU_URL` (default `serial:///dev/ttyACM0:921600`)
+- `ENABLE_RPLIDAR` (default `0`)
+- `RL_PARAMS_FILE` (default `config/nav2_gps_dual_ekf.yaml`)
+- `NAV2_PARAMS_FILE` (default `config/nav2_gps_nav2_params.yaml`)
+- `NAV2_USE_COMPOSITION` (default `false`)
+- `CMD_BRIDGE_INPUT_TOPIC` (default `/cmd_vel`)
+- `CMD_BRIDGE_OUTPUT_TOPIC` (default `/planner_cmd_vel`)
+
+### 7.7 Utility Scripts
 
 - `scripts/export_global_pcd.sh`: wait for `/vertical_lidar_mapper/save_pcd` and trigger export.
 - `scripts/view_latest_pcd.sh`: optionally export then open newest `.pcd` in available viewer.
@@ -617,6 +658,7 @@ cmake --build build -j
 - Main orchestration scripts:
   - `scripts/start_sim_stack_terminator.sh`
   - `scripts/start_real_stack_px4.sh`
+  - `scripts/start_real_nav2_gps.sh`
   - `scripts/start_mapping_mode.sh`
   - `scripts/start_flight_mode.sh`
   - `scripts/start_slam_mapper.sh` (deprecated wrapper to `start_mapping_mode.sh`)
