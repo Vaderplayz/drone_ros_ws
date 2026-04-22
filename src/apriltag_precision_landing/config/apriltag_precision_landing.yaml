@@ -3,7 +3,7 @@ apriltag_camera_detector:
     input_source: device
 
     # For input_source:=device
-    video_device: /dev/video1
+    video_device: /dev/video0
     device_width: 640
     device_height: 480
     device_fps: 30.0
@@ -40,7 +40,7 @@ apriltag_precision_landing:
     tf_topic: /tf
     camera_tag_pose_topic: /precision_landing/tag_pose_camera
     relay_image_stream: true
-    image_input_topic: /camera/image_raw
+    image_input_topic: /image_raw
     image_output_topic: /image_raw
 
     drone_pose_topic: /mavros/local_position/pose
