@@ -47,6 +47,8 @@ ROS_SETUP="${ROS_SETUP:-${ROS_WS}/install/setup.bash}"
 
 WAIT_TIMEOUT_SEC="${WAIT_TIMEOUT_SEC:-60}"
 KILL_BEFORE_LAUNCH="${KILL_BEFORE_LAUNCH:-1}"
+GPS_TOPIC="${GPS_TOPIC:-/mavros/global_position/global}"
+GPS_FALLBACK_TO_SLAM="${GPS_FALLBACK_TO_SLAM:-1}"
 
 MAVROS_LAUNCH_FILE="${MAVROS_LAUNCH_FILE:-px4.launch}"
 FCU_URL="${FCU_URL:-serial:///dev/ttyACM0:921600}"
@@ -75,6 +77,7 @@ NAV2_LOG="${NAV2_LOG:-/tmp/nav2_gps.log}"
 CMD_BRIDGE_LOG="${CMD_BRIDGE_LOG:-/tmp/nav2_cmd_bridge.log}"
 USER_CTRL_LOG="${USER_CTRL_LOG:-/tmp/user_ctrl_nav2_gps.log}"
 RPLIDAR_LOG="${RPLIDAR_LOG:-/tmp/rplidar_nav2_gps.log}"
+SLAM_FALLBACK_SCRIPT="${SLAM_FALLBACK_SCRIPT:-${SCRIPT_DIR}/start_real_basic_2d.sh}"
 
 PIDS=()
 NAMES=()
@@ -95,6 +98,31 @@ add_process() {
   local name="$2"
   PIDS+=("${pid}")
   NAMES+=("${name}")
+}
+
+fallback_to_slam_stack() {
+  if ! is_true "${GPS_FALLBACK_TO_SLAM}"; then
+    echo "[error] GPS is unavailable and GPS_FALLBACK_TO_SLAM=0. Exiting." >&2
+    return 1
+  fi
+  if [[ ! -f "${SLAM_FALLBACK_SCRIPT}" ]]; then
+    echo "[error] fallback script not found: ${SLAM_FALLBACK_SCRIPT}" >&2
+    return 1
+  fi
+
+  echo "[warn] GPS topic not available on ${GPS_TOPIC}. Falling back to SLAM-only stack."
+
+  # Stop started processes before handing off to the SLAM stack launcher.
+  cleanup
+  trap - EXIT INT TERM
+
+  export ROS_WS ROS_SETUP WAIT_TIMEOUT_SEC
+  export MAVROS_LAUNCH_FILE FCU_URL MAVROS_RESPAWN
+  export ENABLE_RPLIDAR RPLIDAR_SERIAL_PORT RPLIDAR_BAUDRATE
+  export RPLIDAR_FRAME_ID RPLIDAR_INVERTED RPLIDAR_ANGLE_COMPENSATE
+  export KILL_BEFORE_LAUNCH=1
+
+  exec "${SLAM_FALLBACK_SCRIPT}"
 }
 
 kill_existing_stack() {
@@ -234,8 +262,10 @@ main() {
   wait_for_topic "/mavros/local_position/odom" "${WAIT_TIMEOUT_SEC}"
   echo "[wait] /mavros/imu/data"
   wait_for_topic "/mavros/imu/data" "${WAIT_TIMEOUT_SEC}"
-  echo "[wait] /mavros/global_position/global"
-  wait_for_topic "/mavros/global_position/global" "${WAIT_TIMEOUT_SEC}"
+  echo "[wait] ${GPS_TOPIC}"
+  if ! wait_for_topic "${GPS_TOPIC}" "${WAIT_TIMEOUT_SEC}"; then
+    fallback_to_slam_stack
+  fi
 
   start_rplidar
   if is_true "${ENABLE_RPLIDAR}"; then

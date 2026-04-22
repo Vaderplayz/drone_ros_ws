@@ -142,6 +142,8 @@ This flow launches:
 - `nav2_cmd_vel_bridge` (`/cmd_vel` -> `/planner_cmd_vel`)
 - `user_ctrl` in bridge mode (OFFBOARD/arm helper + forwarding to MAVROS setpoint topic)
 
+If GPS is unavailable, this launcher now auto-falls back to the SLAM-only stack (`start_real_basic_2d.sh`) by default.
+
 ## 6) Optional AprilTag Precision Landing
 
 Package available:
