@@ -1,5 +1,6 @@
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.actions import DeclareLaunchArgument
+from launch.actions import IncludeLaunchDescription
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
@@ -10,11 +11,11 @@ import os
 
 
 def generate_launch_description():
-    px4_vio_share = get_package_share_directory("px4_vio_bridge")
+    apriltag_share = get_package_share_directory("apriltag_precision_landing")
     obs_share = get_package_share_directory("obs_avoid")
     rplidar_share = get_package_share_directory("rplidar_ros")
 
-    base_stack_launch = os.path.join(px4_vio_share, "launch", "stack_mavros_vio_preland.launch.py")
+    base_stack_launch = os.path.join(apriltag_share, "launch", "stack_mavros_apriltag_preland.launch.py")
     rplidar_launch = os.path.join(rplidar_share, "launch", "rplidar.launch.py")
     slam_params = os.path.join(obs_share, "config", "slam2d_real_1lidar.yaml")
 
@@ -48,7 +49,6 @@ def generate_launch_description():
         DeclareLaunchArgument("ask_goal_on_start", default_value="true"),
         DeclareLaunchArgument("start_trajectory_node", default_value="true"),
         DeclareLaunchArgument("trajectory_topic", default_value="/mavros/trajectory_3d"),
-
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(base_stack_launch),
             launch_arguments={
@@ -60,12 +60,10 @@ def generate_launch_description():
                 "camera_frame": LaunchConfiguration("camera_frame"),
             }.items(),
         ),
-
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(rplidar_launch),
             condition=IfCondition(LaunchConfiguration("start_rplidar")),
         ),
-
         Node(
             package="tf2_ros",
             executable="static_transform_publisher",
@@ -83,7 +81,6 @@ def generate_launch_description():
             ],
             condition=IfCondition(LaunchConfiguration("publish_laser_tf")),
         ),
-
         Node(
             package="odom_flatten",
             executable="px4_odom_flatten_node",
@@ -96,7 +93,6 @@ def generate_launch_description():
             }],
             condition=IfCondition(LaunchConfiguration("start_odom_flatten")),
         ),
-
         Node(
             package="slam_toolbox",
             executable="async_slam_toolbox_node",
@@ -113,7 +109,6 @@ def generate_launch_description():
             ],
             condition=IfCondition(LaunchConfiguration("start_slam")),
         ),
-
         Node(
             package="obs_avoid",
             executable="local_planner_mode_a",
@@ -125,7 +120,6 @@ def generate_launch_description():
             parameters=[{"use_sim_time": False}],
             condition=IfCondition(LaunchConfiguration("start_planner")),
         ),
-
         Node(
             package="obs_avoid",
             executable="user_ctrl",
@@ -137,7 +131,6 @@ def generate_launch_description():
             }],
             condition=IfCondition(LaunchConfiguration("start_user_ctrl")),
         ),
-
         Node(
             package="obs_avoid",
             executable="mavros_trajectory_3d_node",
