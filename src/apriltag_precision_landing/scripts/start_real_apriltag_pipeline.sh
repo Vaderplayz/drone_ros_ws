@@ -16,24 +16,6 @@ is_true() {
   esac
 }
 
-wait_for_topic() {
-  local topic="$1"
-  local timeout_sec="$2"
-  local start_ts
-  start_ts="$(date +%s)"
-
-  while true; do
-    if ros2 topic list 2>/dev/null | grep -qx "${topic}"; then
-      return 0
-    fi
-    if (( "$(date +%s)" - start_ts >= timeout_sec )); then
-      echo "[error] timed out waiting for topic: ${topic}" >&2
-      return 1
-    fi
-    sleep 1
-  done
-}
-
 kill_if_running() {
   local pattern="$1"
   pgrep -af "${pattern}" >/dev/null 2>&1 || return 0
@@ -74,7 +56,6 @@ if ! ROS_SETUP="$(resolve_ros_setup)"; then
 fi
 ROS_WS="${ROS_WS:-$(cd "$(dirname "${ROS_SETUP}")/.." >/dev/null 2>&1 && pwd || true)}"
 
-WAIT_TIMEOUT_SEC="${WAIT_TIMEOUT_SEC:-45}"
 KILL_BEFORE_LAUNCH="${KILL_BEFORE_LAUNCH:-1}"
 
 START_MAVROS="${START_MAVROS:-1}"
@@ -256,11 +237,9 @@ main() {
     exit 1
   fi
 
-  if is_true "${START_MAVROS}"; then
-    if ! ros2 pkg prefix mavros >/dev/null 2>&1; then
-      echo "[error] mavros package not found in overlay." >&2
-      exit 1
-    fi
+  if is_true "${START_MAVROS}" && ! ros2 pkg prefix mavros >/dev/null 2>&1; then
+    echo "[warn] mavros package not found in overlay; continuing without starting MAVROS." >&2
+    START_MAVROS="0"
   fi
 
   if is_true "${START_CAMERA}"; then
@@ -268,11 +247,9 @@ main() {
     START_CAMERA="0"
   fi
 
-  if is_true "${START_IMAGE_VIEW}"; then
-    if ! ros2 pkg prefix rqt_image_view >/dev/null 2>&1; then
-      echo "[error] rqt_image_view package not found in overlay." >&2
-      exit 1
-    fi
+  if is_true "${START_IMAGE_VIEW}" && ! ros2 pkg prefix rqt_image_view >/dev/null 2>&1; then
+    echo "[warn] rqt_image_view package not found; continuing without image viewer." >&2
+    START_IMAGE_VIEW="0"
   fi
 
   if [[ "${KILL_BEFORE_LAUNCH}" == "1" ]]; then
@@ -285,33 +262,21 @@ main() {
 
   if is_true "${START_MAVROS}"; then
     start_mavros
-    echo "[wait] /mavros/state"
-    wait_for_topic "/mavros/state" "${WAIT_TIMEOUT_SEC}"
-    echo "[wait] ${DRONE_POSE_TOPIC}"
-    wait_for_topic "${DRONE_POSE_TOPIC}" "${WAIT_TIMEOUT_SEC}" || true
   fi
 
   if is_true "${START_CAMERA}"; then
     start_camera
-    echo "[wait] ${IMAGE_TOPIC}"
-    wait_for_topic "${IMAGE_TOPIC}" "${WAIT_TIMEOUT_SEC}"
-    echo "[wait] ${CAMERA_INFO_TOPIC}"
-    wait_for_topic "${CAMERA_INFO_TOPIC}" "${WAIT_TIMEOUT_SEC}"
   fi
 
   start_detector
-  echo "[wait] ${TAG_POSE_TOPIC}"
-  wait_for_topic "${TAG_POSE_TOPIC}" "${WAIT_TIMEOUT_SEC}"
-
   start_landing_target
-  echo "[wait] ${LANDING_TARGET_TOPIC}"
-  wait_for_topic "${LANDING_TARGET_TOPIC}" "${WAIT_TIMEOUT_SEC}"
 
   if is_true "${START_IMAGE_VIEW}"; then
     start_image_view
   fi
 
   echo "[ok] apriltag precision-landing pipeline started"
+  echo "[info] startup mode: non-blocking best-effort (no topic wait gates)"
   echo "[info] START_MAVROS=${START_MAVROS} START_CAMERA=${START_CAMERA} START_IMAGE_VIEW=${START_IMAGE_VIEW}"
   echo "[info] detector_input_source=${DETECTOR_INPUT_SOURCE}"
   echo "[info] camera: device=${VIDEO_DEVICE} image=${IMAGE_TOPIC} info=${CAMERA_INFO_TOPIC}"
