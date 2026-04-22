@@ -40,11 +40,39 @@ kill_if_running() {
   pkill -f "${pattern}" >/dev/null 2>&1 || true
 }
 
+resolve_ros_setup() {
+  local candidates=()
+
+  if [[ -n "${ROS_SETUP:-}" ]]; then
+    candidates+=("${ROS_SETUP}")
+  fi
+  if [[ -n "${ROS_WS:-}" ]]; then
+    candidates+=("${ROS_WS}/install/setup.bash")
+  fi
+
+  # Running from source tree: <ws>/src/apriltag_precision_landing/scripts
+  candidates+=("${SCRIPT_DIR}/../../../install/setup.bash")
+  # Running from install tree: <ws>/install/apriltag_precision_landing/lib/apriltag_precision_landing
+  candidates+=("${SCRIPT_DIR}/../../../../setup.bash")
+  candidates+=("${SCRIPT_DIR}/../../../../local_setup.bash")
+  # Fallback to current directory workspace layout.
+  candidates+=("${PWD}/install/setup.bash")
+
+  local c
+  for c in "${candidates[@]}"; do
+    if [[ -f "${c}" ]]; then
+      (cd "$(dirname "${c}")" >/dev/null 2>&1 && printf "%s/%s\n" "$(pwd)" "$(basename "${c}")") || continue
+      return 0
+    fi
+  done
+  return 1
+}
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PKG_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-ROS_WS_DEFAULT="$(cd "${PKG_DIR}/../.." && pwd)"
-ROS_WS="${ROS_WS:-${ROS_WS_DEFAULT}}"
-ROS_SETUP="${ROS_SETUP:-${ROS_WS}/install/setup.bash}"
+if ! ROS_SETUP="$(resolve_ros_setup)"; then
+  ROS_SETUP="${SCRIPT_DIR}/../../../install/setup.bash"
+fi
+ROS_WS="${ROS_WS:-$(cd "$(dirname "${ROS_SETUP}")/.." >/dev/null 2>&1 && pwd || true)}"
 
 WAIT_TIMEOUT_SEC="${WAIT_TIMEOUT_SEC:-45}"
 KILL_BEFORE_LAUNCH="${KILL_BEFORE_LAUNCH:-1}"
@@ -145,6 +173,9 @@ start_detector() {
     -p input_source:=ros_topics \
     -p image_topic:="${IMAGE_TOPIC}" \
     -p camera_info_topic:="${CAMERA_INFO_TOPIC}" \
+    -p image_output_topic:=/image_raw \
+    -p camera_info_output_topic:=/camera_info \
+    -p publish_image_stream:=true \
     -p camera_frame_id:="${CAMERA_FRAME_ID}" \
     -p dictionary:="${TAG_DICTIONARY}" \
     -p tag_size_m:="${TAG_SIZE_M}" \
@@ -159,6 +190,9 @@ start_landing_target() {
   ros2 run apriltag_precision_landing apriltag_precision_landing_node --ros-args \
     -p input_mode:=camera_pose \
     -p camera_tag_pose_topic:="${TAG_POSE_TOPIC}" \
+    -p relay_image_stream:=true \
+    -p image_input_topic:="${IMAGE_TOPIC}" \
+    -p image_output_topic:=/image_raw \
     -p drone_pose_topic:="${DRONE_POSE_TOPIC}" \
     -p landing_target_topic:="${LANDING_TARGET_TOPIC}" \
     -p world_frame:="${WORLD_FRAME}" \

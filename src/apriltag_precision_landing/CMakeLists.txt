@@ -32,6 +32,7 @@ add_executable(apriltag_precision_landing_node src/apriltag_precision_landing_no
 target_link_libraries(apriltag_precision_landing_node PUBLIC
   rclcpp::rclcpp
   ${geometry_msgs_TARGETS}
+  ${sensor_msgs_TARGETS}
   ${tf2_msgs_TARGETS}
   tf2::tf2
   ${tf2_ros_TARGETS}

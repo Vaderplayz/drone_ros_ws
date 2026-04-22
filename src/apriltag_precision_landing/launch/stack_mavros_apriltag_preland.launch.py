@@ -51,6 +51,9 @@ def generate_launch_description():
                     "input_source": "ros_topics",
                     "image_topic": LaunchConfiguration("image_topic"),
                     "camera_info_topic": LaunchConfiguration("camera_info_topic"),
+                    "image_output_topic": "/image_raw",
+                    "camera_info_output_topic": "/camera_info",
+                    "publish_image_stream": True,
                     "camera_frame_id": LaunchConfiguration("camera_frame"),
                 },
             ],
@@ -60,6 +63,13 @@ def generate_launch_description():
             executable="apriltag_precision_landing_node",
             name="apriltag_precision_landing",
             output="screen",
-            parameters=[apriltag_cfg],
+            parameters=[
+                apriltag_cfg,
+                {
+                    "relay_image_stream": True,
+                    "image_input_topic": LaunchConfiguration("image_topic"),
+                    "image_output_topic": "/image_raw",
+                },
+            ],
         ),
     ])

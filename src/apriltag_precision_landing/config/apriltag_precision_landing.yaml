@@ -20,8 +20,13 @@ apriltag_camera_detector:
     dist_coeffs: []
 
     # For input_source:=ros_topics
-    image_topic: /camera/image_raw
-    camera_info_topic: /camera/camera_info
+    image_topic: /image_raw
+    camera_info_topic: /camera_info
+
+    # Publish a live camera stream even in input_source:=device mode.
+    image_output_topic: /image_raw
+    camera_info_output_topic: /camera_info
+    publish_image_stream: true
 
     tag_pose_topic: /precision_landing/tag_pose_camera
     dictionary: 36h11
@@ -34,6 +39,9 @@ apriltag_precision_landing:
     input_mode: camera_pose
     tf_topic: /tf
     camera_tag_pose_topic: /precision_landing/tag_pose_camera
+    relay_image_stream: true
+    image_input_topic: /camera/image_raw
+    image_output_topic: /image_raw
 
     drone_pose_topic: /mavros/local_position/pose
     landing_target_topic: /mavros/landing_target/pose
