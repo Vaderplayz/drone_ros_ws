@@ -1,5 +1,6 @@
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
+from launch.conditions import IfCondition
 from launch.launch_description_sources import AnyLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch.actions import IncludeLaunchDescription
@@ -21,10 +22,9 @@ def generate_launch_description():
     apriltag_share = get_package_share_directory("apriltag_precision_landing")
     config_pkg_share = get_package_share_directory("config_pkg")
 
-    ft_pkg = _find_pkg(["feature_tracker", "vins_feature_tracker"])
-    ve_pkg = _find_pkg(["vins_estimator", "vins_estimator_ros2"])
-    if ft_pkg is None or ve_pkg is None:
-        raise RuntimeError("VINS packages not found. Need feature_tracker + vins_estimator installed.")
+    # Allow running this stack without VIO components.
+    ft_pkg = _find_pkg(["feature_tracker", "vins_feature_tracker"]) or "feature_tracker"
+    ve_pkg = _find_pkg(["vins_estimator", "vins_estimator_ros2"]) or "vins_estimator"
 
     mavros_launch = os.path.join(get_package_share_directory("mavros"), "launch", "px4.launch")
     bridge_cfg = os.path.join(px4_vio_share, "config", "vins_mono_bridge.yaml")
@@ -33,6 +33,8 @@ def generate_launch_description():
 
     return LaunchDescription([
         DeclareLaunchArgument("fcu_url", default_value="serial:///dev/ttyACM0:115200"),
+        DeclareLaunchArgument("start_vio", default_value="true"),
+        DeclareLaunchArgument("start_camera", default_value="true"),
         DeclareLaunchArgument("video_device", default_value="/dev/video0"),
         DeclareLaunchArgument("output_encoding", default_value="mono8"),
         DeclareLaunchArgument("image_topic", default_value="/image_raw"),
@@ -59,6 +61,7 @@ def generate_launch_description():
                 "video_device": LaunchConfiguration("video_device"),
                 "output_encoding": LaunchConfiguration("output_encoding"),
             }],
+            condition=IfCondition(LaunchConfiguration("start_camera")),
         ),
 
         Node(
@@ -71,6 +74,7 @@ def generate_launch_description():
                 "config_file": vins_cfg,
                 "vins_folder": config_pkg_share + "/",
             }],
+            condition=IfCondition(LaunchConfiguration("start_vio")),
         ),
 
         Node(
@@ -83,6 +87,7 @@ def generate_launch_description():
                 "config_file": vins_cfg,
                 "vins_folder": config_pkg_share + "/",
             }],
+            condition=IfCondition(LaunchConfiguration("start_vio")),
         ),
 
         Node(
@@ -98,6 +103,7 @@ def generate_launch_description():
                     "companion_status_topic": LaunchConfiguration("companion_status_topic"),
                 },
             ],
+            condition=IfCondition(LaunchConfiguration("start_vio")),
         ),
 
         Node(
