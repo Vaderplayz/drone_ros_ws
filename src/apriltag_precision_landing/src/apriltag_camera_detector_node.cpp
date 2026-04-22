@@ -47,7 +47,7 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
     camera_info_topic_ = declare_parameter<std::string>("camera_info_topic", "/camera/camera_info");
     camera_frame_id_ = declare_parameter<std::string>("camera_frame_id", "camera_link");
 
-    video_device_ = declare_parameter<std::string>("video_device", "/dev/video1");
+    video_device_ = declare_parameter<std::string>("video_device", "/dev/video0");
     device_width_ = declare_parameter<int>("device_width", 640);
     device_height_ = declare_parameter<int>("device_height", 480);
     device_fps_ = declare_parameter<double>("device_fps", 30.0);
