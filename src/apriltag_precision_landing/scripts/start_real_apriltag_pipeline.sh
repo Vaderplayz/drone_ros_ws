@@ -254,7 +254,7 @@ main() {
     start_image_view
   fi
 
-  echo "[ok] apriltag precision-landing pipeline started (VIO disabled)"
+  echo "[ok] apriltag precision-landing pipeline started"
   echo "[info] START_MAVROS=${START_MAVROS} START_CAMERA=${START_CAMERA} START_IMAGE_VIEW=${START_IMAGE_VIEW}"
   echo "[info] camera: device=${VIDEO_DEVICE} image=${IMAGE_TOPIC} info=${CAMERA_INFO_TOPIC} encoding=${OUTPUT_ENCODING}"
   echo "[info] tag: dict=${TAG_DICTIONARY} tag_size_m=${TAG_SIZE_M} target_tag_id=${TARGET_TAG_ID}"
