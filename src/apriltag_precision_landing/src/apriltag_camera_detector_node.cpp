@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <limits>
 #include <memory>
@@ -10,6 +11,7 @@
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/camera_info.hpp"
 #include "sensor_msgs/msg/image.hpp"
+#include "std_msgs/msg/header.hpp"
 
 #include <opencv2/aruco.hpp>
 #include <opencv2/calib3d.hpp>
@@ -43,8 +45,11 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
   AprilTagCameraDetectorNode() : Node("apriltag_camera_detector") {
     input_source_ = declare_parameter<std::string>("input_source", "device");
 
-    image_topic_ = declare_parameter<std::string>("image_topic", "/camera/image_raw");
-    camera_info_topic_ = declare_parameter<std::string>("camera_info_topic", "/camera/camera_info");
+    image_topic_ = declare_parameter<std::string>("image_topic", "/image_raw");
+    camera_info_topic_ = declare_parameter<std::string>("camera_info_topic", "/camera_info");
+    image_output_topic_ = declare_parameter<std::string>("image_output_topic", "/image_raw");
+    camera_info_output_topic_ = declare_parameter<std::string>("camera_info_output_topic", "/camera_info");
+    publish_image_stream_ = declare_parameter<bool>("publish_image_stream", true);
     camera_frame_id_ = declare_parameter<std::string>("camera_frame_id", "camera_link");
 
     video_device_ = declare_parameter<std::string>("video_device", "/dev/video0");
@@ -67,6 +72,9 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
     dictionary_name_ = declare_parameter<std::string>("dictionary", "36h11");
 
     detector_dict_ = cv::aruco::getPredefinedDictionary(dictionaryFromString(dictionary_name_));
+    const auto qos_sensor = rclcpp::SensorDataQoS();
+    pub_image_ = create_publisher<sensor_msgs::msg::Image>(image_output_topic_, qos_sensor);
+    pub_camera_info_ = create_publisher<sensor_msgs::msg::CameraInfo>(camera_info_output_topic_, qos_sensor);
     pub_tag_pose_ = create_publisher<geometry_msgs::msg::PoseStamped>(tag_pose_topic_, 10);
 
     if (tag_size_m_ <= 0.0) {
@@ -107,6 +115,12 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
 
     RCLCPP_INFO(get_logger(), "ROS-topic mode image=%s camera_info=%s",
                 image_topic_.c_str(), camera_info_topic_.c_str());
+    if (publish_image_stream_ && image_output_topic_ != image_topic_) {
+      RCLCPP_INFO(get_logger(), "Republishing image stream to %s", image_output_topic_.c_str());
+    }
+    if (publish_image_stream_ && camera_info_output_topic_ != camera_info_topic_) {
+      RCLCPP_INFO(get_logger(), "Republishing camera_info to %s", camera_info_output_topic_.c_str());
+    }
   }
 
   void initDeviceMode() {
@@ -133,6 +147,10 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
 
     RCLCPP_INFO(get_logger(), "Device mode video=%s (requested %dx%d @ %.1f)",
                 video_device_.c_str(), device_width_, device_height_, device_fps_);
+    if (publish_image_stream_) {
+      RCLCPP_INFO(get_logger(), "Publishing device stream image=%s camera_info=%s",
+                  image_output_topic_.c_str(), camera_info_output_topic_.c_str());
+    }
   }
 
   void setupCameraModelFromParams() {
@@ -203,6 +221,14 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
     }
 
     got_camera_info_ = true;
+
+    if (publish_image_stream_ && camera_info_output_topic_ != camera_info_topic_) {
+      auto out = *msg;
+      if (out.header.frame_id.empty()) {
+        out.header.frame_id = camera_frame_id_;
+      }
+      pub_camera_info_->publish(out);
+    }
   }
 
   void imageCb(const sensor_msgs::msg::Image::SharedPtr msg) {
@@ -219,6 +245,14 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
       RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
                            "cv_bridge exception: %s", e.what());
       return;
+    }
+
+    if (publish_image_stream_ && image_output_topic_ != image_topic_) {
+      auto out = *msg;
+      if (out.header.frame_id.empty()) {
+        out.header.frame_id = camera_frame_id_;
+      }
+      pub_image_->publish(out);
     }
 
     detectAndPublish(cv_ptr->image, rclcpp::Time(msg->header.stamp), msg->header.frame_id);
@@ -238,7 +272,58 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
       return;
     }
 
-    detectAndPublish(frame, now(), camera_frame_id_);
+    const auto stamp = now();
+    if (publish_image_stream_) {
+      publishDeviceStream(frame, stamp, camera_frame_id_);
+    }
+    detectAndPublish(frame, stamp, camera_frame_id_);
+  }
+
+  void publishDeviceStream(const cv::Mat &frame, const rclcpp::Time &stamp, const std::string &frame_id) {
+    cv::Mat bgr;
+    if (frame.channels() == 1) {
+      cv::cvtColor(frame, bgr, cv::COLOR_GRAY2BGR);
+    } else if (frame.channels() == 3) {
+      bgr = frame;
+    } else if (frame.channels() == 4) {
+      cv::cvtColor(frame, bgr, cv::COLOR_BGRA2BGR);
+    } else {
+      RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
+                           "Unsupported channel count=%d for image publish", frame.channels());
+      return;
+    }
+
+    std_msgs::msg::Header header;
+    header.stamp = stamp;
+    header.frame_id = frame_id.empty() ? camera_frame_id_ : frame_id;
+
+    auto img_msg = cv_bridge::CvImage(header, "bgr8", bgr).toImageMsg();
+    pub_image_->publish(*img_msg);
+
+    sensor_msgs::msg::CameraInfo info;
+    info.header = header;
+    info.width = static_cast<uint32_t>(bgr.cols);
+    info.height = static_cast<uint32_t>(bgr.rows);
+    info.distortion_model = "plumb_bob";
+
+    info.k = {camera_matrix_.at<double>(0, 0), camera_matrix_.at<double>(0, 1), camera_matrix_.at<double>(0, 2),
+              camera_matrix_.at<double>(1, 0), camera_matrix_.at<double>(1, 1), camera_matrix_.at<double>(1, 2),
+              camera_matrix_.at<double>(2, 0), camera_matrix_.at<double>(2, 1), camera_matrix_.at<double>(2, 2)};
+
+    info.r = {1.0, 0.0, 0.0,
+              0.0, 1.0, 0.0,
+              0.0, 0.0, 1.0};
+
+    info.p = {camera_matrix_.at<double>(0, 0), camera_matrix_.at<double>(0, 1), camera_matrix_.at<double>(0, 2), 0.0,
+              camera_matrix_.at<double>(1, 0), camera_matrix_.at<double>(1, 1), camera_matrix_.at<double>(1, 2), 0.0,
+              camera_matrix_.at<double>(2, 0), camera_matrix_.at<double>(2, 1), camera_matrix_.at<double>(2, 2), 0.0};
+
+    info.d.resize(static_cast<size_t>(dist_coeffs_.cols), 0.0);
+    for (int i = 0; i < dist_coeffs_.cols; ++i) {
+      info.d[static_cast<size_t>(i)] = dist_coeffs_.at<double>(0, i);
+    }
+
+    pub_camera_info_->publish(info);
   }
 
   void detectAndPublish(const cv::Mat &image, const rclcpp::Time &stamp, const std::string &frame_id) {
@@ -344,6 +429,9 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
 
   std::string image_topic_;
   std::string camera_info_topic_;
+  std::string image_output_topic_;
+  std::string camera_info_output_topic_;
+  bool publish_image_stream_{true};
   std::string camera_frame_id_;
 
   std::string video_device_;
@@ -375,6 +463,8 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
 
   rclcpp::Subscription<sensor_msgs::msg::CameraInfo>::SharedPtr sub_camera_info_;
   rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr sub_image_;
+  rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr pub_image_;
+  rclcpp::Publisher<sensor_msgs::msg::CameraInfo>::SharedPtr pub_camera_info_;
   rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr pub_tag_pose_;
   rclcpp::TimerBase::SharedPtr capture_timer_;
 };

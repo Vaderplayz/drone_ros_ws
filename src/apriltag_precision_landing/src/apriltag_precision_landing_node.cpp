@@ -7,6 +7,7 @@
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "geometry_msgs/msg/transform_stamped.hpp"
 #include "rclcpp/rclcpp.hpp"
+#include "sensor_msgs/msg/image.hpp"
 #include "tf2/LinearMath/Quaternion.hpp"
 #include "tf2/LinearMath/Transform.hpp"
 #include "tf2_msgs/msg/tf_message.hpp"
@@ -23,6 +24,9 @@ class AprilTagPrecisionLandingNode : public rclcpp::Node {
   AprilTagPrecisionLandingNode() : Node("apriltag_precision_landing") {
     tf_topic_ = declare_parameter<std::string>("tf_topic", "/tf");
     camera_tag_pose_topic_ = declare_parameter<std::string>("camera_tag_pose_topic", "/precision_landing/tag_pose_camera");
+    relay_image_stream_ = declare_parameter<bool>("relay_image_stream", true);
+    image_input_topic_ = declare_parameter<std::string>("image_input_topic", "/camera/image_raw");
+    image_output_topic_ = declare_parameter<std::string>("image_output_topic", "/image_raw");
     drone_pose_topic_ = declare_parameter<std::string>("drone_pose_topic", "/mavros/local_position/pose");
     landing_target_topic_ = declare_parameter<std::string>("landing_target_topic", "/mavros/landing_target/pose");
     world_frame_ = declare_parameter<std::string>("world_frame", "map");
@@ -50,6 +54,21 @@ class AprilTagPrecisionLandingNode : public rclcpp::Node {
     drone_t_cam_.setRotation(q_cam);
 
     const auto qos_sensor = rclcpp::SensorDataQoS();
+
+    if (relay_image_stream_) {
+      if (image_input_topic_ == image_output_topic_) {
+        RCLCPP_INFO(get_logger(),
+                    "image relay enabled but input==output (%s), skipping relay to avoid topic loop",
+                    image_output_topic_.c_str());
+      } else {
+        pub_image_relay_ = create_publisher<sensor_msgs::msg::Image>(image_output_topic_, qos_sensor);
+        sub_image_relay_ = create_subscription<sensor_msgs::msg::Image>(
+            image_input_topic_, qos_sensor,
+            std::bind(&AprilTagPrecisionLandingNode::imageRelayCb, this, std::placeholders::_1));
+        RCLCPP_INFO(get_logger(), "Relaying image stream %s -> %s",
+                    image_input_topic_.c_str(), image_output_topic_.c_str());
+      }
+    }
 
     if (input_mode_ == "tf" || input_mode_ == "auto") {
       sub_tf_ = create_subscription<tf2_msgs::msg::TFMessage>(
@@ -105,6 +124,17 @@ class AprilTagPrecisionLandingNode : public rclcpp::Node {
 
     got_world_t_drone_ = true;
     last_drone_pose_time_ = now();
+  }
+
+  void imageRelayCb(const sensor_msgs::msg::Image::SharedPtr msg) {
+    if (!pub_image_relay_) {
+      return;
+    }
+    auto out = *msg;
+    if (out.header.frame_id.empty() && !camera_frame_id_.empty()) {
+      out.header.frame_id = camera_frame_id_;
+    }
+    pub_image_relay_->publish(out);
   }
 
   void cameraTagPoseCb(const geometry_msgs::msg::PoseStamped::SharedPtr msg) {
@@ -201,6 +231,9 @@ class AprilTagPrecisionLandingNode : public rclcpp::Node {
 
   std::string tf_topic_;
   std::string camera_tag_pose_topic_;
+  bool relay_image_stream_{true};
+  std::string image_input_topic_;
+  std::string image_output_topic_;
   std::string drone_pose_topic_;
   std::string landing_target_topic_;
   std::string world_frame_;
@@ -234,8 +267,10 @@ class AprilTagPrecisionLandingNode : public rclcpp::Node {
   rclcpp::Time last_tag_time_{0, 0, RCL_ROS_TIME};
 
   rclcpp::Subscription<tf2_msgs::msg::TFMessage>::SharedPtr sub_tf_;
+  rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr sub_image_relay_;
   rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr sub_camera_tag_pose_;
   rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr sub_drone_pose_;
+  rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr pub_image_relay_;
   rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr pub_landing_target_pose_;
   std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
   rclcpp::TimerBase::SharedPtr timer_;
