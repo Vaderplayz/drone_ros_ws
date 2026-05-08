@@ -16,10 +16,64 @@ is_true() {
   esac
 }
 
-kill_if_running() {
+STOP_GRACE_SEC="${STOP_GRACE_SEC:-3}"
+
+stop_pid_list() {
+  local reason="$1"
+  shift
+  local pids=("$@")
+  if [[ "${#pids[@]}" -eq 0 ]]; then
+    return 0
+  fi
+
+  echo "[stop] ${reason}: sending SIGTERM to pid(s): ${pids[*]}"
+  kill "${pids[@]}" >/dev/null 2>&1 || true
+
+  local deadline=$((SECONDS + STOP_GRACE_SEC))
+  while (( SECONDS < deadline )); do
+    local alive=()
+    local pid
+    for pid in "${pids[@]}"; do
+      if kill -0 "${pid}" >/dev/null 2>&1; then
+        alive+=("${pid}")
+      fi
+    done
+    if [[ "${#alive[@]}" -eq 0 ]]; then
+      return 0
+    fi
+    sleep 0.2
+  done
+
+  local still_alive=()
+  local pid
+  for pid in "${pids[@]}"; do
+    if kill -0 "${pid}" >/dev/null 2>&1; then
+      still_alive+=("${pid}")
+    fi
+  done
+  if [[ "${#still_alive[@]}" -gt 0 ]]; then
+    echo "[stop] ${reason}: forcing SIGKILL on pid(s): ${still_alive[*]}"
+    kill -9 "${still_alive[@]}" >/dev/null 2>&1 || true
+  fi
+}
+
+stop_matching_pattern() {
   local pattern="$1"
-  pgrep -af "${pattern}" >/dev/null 2>&1 || return 0
-  pkill -f "${pattern}" >/dev/null 2>&1 || true
+  local label="$2"
+  local found=()
+  local pid
+  while read -r pid; do
+    [[ -z "${pid}" ]] && continue
+    # Never kill this script or its parent shell.
+    if [[ "${pid}" -eq "$$" || "${pid}" -eq "${PPID}" || "${pid}" -eq "${BASHPID}" ]]; then
+      continue
+    fi
+    found+=("${pid}")
+  done < <(pgrep -f "${pattern}" || true)
+
+  if [[ "${#found[@]}" -gt 0 ]]; then
+    stop_pid_list "${label}" "${found[@]}"
+  fi
 }
 
 resolve_ros_setup() {
@@ -109,12 +163,14 @@ NAMES=()
 cleanup() {
   set +e
   local i
+  local to_stop=()
   for i in "${!PIDS[@]}"; do
     if kill -0 "${PIDS[$i]}" >/dev/null 2>&1; then
       echo "[stop] ${NAMES[$i]} (pid=${PIDS[$i]})"
-      kill "${PIDS[$i]}" >/dev/null 2>&1 || true
+      to_stop+=("${PIDS[$i]}")
     fi
   done
+  stop_pid_list "managed child processes" "${to_stop[@]}"
 }
 
 add_process() {
@@ -125,12 +181,15 @@ add_process() {
 }
 
 kill_existing_stack() {
-  kill_if_running "ros2 launch mavros ${MAVROS_LAUNCH_FILE}"
-  kill_if_running "/mavros_node"
-  kill_if_running "ros2 run v4l2_camera v4l2_camera_node"
-  kill_if_running "ros2 run apriltag_precision_landing apriltag_camera_detector_node"
-  kill_if_running "ros2 run apriltag_precision_landing apriltag_precision_landing_node"
-  kill_if_running "ros2 run rqt_image_view rqt_image_view"
+  stop_matching_pattern "ros2 launch mavros ${MAVROS_LAUNCH_FILE}" "stale mavros launch"
+  stop_matching_pattern "/mavros_node" "stale mavros node"
+  stop_matching_pattern "/mavros_router" "stale mavros router"
+  stop_matching_pattern "ros2 run v4l2_camera v4l2_camera_node" "stale v4l2 camera node"
+  stop_matching_pattern "ros2 run apriltag_precision_landing apriltag_camera_detector_node" "stale apriltag detector launch"
+  stop_matching_pattern "/apriltag_camera_detector_node" "stale apriltag detector process"
+  stop_matching_pattern "ros2 run apriltag_precision_landing apriltag_precision_landing_node" "stale apriltag target launch"
+  stop_matching_pattern "/apriltag_precision_landing_node" "stale apriltag target process"
+  stop_matching_pattern "ros2 run rqt_image_view rqt_image_view" "stale rqt_image_view"
 }
 
 start_mavros() {
