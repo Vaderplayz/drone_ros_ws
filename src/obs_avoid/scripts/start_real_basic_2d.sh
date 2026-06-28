@@ -48,10 +48,8 @@ ROS_SETUP="${ROS_SETUP:-${ROS_WS}/install/setup.bash}"
 
 WAIT_TIMEOUT_SEC="${WAIT_TIMEOUT_SEC:-60}"
 KILL_BEFORE_LAUNCH="${KILL_BEFORE_LAUNCH:-1}"
-
-MAVROS_LAUNCH_FILE="${MAVROS_LAUNCH_FILE:-px4.launch}"
-FCU_URL="${FCU_URL:-serial:///dev/ttyACM0:115200}"
-MAVROS_RESPAWN="${MAVROS_RESPAWN:-true}"
+PX4_DDS_LOCAL_POSITION_TOPIC="${PX4_DDS_LOCAL_POSITION_TOPIC:-/fmu/out/vehicle_local_position}"
+PX4_DDS_GPS_TOPIC="${PX4_DDS_GPS_TOPIC:-/fmu/out/vehicle_gps_position}"
 
 RPLIDAR_SERIAL_PORT="${RPLIDAR_SERIAL_PORT:-/dev/ttyUSB0}"
 RPLIDAR_BAUDRATE="${RPLIDAR_BAUDRATE:-115200}"
@@ -60,8 +58,8 @@ RPLIDAR_INVERTED="${RPLIDAR_INVERTED:-false}"
 RPLIDAR_ANGLE_COMPENSATE="${RPLIDAR_ANGLE_COMPENSATE:-true}"
 SCAN_TOPIC="${SCAN_TOPIC:-/scan}"
 
-ENABLE_ODOM_FLATTEN="${ENABLE_ODOM_FLATTEN:-1}"
-ODOM_TOPIC="${ODOM_TOPIC:-/mavros/local_position/odom}"
+ENABLE_PX4_DDS_BRIDGE="${ENABLE_PX4_DDS_BRIDGE:-1}"
+ODOM_TOPIC="${ODOM_TOPIC:-/px4/odom}"
 ODOM_PARENT_FRAME="${ODOM_PARENT_FRAME:-odom}"
 ODOM_CHILD_FRAME="${ODOM_CHILD_FRAME:-base_link}"
 
@@ -81,13 +79,17 @@ PLANNER_NODE="${PLANNER_NODE:-local_planner_mode_a}"
 PLANNER_PARAMS_FILE="${PLANNER_PARAMS_FILE:-}"
 PLANNER_SCAN_TOPIC="${PLANNER_SCAN_TOPIC:-${SCAN_TOPIC}}"
 PLANNER_REMAP_CMD_VEL_TO="${PLANNER_REMAP_CMD_VEL_TO:-}"
+MAX_ALTITUDE_M="${MAX_ALTITUDE_M:-5.0}"
+MIN_ALTITUDE_M="${MIN_ALTITUDE_M:-0.0}"
+MAX_LINEAR_SPEED_MPS="${MAX_LINEAR_SPEED_MPS:-3.0}"
+MAX_YAW_RATE_RAD_S="${MAX_YAW_RATE_RAD_S:-0.45}"
 
-MAVROS_LOG="${MAVROS_LOG:-/tmp/mavros_real_basic.log}"
+PX4_DDS_BRIDGE_LOG="${PX4_DDS_BRIDGE_LOG:-/tmp/px4_dds_bridge_real_basic.log}"
 RPLIDAR_LOG="${RPLIDAR_LOG:-/tmp/rplidar_real_basic.log}"
 SLAM_LOG="${SLAM_LOG:-/tmp/slam_real_basic.log}"
-ODOM_FLATTEN_LOG="${ODOM_FLATTEN_LOG:-/tmp/odom_flatten_real_basic.log}"
 TF_LOG="${TF_LOG:-/tmp/lidar_static_tf_real_basic.log}"
 PLANNER_LOG="${PLANNER_LOG:-/tmp/planner_real_basic.log}"
+USER_CTRL_LOG="${USER_CTRL_LOG:-/tmp/user_ctrl_dds_real_basic.log}"
 
 PIDS=()
 NAMES=()
@@ -111,21 +113,26 @@ add_process() {
 }
 
 kill_existing_stack() {
-  kill_if_running "ros2 launch mavros ${MAVROS_LAUNCH_FILE}"
+  kill_if_running "ros2 run obs_avoid px4_dds_local_bridge"
   kill_if_running "ros2 run rplidar_ros rplidar_composition"
   kill_if_running "ros2 launch slam_toolbox online_async_launch.py"
-  kill_if_running "ros2 run odom_flatten px4_odom_flatten_node"
   kill_if_running "ros2 run obs_avoid local_planner_mode_a"
+  kill_if_running "ros2 run obs_avoid user_ctrl_dds"
   kill_if_running "ros2 run tf2_ros static_transform_publisher.*${LIDAR_FRAME}"
 }
 
-start_mavros() {
-  echo "[run] MAVROS -> ${MAVROS_LOG}"
-  ros2 launch mavros "${MAVROS_LAUNCH_FILE}" \
-    fcu_url:="${FCU_URL}" \
-    respawn_mavros:="${MAVROS_RESPAWN}" \
-    use_sim_time:=false >"${MAVROS_LOG}" 2>&1 &
-  add_process "$!" "mavros"
+start_px4_dds_bridge() {
+  if ! is_true "${ENABLE_PX4_DDS_BRIDGE}"; then
+    return
+  fi
+  echo "[run] px4_dds_local_bridge -> ${PX4_DDS_BRIDGE_LOG}"
+  ros2 run obs_avoid px4_dds_local_bridge --ros-args \
+    -p px4_local_position_topic:="${PX4_DDS_LOCAL_POSITION_TOPIC}" \
+    -p px4_gps_topic:="${PX4_DDS_GPS_TOPIC}" \
+    -p odom_topic:="${ODOM_TOPIC}" \
+    -p odom_frame:="${ODOM_PARENT_FRAME}" \
+    -p base_frame:="${ODOM_CHILD_FRAME}" >"${PX4_DDS_BRIDGE_LOG}" 2>&1 &
+  add_process "$!" "px4_dds_bridge"
 }
 
 start_rplidar() {
@@ -139,19 +146,6 @@ start_rplidar() {
     -p angle_compensate:="${RPLIDAR_ANGLE_COMPENSATE}" \
     -p topic_name:="${SCAN_TOPIC#/}" >"${RPLIDAR_LOG}" 2>&1 &
   add_process "$!" "rplidar"
-}
-
-start_odom_flatten() {
-  if ! is_true "${ENABLE_ODOM_FLATTEN}"; then
-    return
-  fi
-  echo "[run] px4_odom_flatten_node -> ${ODOM_FLATTEN_LOG}"
-  ros2 run odom_flatten px4_odom_flatten_node --ros-args \
-    -p use_sim_time:=false \
-    -p odom_topic:="${ODOM_TOPIC}" \
-    -p parent_frame:="${ODOM_PARENT_FRAME}" \
-    -p child_frame:="${ODOM_CHILD_FRAME}" >"${ODOM_FLATTEN_LOG}" 2>&1 &
-  add_process "$!" "odom_flatten"
 }
 
 start_static_tf() {
@@ -181,17 +175,53 @@ start_slam() {
 
 start_planner() {
   local cmd=(ros2 run obs_avoid "${PLANNER_NODE}" --ros-args -p use_sim_time:=false)
+  cmd+=(
+    -p "v_max:=0.9"
+    -p "vy_max:=0.6"
+    -p "w_max:=${MAX_YAW_RATE_RAD_S}"
+    -p "vz_max:=0.6"
+    -p "ax_max:=0.8"
+    -p "ay_max:=0.8"
+    -p "aw_max:=1.0"
+    -p "enable_sharp_turn_assist:=false"
+    -p "bypass_strafe_speed:=0.25"
+    -p "bypass_forward_speed:=0.18"
+    -p "bypass_yaw_rate:=0.25"
+    -p "max_linear_speed_total:=${MAX_LINEAR_SPEED_MPS}"
+    -p "max_yaw_rate_abs:=${MAX_YAW_RATE_RAD_S}"
+    -p "max_altitude_m:=${MAX_ALTITUDE_M}"
+    -p "min_altitude_m:=${MIN_ALTITUDE_M}"
+    -p "odom_topic:=${ODOM_TOPIC}"
+  )
   if [[ -n "${PLANNER_PARAMS_FILE}" ]]; then
     cmd+=(--params-file "${PLANNER_PARAMS_FILE}")
   fi
   if [[ -n "${PLANNER_REMAP_CMD_VEL_TO}" ]]; then
-    cmd+=(-r "/mavros/setpoint_velocity/cmd_vel:=${PLANNER_REMAP_CMD_VEL_TO}")
+    cmd+=(-r "/planner_cmd_vel:=${PLANNER_REMAP_CMD_VEL_TO}")
   fi
   cmd+=(-r "/scan_horizontal:=${PLANNER_SCAN_TOPIC}")
 
   echo "[run] ${PLANNER_NODE} -> ${PLANNER_LOG}"
   "${cmd[@]}" >"${PLANNER_LOG}" 2>&1 &
   add_process "$!" "planner"
+}
+
+start_user_ctrl() {
+  echo "[run] user_ctrl_dds (PX4 DDS OFFBOARD bridge mode) -> ${USER_CTRL_LOG}"
+  ros2 run obs_avoid user_ctrl_dds --ros-args \
+    -p use_sim_time:=false \
+    -p ask_goal_on_start:=false \
+    -p print_input_help_on_start:=false \
+    -p enable_internal_goal_nav:=false \
+    -p planner_cmd_timeout_sec:=1.0 \
+    -p max_altitude_m:="${MAX_ALTITUDE_M}" \
+    -p min_altitude_m:="${MIN_ALTITUDE_M}" \
+    -p max_linear_speed_mps:="${MAX_LINEAR_SPEED_MPS}" \
+    -p max_yaw_rate_rad_s:="${MAX_YAW_RATE_RAD_S}" \
+    -p max_accel_xy_mps2:=0.8 \
+    -p max_accel_z_mps2:=0.6 \
+    -p max_yaw_accel_rad_s2:=1.0 >"${USER_CTRL_LOG}" 2>&1 &
+  add_process "$!" "user_ctrl_dds"
 }
 
 main() {
@@ -218,10 +248,6 @@ main() {
   source "${ROS_SETUP}"
   set -u
 
-  if ! ros2 pkg prefix mavros >/dev/null 2>&1; then
-    echo "[error] mavros package not found in overlay." >&2
-    exit 1
-  fi
   if ! ros2 pkg prefix rplidar_ros >/dev/null 2>&1; then
     echo "[error] rplidar_ros package not found in overlay." >&2
     exit 1
@@ -239,9 +265,9 @@ main() {
 
   trap cleanup EXIT INT TERM
 
-  start_mavros
-  echo "[wait] /mavros/state"
-  wait_for_topic "/mavros/state" "${WAIT_TIMEOUT_SEC}"
+  start_px4_dds_bridge
+  echo "[wait] ${PX4_DDS_LOCAL_POSITION_TOPIC}"
+  wait_for_topic "${PX4_DDS_LOCAL_POSITION_TOPIC}" "${WAIT_TIMEOUT_SEC}"
 
   echo "[wait] ${ODOM_TOPIC}"
   wait_for_topic "${ODOM_TOPIC}" "${WAIT_TIMEOUT_SEC}"
@@ -250,7 +276,6 @@ main() {
   echo "[wait] ${SCAN_TOPIC}"
   wait_for_topic "${SCAN_TOPIC}" "${WAIT_TIMEOUT_SEC}"
 
-  start_odom_flatten
   start_static_tf
   start_slam
 
@@ -258,20 +283,20 @@ main() {
   wait_for_topic "/map" "${WAIT_TIMEOUT_SEC}" || true
 
   start_planner
+  start_user_ctrl
 
   echo "[ok] real basic 2D stack started"
-  echo "[info] FCU_URL=${FCU_URL}"
   echo "[info] LiDAR port=${RPLIDAR_SERIAL_PORT} baud=${RPLIDAR_BAUDRATE} topic=${SCAN_TOPIC} frame=${RPLIDAR_FRAME_ID}"
   echo "[info] planner=${PLANNER_NODE} scan_remap=${PLANNER_SCAN_TOPIC}"
+  echo "[info] DDS local_position=${PX4_DDS_LOCAL_POSITION_TOPIC} odom=${ODOM_TOPIC}"
+  echo "[info] safety: max_altitude=${MAX_ALTITUDE_M}m max_linear=${MAX_LINEAR_SPEED_MPS}m/s max_yaw_rate=${MAX_YAW_RATE_RAD_S}rad/s"
   echo "[info] use_sim_time=false"
   echo "[info] logs:"
-  echo "  - ${MAVROS_LOG}"
+  echo "  - ${PX4_DDS_BRIDGE_LOG}"
   echo "  - ${RPLIDAR_LOG}"
   echo "  - ${SLAM_LOG}"
   echo "  - ${PLANNER_LOG}"
-  if is_true "${ENABLE_ODOM_FLATTEN}"; then
-    echo "  - ${ODOM_FLATTEN_LOG}"
-  fi
+  echo "  - ${USER_CTRL_LOG}"
 
   set +e
   wait -n "${PIDS[@]}"

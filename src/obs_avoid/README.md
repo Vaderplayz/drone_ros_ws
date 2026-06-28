@@ -262,7 +262,18 @@ What this starts:
 - planner pane + user mode pane
 - RViz
 
-### Workflow B: Real PX4 hardware stack (Pi 5 + PX4 + MAVROS + planner)
+### Workflow B: Real PX4 hardware stack (Pi 5 + PX4 DDS + planner)
+
+This branch uses PX4 DDS topics through `px4_msgs` instead of MAVROS for the
+real-hardware launchers. Make sure `px4_msgs` is present in the ROS 2 workspace
+and that the PX4 micro XRCE-DDS agent is running before starting these scripts.
+
+```bash
+cd ~/ros2_ws/src
+git clone https://github.com/PX4/px4_msgs.git
+cd ~/ros2_ws
+colcon build --packages-select px4_msgs obs_avoid
+```
 
 ```bash
 cd ~/ros2_ws/src/obs_avoid
@@ -272,8 +283,8 @@ cd ~/ros2_ws/src/obs_avoid
 Common real-hardware overrides:
 
 ```bash
-# UART TELEM example instead of USB CDC:
-FCU_URL=serial:///dev/ttyAMA0:921600 ./scripts/start_real_stack_px4.sh
+# Override PX4 DDS topic names if your bridge uses different namespaces:
+PX4_DDS_LOCAL_POSITION_TOPIC=/fmu/out/vehicle_local_position ./scripts/start_real_stack_px4.sh
 
 # Conservative planner profile for first hardware flights:
 PLANNER_PARAMS_FILE=~/ros2_ws/src/obs_avoid/uav_stack_bringup/config/local_planner_mode_a_real_safe.yaml \
@@ -285,8 +296,8 @@ START_MAPPING=1 ./scripts/start_real_stack_px4.sh
 
 What this starts:
 
-- MAVROS (`use_sim_time:=false`, serial FCU by default)
-- odom flatten bridge (`/mavros/local_position/odom` -> TF `odom->base_link`)
+- PX4 DDS local bridge (`/fmu/out/vehicle_local_position` -> `/px4/odom`)
+- DDS offboard bridge (`/planner_cmd_vel` -> `/fmu/in/trajectory_setpoint`)
 - static TF for `lidar_vert_link` and `lidar_horiz_link` (configurable env vars)
 - selected planner (`local_planner_mode_a` by default)
 - optional mapping launcher (`START_MAPPING=1`)
@@ -294,7 +305,8 @@ What this starts:
 Prerequisites for real drone:
 
 - LiDAR driver(s) already publishing `/scan_horizontal` (and `/scan_vertical` if mapping is enabled)
-- PX4 set for OFFBOARD velocity control flow (or use `mission_obs_avoid` for AUTO.MISSION interception)
+- PX4 micro XRCE-DDS agent connected and publishing `/fmu/out/vehicle_local_position`
+- PX4 accepting OFFBOARD velocity setpoints on `/fmu/in/trajectory_setpoint`
 
 ### Workflow C: Mapping mode launcher (SLAM + mapper only)
 
@@ -344,7 +356,7 @@ cd ~/ros2_ws/src/obs_avoid
 ### Workflow G: Real PX4 + Nav2-only navigation/obstacle avoidance + GPS fusion
 
 This workflow does not use `slam_navigation_mode` or `local_planner_mode_a`.
-Nav2 handles global planning + local obstacle avoidance, and a command bridge forwards Nav2 `/cmd_vel` to `/planner_cmd_vel` for PX4 OFFBOARD forwarding.
+Nav2 handles global planning + local obstacle avoidance, and a command bridge forwards Nav2 `/cmd_vel` to `/planner_cmd_vel` for DDS OFFBOARD forwarding.
 If GPS is not available, the launcher automatically falls back to `start_real_basic_2d.sh` (SLAM + local planner) unless disabled.
 
 ```bash
@@ -355,15 +367,15 @@ cd ~/ros2_ws/src/obs_avoid
 Common overrides:
 
 ```bash
-# Use onboard UART telemetry:
-FCU_URL=serial:///dev/ttyAMA0:921600 ./scripts/start_real_nav2_gps.sh
+# Override PX4 DDS GPS topic if needed:
+PX4_DDS_GPS_TOPIC=/fmu/out/vehicle_gps_position ./scripts/start_real_nav2_gps.sh
 
 # If you also want this script to start RPLIDAR:
 ENABLE_RPLIDAR=1 RPLIDAR_SERIAL_PORT=/dev/ttyUSB0 ./scripts/start_real_nav2_gps.sh
 
 # Override nav2 and robot_localization params:
 NAV2_PARAMS_FILE=~/ros2_ws/src/obs_avoid/config/nav2_gps_nav2_params.yaml \
-RL_PARAMS_FILE=~/ros2_ws/src/obs_avoid/config/nav2_gps_dual_ekf.yaml \
+RL_PARAMS_FILE=~/ros2_ws/src/obs_avoid/config/nav2_gps_dual_ekf_dds.yaml \
 ./scripts/start_real_nav2_gps.sh
 
 # Disable automatic SLAM fallback on missing GPS:
@@ -396,9 +408,9 @@ Key env vars:
 
 Key env vars:
 
-- `FCU_URL` (default `serial:///dev/ttyACM0:921600`)
-- `MAVROS_LAUNCH_FILE` (default `px4.launch`)
-- `MAVROS_RESPAWN` (default `true`)
+- `PX4_DDS_LOCAL_POSITION_TOPIC` (default `/fmu/out/vehicle_local_position`)
+- `PX4_DDS_GPS_TOPIC` (default `/fmu/out/vehicle_gps_position`)
+- `ODOM_TOPIC` (default `/px4/odom`)
 - `WAIT_TIMEOUT_SEC` (default `45`)
 - `PLANNER_NODE` (`local_planner_mode_a|local_planner_sector_mode|local_planner_hybrid_mode`)
 - `PLANNER_PARAMS_FILE` (optional ROS params file for planner)
@@ -449,18 +461,20 @@ Key env vars:
 
 Purpose:
 - Real drone workflow using official Nav2 + `robot_localization` GPS fusion.
-- Keeps `user_ctrl` only as PX4 OFFBOARD bridge and arm/mode helper.
+- Keeps `user_ctrl_dds` only as PX4 DDS OFFBOARD bridge and arm/mode helper.
 - Does not launch internal planners (`local_planner_*`) or `slam_navigation_mode`.
 
 Key env vars:
-- `FCU_URL` (default `serial:///dev/ttyACM0:921600`)
+- `PX4_DDS_LOCAL_POSITION_TOPIC` (default `/fmu/out/vehicle_local_position`)
+- `PX4_DDS_GPS_TOPIC` (default `/fmu/out/vehicle_gps_position`)
+- `PX4_ODOM_TOPIC` (default `/px4/odom`)
 - `ENABLE_RPLIDAR` (default `0`)
-- `RL_PARAMS_FILE` (default `config/nav2_gps_dual_ekf.yaml`)
+- `RL_PARAMS_FILE` (default `config/nav2_gps_dual_ekf_dds.yaml`)
 - `NAV2_PARAMS_FILE` (default `config/nav2_gps_nav2_params.yaml`)
 - `NAV2_USE_COMPOSITION` (default `false`)
 - `CMD_BRIDGE_INPUT_TOPIC` (default `/cmd_vel`)
 - `CMD_BRIDGE_OUTPUT_TOPIC` (default `/planner_cmd_vel`)
-- `GPS_TOPIC` (default `/mavros/global_position/global`)
+- `GPS_TOPIC` (default `/px4/gps/fix`)
 - `GPS_FALLBACK_TO_SLAM` (default `1`)
 - `SLAM_FALLBACK_SCRIPT` (default `scripts/start_real_basic_2d.sh`)
 
@@ -479,13 +493,15 @@ Key env vars:
 - `/clock` (only when `use_sim_time=true`)
 - `/scan_horizontal`
 - `/scan_vertical`
-- `/mavros/local_position/odom`
+- `/px4/odom` for DDS real-flight launchers
+- `/mavros/local_position/odom` for legacy MAVROS/SITL launchers
 
 ### Important output topics
 
 - Control:
   - `/planner_cmd_vel`
-  - `/mavros/setpoint_velocity/cmd_vel`
+  - `/fmu/in/trajectory_setpoint` for DDS real-flight launchers
+  - `/mavros/setpoint_velocity/cmd_vel` for legacy MAVROS/SITL launchers
   - `/drone_goal`
 - SLAM:
   - `/map`
@@ -590,7 +606,7 @@ Spiral mode behavior:
 - Requests OFFBOARD + ARM.
 - Generates square-spiral mission waypoints.
 - Can skip blocked waypoints using LiDAR proximity gate.
-- Publishes goals to `/drone_goal` and velocity to MAVROS setpoint topic.
+- Publishes goals to `/drone_goal`; real-flight DDS launchers forward planner velocity through `user_ctrl_dds`.
 
 ## 11) Tuning Assets
 
@@ -610,8 +626,8 @@ Track summary:
 Check missing prerequisites:
 
 ```bash
-ros2 topic list | rg -n "^/scan_horizontal$|^/scan_vertical$|^/mavros/local_position/odom$"
-ros2 node list | rg -n "^/px4_odom_flatten_node$|^/odom_to_tf_bridge$"
+ros2 topic list | rg -n "^/scan_horizontal$|^/scan_vertical$|^/px4/odom$"
+ros2 node list | rg -n "^/px4_dds_local_bridge$|^/odom_to_tf_bridge$"
 ```
 
 If you run with `USE_SIM_TIME=true`, also verify `/clock` exists.
@@ -623,7 +639,7 @@ If you run with `USE_SIM_TIME=true`, also verify `/clock` exists.
 
 ```bash
 ros2 topic hz /planner_cmd_vel
-ros2 topic hz /mavros/setpoint_velocity/cmd_vel
+ros2 topic hz /fmu/in/trajectory_setpoint
 ```
 
 ### 12.3 Mapper clouds empty or unstable

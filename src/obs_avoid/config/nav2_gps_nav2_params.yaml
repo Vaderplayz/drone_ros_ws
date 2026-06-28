@@ -40,22 +40,22 @@ controller_server:
       plugin: "dwb_core::DWBLocalPlanner"
       debug_trajectory_details: false
       min_vel_x: 0.0
-      max_vel_x: 1.2
-      min_vel_y: -1.2
-      max_vel_y: 1.2
-      max_vel_theta: 1.0
+      max_vel_x: 0.8
+      min_vel_y: -0.5
+      max_vel_y: 0.5
+      max_vel_theta: 0.45
       min_speed_xy: 0.0
-      max_speed_xy: 1.4
+      max_speed_xy: 0.9
       min_speed_theta: 0.0
-      acc_lim_x: 1.5
-      acc_lim_y: 1.5
-      acc_lim_theta: 2.0
-      decel_lim_x: -1.5
-      decel_lim_y: -1.5
-      decel_lim_theta: -2.0
-      vx_samples: 15
-      vy_samples: 15
-      vtheta_samples: 20
+      acc_lim_x: 0.9
+      acc_lim_y: 0.9
+      acc_lim_theta: 1.0
+      decel_lim_x: -0.9
+      decel_lim_y: -0.9
+      decel_lim_theta: -1.0
+      vx_samples: 13
+      vy_samples: 11
+      vtheta_samples: 16
       sim_time: 1.5
       linear_granularity: 0.05
       angular_granularity: 0.025
@@ -80,7 +80,7 @@ local_costmap:
   local_costmap:
     ros__parameters:
       use_sim_time: false
-      update_frequency: 10.0
+      update_frequency: 12.0
       publish_frequency: 5.0
       global_frame: odom
       robot_base_frame: base_link
@@ -88,7 +88,7 @@ local_costmap:
       width: 20.0
       height: 20.0
       resolution: 0.10
-      robot_radius: 0.45
+      robot_radius: 0.50
       always_send_full_costmap: true
       plugins: ["obstacle_layer", "inflation_layer"]
 
@@ -103,14 +103,14 @@ local_costmap:
           marking: true
           raytrace_max_range: 15.0
           raytrace_min_range: 0.0
-          obstacle_max_range: 10.0
+          obstacle_max_range: 8.0
           obstacle_min_range: 0.0
           max_obstacle_height: 3.0
 
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 3.0
-        inflation_radius: 1.0
+        inflation_radius: 1.2
 
 global_costmap:
   global_costmap:
@@ -125,7 +125,7 @@ global_costmap:
       width: 120.0
       height: 120.0
       resolution: 0.25
-      robot_radius: 0.45
+      robot_radius: 0.50
       always_send_full_costmap: true
       plugins: ["obstacle_layer", "inflation_layer"]
 
@@ -212,10 +212,10 @@ velocity_smoother:
     smoothing_frequency: 20.0
     scale_velocities: false
     feedback: "OPEN_LOOP"
-    max_velocity: [1.2, 1.2, 1.0]
-    min_velocity: [-1.2, -1.2, -1.0]
-    max_accel: [1.5, 1.5, 2.0]
-    max_decel: [-1.5, -1.5, -2.0]
+    max_velocity: [0.8, 0.5, 0.45]
+    min_velocity: [-0.8, -0.5, -0.45]
+    max_accel: [0.9, 0.9, 1.0]
+    max_decel: [-0.9, -0.9, -1.0]
     odom_topic: /odometry/local
     odom_duration: 0.2
     deadband_velocity: [0.0, 0.0, 0.0]

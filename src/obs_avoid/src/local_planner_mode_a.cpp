@@ -68,14 +68,14 @@ class DwaLocalPlanner : public rclcpp::Node {
 public:
   DwaLocalPlanner() : Node("dwa_local_planner_skeleton") {
     // -------- Parameters (keep simple first) --------
-    v_max_  = declare_parameter<double>("v_max", 2.5);
-    vy_max_ = declare_parameter<double>("vy_max", 2.0);
-    w_max_  = declare_parameter<double>("w_max", 1.0);
-    vz_max_ = declare_parameter<double>("vz_max", 1.0);
+    v_max_  = declare_parameter<double>("v_max", 0.9);
+    vy_max_ = declare_parameter<double>("vy_max", 0.6);
+    w_max_  = declare_parameter<double>("w_max", 0.45);
+    vz_max_ = declare_parameter<double>("vz_max", 0.6);
 
     ax_max_ = declare_parameter<double>("ax_max", 1.0);
     ay_max_ = declare_parameter<double>("ay_max", 1.0);
-    aw_max_ = declare_parameter<double>("aw_max", 2.2);
+    aw_max_ = declare_parameter<double>("aw_max", 1.2);
 
     control_dt_ = declare_parameter<double>("control_dt", 0.05);
     sim_dt_     = declare_parameter<double>("sim_dt", 0.10);
@@ -102,9 +102,9 @@ public:
     enable_bypass_assist_ = declare_parameter<bool>("enable_bypass_assist", true);
     bypass_front_trigger_dist_ = declare_parameter<double>("bypass_front_trigger_dist", 1.8);
     bypass_side_open_dist_ = declare_parameter<double>("bypass_side_open_dist", 1.0);
-    bypass_strafe_speed_ = declare_parameter<double>("bypass_strafe_speed", 0.55);
-    bypass_forward_speed_ = declare_parameter<double>("bypass_forward_speed", 0.24);
-    bypass_yaw_rate_ = declare_parameter<double>("bypass_yaw_rate", 0.35);
+    bypass_strafe_speed_ = declare_parameter<double>("bypass_strafe_speed", 0.25);
+    bypass_forward_speed_ = declare_parameter<double>("bypass_forward_speed", 0.18);
+    bypass_yaw_rate_ = declare_parameter<double>("bypass_yaw_rate", 0.25);
     bypass_lock_sec_ = declare_parameter<double>("bypass_lock_sec", 1.0);
     bypass_turn_hysteresis_ = declare_parameter<double>("bypass_turn_hysteresis", 0.60);
     bypass_max_continuous_sec_ = declare_parameter<double>("bypass_max_continuous_sec", 6.0);
@@ -119,13 +119,13 @@ public:
     bypass_near_goal_dist_ = declare_parameter<double>("bypass_near_goal_dist", 4.5);
     bypass_near_goal_strafe_scale_ =
         declare_parameter<double>("bypass_near_goal_strafe_scale", 0.40);
-    enable_sharp_turn_assist_ = declare_parameter<bool>("enable_sharp_turn_assist", true);
+    enable_sharp_turn_assist_ = declare_parameter<bool>("enable_sharp_turn_assist", false);
     sharp_turn_trigger_dist_ = declare_parameter<double>("sharp_turn_trigger_dist", 2.0);
-    sharp_turn_yaw_boost_ = declare_parameter<double>("sharp_turn_yaw_boost", 1.6);
+    sharp_turn_yaw_boost_ = declare_parameter<double>("sharp_turn_yaw_boost", 1.1);
     sharp_turn_min_fwd_scale_ = declare_parameter<double>("sharp_turn_min_fwd_scale", 0.25);
-    sharp_turn_side_speed_ = declare_parameter<double>("sharp_turn_side_speed", 0.28);
-    final_gate_turn_rate_ = declare_parameter<double>("final_gate_turn_rate", 0.60);
-    final_gate_strafe_speed_ = declare_parameter<double>("final_gate_strafe_speed", 0.22);
+    sharp_turn_side_speed_ = declare_parameter<double>("sharp_turn_side_speed", 0.12);
+    final_gate_turn_rate_ = declare_parameter<double>("final_gate_turn_rate", 0.30);
+    final_gate_strafe_speed_ = declare_parameter<double>("final_gate_strafe_speed", 0.12);
     recovery_side_lock_sec_ = declare_parameter<double>("recovery_side_lock_sec", 1.20);
     recovery_side_hysteresis_ = declare_parameter<double>("recovery_side_hysteresis", 0.40);
     deorbit_trigger_dist_ = declare_parameter<double>("deorbit_trigger_dist", 1.8);
@@ -182,6 +182,11 @@ public:
 
     // If true: publish vx,vy in world/map frame (recommended for PX4 offboard velocity in ENU).
     publish_world_cmd_ = declare_parameter<bool>("publish_world_cmd", true);
+    max_linear_speed_total_ = declare_parameter<double>("max_linear_speed_total", 3.0);
+    max_yaw_rate_abs_ = declare_parameter<double>("max_yaw_rate_abs", 0.45);
+    max_altitude_m_ = declare_parameter<double>("max_altitude_m", 5.0);
+    min_altitude_m_ = declare_parameter<double>("min_altitude_m", 0.0);
+    altitude_guard_band_m_ = declare_parameter<double>("altitude_guard_band_m", 0.4);
     publish_rollout_path_ = declare_parameter<bool>("publish_rollout_path", true);
     rollout_path_frame_ = declare_parameter<std::string>("rollout_path_frame", "base_link");
 
@@ -191,8 +196,9 @@ public:
     // the last published goal waypoint.
     auto qos_goal   = rclcpp::QoS(10).reliable().transient_local();
 
+    odom_topic_ = declare_parameter<std::string>("odom_topic", "/px4/odom");
     sub_odom_ = create_subscription<nav_msgs::msg::Odometry>(
-        "/mavros/local_position/odom", qos_sensor,
+        odom_topic_, qos_sensor,
         [this](nav_msgs::msg::Odometry::SharedPtr msg){ odom_ = *msg; });
 
     sub_scan_ = create_subscription<sensor_msgs::msg::LaserScan>(
@@ -1238,6 +1244,45 @@ private:
     pub_state_->publish(msg);
   }
 
+  void apply_output_safety_limits(double &vx, double &vy, double &vz, double &wz) {
+    const double vxy = std::hypot(vx, vy);
+    if (vxy > std::max(1e-3, v_max_)) {
+      const double s = v_max_ / vxy;
+      vx *= s;
+      vy *= s;
+    }
+
+    const double v_norm = std::sqrt(vx * vx + vy * vy + vz * vz);
+    const double v_cap = std::max(0.1, max_linear_speed_total_);
+    if (v_norm > v_cap) {
+      const double s = v_cap / v_norm;
+      vx *= s;
+      vy *= s;
+      vz *= s;
+    }
+
+    if (odom_) {
+      const double z = odom_->pose.pose.position.z;
+      const double guard_band = std::max(0.05, altitude_guard_band_m_);
+      if (z >= max_altitude_m_ && vz > 0.0) {
+        vz = 0.0;
+      } else if (z > (max_altitude_m_ - guard_band) && vz > 0.0) {
+        const double scale = clamp((max_altitude_m_ - z) / guard_band, 0.0, 1.0);
+        vz *= scale;
+      }
+      if (z <= min_altitude_m_ && vz < 0.0) {
+        vz = 0.0;
+      } else if (z < (min_altitude_m_ + guard_band) && vz < 0.0) {
+        const double scale = clamp((z - min_altitude_m_) / guard_band, 0.0, 1.0);
+        vz *= scale;
+      }
+    }
+
+    vz = clamp(vz, -vz_max_, vz_max_);
+    const double w_lim = std::min(std::fabs(w_max_), std::fabs(max_yaw_rate_abs_));
+    wz = clamp(wz, -w_lim, w_lim);
+  }
+
   void publish_cmd(double vx_b, double vy_b, double vz, double wz) {
     // store cmd state (used for window + smoothing)
     vx_cmd_b_ = vx_b;
@@ -1260,10 +1305,11 @@ private:
       msg.header.frame_id = "base_link";
     }
 
-    msg.twist.linear.x  = clamp(vx_out, -v_max_, v_max_);
-    msg.twist.linear.y  = clamp(vy_out, -v_max_, v_max_);
-    msg.twist.linear.z  = clamp(vz, -vz_max_, vz_max_);
-    msg.twist.angular.z = clamp(wz, -w_max_, w_max_);
+    apply_output_safety_limits(vx_out, vy_out, vz, wz);
+    msg.twist.linear.x  = vx_out;
+    msg.twist.linear.y  = vy_out;
+    msg.twist.linear.z  = vz;
+    msg.twist.angular.z = wz;
 
     pub_cmd_->publish(msg);
   }
@@ -1388,8 +1434,14 @@ private:
   double min_cruise_front_margin_{0.45};
   double min_cruise_blend_{0.85};
   bool publish_world_cmd_{true};
+  double max_linear_speed_total_{3.0};
+  double max_yaw_rate_abs_{0.6};
+  double max_altitude_m_{5.0};
+  double min_altitude_m_{0.0};
+  double altitude_guard_band_m_{0.4};
   bool publish_rollout_path_{true};
   std::string rollout_path_frame_{"base_link"};
+  std::string odom_topic_{"/px4/odom"};
 
   // state
   std::optional<nav_msgs::msg::Odometry> odom_;

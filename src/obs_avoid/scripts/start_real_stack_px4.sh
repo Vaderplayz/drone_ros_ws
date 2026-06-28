@@ -46,17 +46,13 @@ ROS_WS_DEFAULT="$(cd "${PKG_DIR}/../.." && pwd)"
 ROS_WS="${ROS_WS:-${ROS_WS_DEFAULT}}"
 ROS_SETUP="${ROS_SETUP:-${ROS_WS}/install/setup.bash}"
 
-MAVROS_LAUNCH_FILE="${MAVROS_LAUNCH_FILE:-px4.launch}"
-FCU_URL="${FCU_URL:-serial:///dev/ttyACM0:921600}"
-GCS_URL="${GCS_URL:-}"
-MAVROS_RESPAWN="${MAVROS_RESPAWN:-true}"
-TGT_SYSTEM="${TGT_SYSTEM:-}"
-TGT_COMPONENT="${TGT_COMPONENT:-}"
+PX4_DDS_LOCAL_POSITION_TOPIC="${PX4_DDS_LOCAL_POSITION_TOPIC:-/fmu/out/vehicle_local_position}"
+PX4_DDS_GPS_TOPIC="${PX4_DDS_GPS_TOPIC:-/fmu/out/vehicle_gps_position}"
 
 WAIT_TIMEOUT_SEC="${WAIT_TIMEOUT_SEC:-45}"
 KILL_BEFORE_LAUNCH="${KILL_BEFORE_LAUNCH:-1}"
 
-ODOM_TOPIC="${ODOM_TOPIC:-/mavros/local_position/odom}"
+ODOM_TOPIC="${ODOM_TOPIC:-/px4/odom}"
 ODOM_PARENT_FRAME="${ODOM_PARENT_FRAME:-odom}"
 ODOM_CHILD_FRAME="${ODOM_CHILD_FRAME:-base_link}"
 
@@ -86,9 +82,9 @@ MAPPING_PROFILE="${MAPPING_PROFILE:-v11_clean}"
 SCAN_TOPIC="${SCAN_TOPIC:-/scan_vertical}"
 TARGET_FRAME="${TARGET_FRAME:-map}"
 
-MAVROS_LOG="${MAVROS_LOG:-/tmp/mavros_real_px4.log}"
-ODOM_FLATTEN_LOG="${ODOM_FLATTEN_LOG:-/tmp/odom_flatten_real_px4.log}"
+PX4_DDS_BRIDGE_LOG="${PX4_DDS_BRIDGE_LOG:-/tmp/px4_dds_bridge_real_px4.log}"
 PLANNER_LOG="${PLANNER_LOG:-/tmp/local_planner_real_px4.log}"
+USER_CTRL_LOG="${USER_CTRL_LOG:-/tmp/user_ctrl_dds_real_px4.log}"
 TF_VERT_LOG="${TF_VERT_LOG:-/tmp/static_tf_vert.log}"
 TF_HORIZ_LOG="${TF_HORIZ_LOG:-/tmp/static_tf_horiz.log}"
 MAPPING_LOG="${MAPPING_LOG:-/tmp/mapping_mode_real_px4.log}"
@@ -115,45 +111,25 @@ add_process() {
 }
 
 kill_existing_stack() {
-  kill_if_running "ros2 launch mavros ${MAVROS_LAUNCH_FILE}"
-  kill_if_running "/mavros_node"
-  kill_if_running "ros2 run odom_flatten px4_odom_flatten_node"
+  kill_if_running "ros2 run obs_avoid px4_dds_local_bridge"
   kill_if_running "ros2 run obs_avoid local_planner_mode_a"
   kill_if_running "ros2 run obs_avoid local_planner_sector_mode"
   kill_if_running "ros2 run obs_avoid local_planner_hybrid_mode"
+  kill_if_running "ros2 run obs_avoid user_ctrl_dds"
   kill_if_running "ros2 run tf2_ros static_transform_publisher.*${LIDAR_VERT_FRAME}"
   kill_if_running "ros2 run tf2_ros static_transform_publisher.*${LIDAR_HORIZ_FRAME}"
   kill_if_running "scripts/start_mapping_mode.sh"
 }
 
-start_mavros() {
-  local cmd=(ros2 launch mavros "${MAVROS_LAUNCH_FILE}"
-    "fcu_url:=${FCU_URL}"
-    "respawn_mavros:=${MAVROS_RESPAWN}"
-    "use_sim_time:=false")
-  if [[ -n "${GCS_URL}" ]]; then
-    cmd+=("gcs_url:=${GCS_URL}")
-  fi
-  if [[ -n "${TGT_SYSTEM}" ]]; then
-    cmd+=("tgt_system:=${TGT_SYSTEM}")
-  fi
-  if [[ -n "${TGT_COMPONENT}" ]]; then
-    cmd+=("tgt_component:=${TGT_COMPONENT}")
-  fi
-
-  echo "[run] MAVROS (${MAVROS_LAUNCH_FILE}) -> ${MAVROS_LOG}"
-  "${cmd[@]}" >"${MAVROS_LOG}" 2>&1 &
-  add_process "$!" "mavros"
-}
-
-start_odom_flatten() {
-  echo "[run] px4_odom_flatten_node -> ${ODOM_FLATTEN_LOG}"
-  ros2 run odom_flatten px4_odom_flatten_node --ros-args \
-    -p use_sim_time:=false \
+start_px4_dds_bridge() {
+  echo "[run] px4_dds_local_bridge -> ${PX4_DDS_BRIDGE_LOG}"
+  ros2 run obs_avoid px4_dds_local_bridge --ros-args \
+    -p px4_local_position_topic:="${PX4_DDS_LOCAL_POSITION_TOPIC}" \
+    -p px4_gps_topic:="${PX4_DDS_GPS_TOPIC}" \
     -p odom_topic:="${ODOM_TOPIC}" \
-    -p parent_frame:="${ODOM_PARENT_FRAME}" \
-    -p child_frame:="${ODOM_CHILD_FRAME}" >"${ODOM_FLATTEN_LOG}" 2>&1 &
-  add_process "$!" "odom_flatten"
+    -p odom_frame:="${ODOM_PARENT_FRAME}" \
+    -p base_frame:="${ODOM_CHILD_FRAME}" >"${PX4_DDS_BRIDGE_LOG}" 2>&1 &
+  add_process "$!" "px4_dds_bridge"
 }
 
 start_static_tf() {
@@ -183,13 +159,25 @@ start_planner() {
   if [[ -n "${PLANNER_PARAMS_FILE}" ]]; then
     cmd+=(--params-file "${PLANNER_PARAMS_FILE}")
   fi
+  cmd+=(-p "odom_topic:=${ODOM_TOPIC}")
   if [[ -n "${PLANNER_REMAP_CMD_VEL_TO}" ]]; then
-    cmd+=(-r "/mavros/setpoint_velocity/cmd_vel:=${PLANNER_REMAP_CMD_VEL_TO}")
+    cmd+=(-r "/planner_cmd_vel:=${PLANNER_REMAP_CMD_VEL_TO}")
   fi
 
   echo "[run] ${PLANNER_NODE} -> ${PLANNER_LOG}"
   "${cmd[@]}" >"${PLANNER_LOG}" 2>&1 &
   add_process "$!" "planner"
+}
+
+start_user_ctrl() {
+  echo "[run] user_ctrl_dds (PX4 DDS OFFBOARD bridge mode) -> ${USER_CTRL_LOG}"
+  ros2 run obs_avoid user_ctrl_dds --ros-args \
+    -p use_sim_time:=false \
+    -p ask_goal_on_start:=false \
+    -p print_input_help_on_start:=false \
+    -p enable_internal_goal_nav:=false \
+    -p planner_cmd_timeout_sec:=1.0 >"${USER_CTRL_LOG}" 2>&1 &
+  add_process "$!" "user_ctrl_dds"
 }
 
 start_mapping_mode() {
@@ -228,11 +216,6 @@ main() {
   source "${ROS_SETUP}"
   set -u
 
-  if ! ros2 pkg prefix mavros >/dev/null 2>&1; then
-    echo "[error] mavros package not found in current overlay." >&2
-    exit 1
-  fi
-
   if [[ "${KILL_BEFORE_LAUNCH}" == "1" ]]; then
     echo "[prep] stopping stale real-stack processes (if any)"
     kill_existing_stack
@@ -241,31 +224,31 @@ main() {
 
   trap cleanup EXIT INT TERM
 
-  start_mavros
-  echo "[wait] /mavros/state"
-  wait_for_topic "/mavros/state" "${WAIT_TIMEOUT_SEC}"
+  start_px4_dds_bridge
+  echo "[wait] ${PX4_DDS_LOCAL_POSITION_TOPIC}"
+  wait_for_topic "${PX4_DDS_LOCAL_POSITION_TOPIC}" "${WAIT_TIMEOUT_SEC}"
   echo "[wait] ${ODOM_TOPIC}"
   wait_for_topic "${ODOM_TOPIC}" "${WAIT_TIMEOUT_SEC}"
 
-  start_odom_flatten
   start_static_tf
   start_planner
+  start_user_ctrl
   start_mapping_mode
 
   echo "[ok] real PX4 stack started"
-  echo "[info] FCU_URL=${FCU_URL}"
+  echo "[info] DDS local_position=${PX4_DDS_LOCAL_POSITION_TOPIC} odom=${ODOM_TOPIC}"
   echo "[info] planner=${PLANNER_NODE}"
   echo "[info] use_sim_time=false"
   echo "[info] logs:"
-  echo "  - ${MAVROS_LOG}"
-  echo "  - ${ODOM_FLATTEN_LOG}"
+  echo "  - ${PX4_DDS_BRIDGE_LOG}"
   echo "  - ${PLANNER_LOG}"
+  echo "  - ${USER_CTRL_LOG}"
   if is_true "${START_MAPPING}"; then
     echo "  - ${MAPPING_LOG}"
   fi
   echo "[check] ros2 topic hz /planner_cmd_vel"
-  echo "[check] ros2 topic hz /mavros/setpoint_velocity/cmd_vel"
-  echo "[check] ros2 topic echo --once /mavros/state"
+  echo "[check] ros2 topic hz /fmu/in/trajectory_setpoint"
+  echo "[check] ros2 topic echo --once /fmu/out/vehicle_local_position"
 
   set +e
   wait -n "${PIDS[@]}"

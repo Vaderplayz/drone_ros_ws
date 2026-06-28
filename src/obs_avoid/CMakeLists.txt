@@ -8,6 +8,7 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(mavros_msgs REQUIRED)
+find_package(px4_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(tf2_msgs REQUIRED)
 find_package(tf2 REQUIRED)
@@ -33,6 +34,25 @@ target_link_libraries(user_ctrl PUBLIC
   ${geometry_msgs_TARGETS}
 )
 install(TARGETS user_ctrl DESTINATION lib/${PROJECT_NAME})
+
+add_executable(user_ctrl_dds src/offboard_node_user_ctrl_dds.cpp)
+target_link_libraries(user_ctrl_dds PUBLIC
+  rclcpp::rclcpp
+  ${px4_msgs_TARGETS}
+  ${geometry_msgs_TARGETS}
+)
+install(TARGETS user_ctrl_dds DESTINATION lib/${PROJECT_NAME})
+
+add_executable(px4_dds_local_bridge src/px4_dds_local_bridge.cpp)
+target_link_libraries(px4_dds_local_bridge PUBLIC
+  rclcpp::rclcpp
+  ${px4_msgs_TARGETS}
+  ${geometry_msgs_TARGETS}
+  ${nav_msgs_TARGETS}
+  ${sensor_msgs_TARGETS}
+  tf2::tf2
+)
+install(TARGETS px4_dds_local_bridge DESTINATION lib/${PROJECT_NAME})
 
 add_executable(spiral_mapping_mode src/spiral_mapping_mode.cpp)
 target_link_libraries(spiral_mapping_mode PUBLIC

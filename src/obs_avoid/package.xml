@@ -11,6 +11,7 @@
 
   <depend>rclcpp</depend>
   <depend>mavros_msgs</depend>
+  <depend>px4_msgs</depend>
   <depend>geometry_msgs</depend>
   <depend>sensor_msgs</depend>
   <depend>tf2_msgs</depend>

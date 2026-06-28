@@ -10,12 +10,18 @@ from ament_index_python.packages import get_package_share_directory
 def generate_launch_description():
     use_sim_time = LaunchConfiguration("use_sim_time")
     params_file = LaunchConfiguration("params_file")
+    gps_topic = LaunchConfiguration("gps_topic")
 
     declare_use_sim_time = DeclareLaunchArgument("use_sim_time", default_value="false")
     declare_params_file = DeclareLaunchArgument(
         "params_file",
         default_value=f"{get_package_share_directory('obs_avoid')}/config/nav2_gps_dual_ekf.yaml",
         description="Robot localization (dual EKF + navsat) params file",
+    )
+    declare_gps_topic = DeclareLaunchArgument(
+        "gps_topic",
+        default_value="/px4/gps/fix",
+        description="GPS NavSatFix topic",
     )
 
     ekf_odom = Node(
@@ -43,8 +49,8 @@ def generate_launch_description():
         output="screen",
         parameters=[params_file, {"use_sim_time": use_sim_time}],
         remappings=[
-            ("imu/data", "/mavros/imu/data"),
-            ("gps/fix", "/mavros/global_position/global"),
+            ("imu/data", "/px4/imu/data"),
+            ("gps/fix", gps_topic),
             ("odometry/filtered", "/odometry/local"),
             ("odometry/gps", "/odometry/gps"),
             ("gps/filtered", "/gps/filtered"),
@@ -55,6 +61,7 @@ def generate_launch_description():
         [
             declare_use_sim_time,
             declare_params_file,
+            declare_gps_topic,
             ekf_odom,
             ekf_map,
             navsat,
