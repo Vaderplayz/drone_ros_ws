@@ -58,12 +58,21 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
     device_fps_ = declare_parameter<double>("device_fps", 30.0);
     detect_rate_hz_ = declare_parameter<double>("detect_rate_hz", 20.0);
 
-    fx_ = declare_parameter<double>("fx", 0.0);
-    fy_ = declare_parameter<double>("fy", 0.0);
-    cx_ = declare_parameter<double>("cx", 0.0);
-    cy_ = declare_parameter<double>("cy", 0.0);
+    fx_ = declare_parameter<double>("fx", 815.850981);
+    fy_ = declare_parameter<double>("fy", 812.573400);
+    cx_ = declare_parameter<double>("cx", 313.820838);
+    cy_ = declare_parameter<double>("cy", 232.071864);
     hfov_deg_ = declare_parameter<double>("hfov_deg", 78.0);
-    dist_coeffs_vec_ = declare_parameter<std::vector<double>>("dist_coeffs", std::vector<double>{});
+    dist_coeffs_vec_ =
+    declare_parameter<std::vector<double>>(
+        "dist_coeffs",
+        std::vector<double>{
+            0.317619,
+           -1.031399,
+            0.001990,
+           -0.002757,
+            0.0
+        });
 
     tag_pose_topic_ = declare_parameter<std::string>("tag_pose_topic", "/precision_landing/tag_pose_camera");
     tag_size_m_ = declare_parameter<double>("tag_size_m", 0.12);

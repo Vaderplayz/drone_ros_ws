@@ -38,9 +38,9 @@ class AprilTagPrecisionLandingNode : public rclcpp::Node {
     const double publish_rate_hz = declare_parameter<double>("publish_rate_hz", 20.0);
     input_timeout_sec_ = declare_parameter<double>("input_timeout_sec", 0.30);
 
-    camera_offset_x_ = declare_parameter<double>("camera_offset_x", 0.0);
+    camera_offset_x_ = declare_parameter<double>("camera_offset_x", 0.150);
     camera_offset_y_ = declare_parameter<double>("camera_offset_y", 0.0);
-    camera_offset_z_ = declare_parameter<double>("camera_offset_z", 0.0);
+    camera_offset_z_ = declare_parameter<double>("camera_offset_z", -0.03);
     camera_roll_ = declare_parameter<double>("camera_roll", 0.0);
     camera_pitch_ = declare_parameter<double>("camera_pitch", M_PI);
     camera_yaw_ = declare_parameter<double>("camera_yaw", M_PI_2);
