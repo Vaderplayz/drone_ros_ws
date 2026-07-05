@@ -78,7 +78,7 @@ DETECTOR_DEVICE_HEIGHT="${DETECTOR_DEVICE_HEIGHT:-480}"
 DETECTOR_DEVICE_FPS="${DETECTOR_DEVICE_FPS:-30.0}"
 
 TAG_DICTIONARY="${TAG_DICTIONARY:-36h11}"
-TAG_SIZE_M="${TAG_SIZE_M:-0.16}"
+TAG_SIZE_M="${TAG_SIZE_M:-}"
 TARGET_TAG_ID="${TARGET_TAG_ID:--1}"
 MIN_TAG_AREA_PX="${MIN_TAG_AREA_PX:-40.0}"
 TAG_POSE_TOPIC="${TAG_POSE_TOPIC:-/precision_landing/tag_pose_camera}"
@@ -174,10 +174,13 @@ start_detector() {
     -p "publish_image_stream:=true"
     -p "camera_frame_id:=${CAMERA_FRAME_ID}"
     -p "dictionary:=${TAG_DICTIONARY}"
-    -p "tag_size_m:=${TAG_SIZE_M}"
     -p "target_tag_id:=${TARGET_TAG_ID}"
     -p "min_tag_area_px:=${MIN_TAG_AREA_PX}"
     -p "tag_pose_topic:=${TAG_POSE_TOPIC}")
+
+  if [[ -n "${TAG_SIZE_M}" ]]; then
+    cmd+=(-p "tag_size_m:=${TAG_SIZE_M}")
+  fi
 
   if [[ "${source}" == "device" ]]; then
     cmd+=(

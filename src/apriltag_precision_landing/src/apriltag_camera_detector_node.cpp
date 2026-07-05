@@ -77,7 +77,7 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
         });
 
     tag_pose_topic_ = declare_parameter<std::string>("tag_pose_topic", "/precision_landing/tag_pose_camera");
-    tag_size_m_ = declare_parameter<double>("tag_size_m", 0.12);
+    tag_size_m_ = declare_parameter<double>("tag_size_m", std::numeric_limits<double>::quiet_NaN());
     target_tag_id_ = declare_parameter<int>("target_tag_id", -1);
     min_tag_area_px_ = declare_parameter<double>("min_tag_area_px", 80.0);
     dictionary_name_ = declare_parameter<std::string>("dictionary", "36h11");
@@ -88,8 +88,8 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
     pub_camera_info_ = create_publisher<sensor_msgs::msg::CameraInfo>(camera_info_output_topic_, qos_sensor);
     pub_tag_pose_ = create_publisher<geometry_msgs::msg::PoseStamped>(tag_pose_topic_, 10);
 
-    if (tag_size_m_ <= 0.0) {
-      RCLCPP_FATAL(get_logger(), "tag_size_m must be > 0.0");
+    if (!std::isfinite(tag_size_m_) || tag_size_m_ <= 0.0) {
+      RCLCPP_FATAL(get_logger(), "tag_size_m must be provided and > 0.0");
       throw std::runtime_error("invalid tag_size_m");
     }
 
