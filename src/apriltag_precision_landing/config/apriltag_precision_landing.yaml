@@ -13,12 +13,12 @@ apriltag_camera_detector:
 
     # Optional manual intrinsics for device mode. If fx/fy/cx/cy stay 0,
     # node uses an approximate camera model from hfov_deg and frame size.
-    fx: 815.850981
-    fy: 812.573400
-    cx: 313.820838
-    cy: 232.071864
+    fx: 824.098969
+    fy: 822.930714
+    cx: 308.724037
+    cy: 224.611413
     hfov_deg: 78.0
-    dist_coeffs: [0.317619, -1.031399, 0.001990, -0.002757, 0.0]
+    dist_coeffs: [0.346669, -1.162089, -0.004623, -0.002351, 0.0]
 
     # For input_source:=ros_topics
     image_topic: /image_raw
@@ -31,9 +31,9 @@ apriltag_camera_detector:
 
     tag_pose_topic: /precision_landing/tag_pose_camera
     dictionary: 36h11
-    tag_size_m: 0.031
-    target_tag_id: -1
-    min_tag_area_px: 80.0
+    tag_size_m: 0.052 
+    target_tag_id: 0
+    min_tag_area_px: 500.0
 
 apriltag_precision_landing:
   ros__parameters:
