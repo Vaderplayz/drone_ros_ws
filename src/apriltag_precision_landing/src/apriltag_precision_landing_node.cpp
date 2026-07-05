@@ -63,10 +63,10 @@ class AprilTagPrecisionLandingNode : public rclcpp::Node {
     publish_camera_tag_tf_ = declare_parameter<bool>("publish_camera_tag_tf", true);
     publish_debug_tf_ = declare_parameter<bool>("publish_debug_tf", true);
 
-    tf2::Quaternion q_cam_mount;
-    q_cam_mount.setRPY(camera_roll_, camera_pitch_, camera_yaw_);
-    drone_t_camera_mount_.setOrigin(tf2::Vector3(camera_offset_x_, camera_offset_y_, camera_offset_z_));
-    drone_t_camera_mount_.setRotation(q_cam_mount);
+    tf2::Quaternion q_cam_optical_from_drone;
+    q_cam_optical_from_drone.setRPY(camera_roll_, camera_pitch_, camera_yaw_);
+    drone_t_camera_optical_.setOrigin(tf2::Vector3(camera_offset_x_, camera_offset_y_, camera_offset_z_));
+    drone_t_camera_optical_.setRotation(q_cam_optical_from_drone);
 
     tf2::Quaternion q_cam_optical;
     q_cam_optical.setRPY(optical_roll_, optical_pitch_, optical_yaw_);
@@ -167,7 +167,11 @@ class AprilTagPrecisionLandingNode : public rclcpp::Node {
     const auto stamp = now();
     std::vector<geometry_msgs::msg::TransformStamped> transforms;
     transforms.push_back(makeTransformStamped(
-        drone_frame_, camera_optical_frame_, drone_t_camera_mount_, stamp));
+        drone_frame_, camera_optical_frame_, drone_t_camera_optical_, stamp));
+    if (camera_mount_frame_ != camera_optical_frame_) {
+      transforms.push_back(makeTransformStamped(
+          drone_frame_, camera_mount_frame_, drone_t_camera_optical_, stamp));
+    }
     if (publish_camera_mount_to_optical_tf_) {
       transforms.push_back(makeTransformStamped(
           camera_mount_frame_, camera_optical_frame_, camera_mount_t_optical_, stamp));
@@ -262,7 +266,7 @@ class AprilTagPrecisionLandingNode : public rclcpp::Node {
       return;
     }
 
-    const tf2::Transform world_t_tag = world_t_drone_ * drone_t_camera_mount_ * cam_t_tag_;
+    const tf2::Transform world_t_tag = world_t_drone_ * drone_t_camera_optical_ * cam_t_tag_;
     const rclcpp::Time publish_stamp =
         last_drone_pose_time_ > last_tag_time_ ? last_drone_pose_time_ : last_tag_time_;
     const std::string world_frame = world_frame_from_pose_.empty() ? world_frame_ : world_frame_from_pose_;
@@ -349,7 +353,7 @@ class AprilTagPrecisionLandingNode : public rclcpp::Node {
 
   tf2::Transform world_t_drone_;
   tf2::Transform cam_t_tag_;
-  tf2::Transform drone_t_camera_mount_;
+  tf2::Transform drone_t_camera_optical_;
   tf2::Transform camera_mount_t_optical_;
 
   rclcpp::Time last_drone_pose_time_{0, 0, RCL_ROS_TIME};
