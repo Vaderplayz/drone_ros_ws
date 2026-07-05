@@ -31,7 +31,7 @@ apriltag_camera_detector:
 
     tag_pose_topic: /precision_landing/tag_pose_camera
     dictionary: 36h11
-    tag_size_m: 0.055
+    tag_size_m: 0.031
     target_tag_id: -1
     min_tag_area_px: 80.0
 
