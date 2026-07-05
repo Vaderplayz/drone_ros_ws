@@ -82,6 +82,7 @@ TAG_SIZE_M="${TAG_SIZE_M:-}"
 TARGET_TAG_ID="${TARGET_TAG_ID:--1}"
 MIN_TAG_AREA_PX="${MIN_TAG_AREA_PX:-40.0}"
 TAG_POSE_TOPIC="${TAG_POSE_TOPIC:-/precision_landing/tag_pose_camera}"
+APRILTAG_CONFIG="${APRILTAG_CONFIG:-}"
 
 DRONE_POSE_TOPIC="${DRONE_POSE_TOPIC:-/mavros/local_position/pose}"
 LANDING_TARGET_TOPIC="${LANDING_TARGET_TOPIC:-/mavros/landing_target/pose}"
@@ -165,7 +166,9 @@ start_detector() {
   fi
 
   echo "[run] apriltag_camera_detector_node -> ${DETECTOR_LOG}"
-  local cmd=(ros2 run apriltag_precision_landing apriltag_camera_detector_node --ros-args
+  local cmd=(ros2 run apriltag_precision_landing apriltag_camera_detector_node
+    --ros-args
+    --params-file "${APRILTAG_CONFIG}"
     -p "input_source:=${source}"
     -p "image_topic:=${IMAGE_TOPIC}"
     -p "camera_info_topic:=${CAMERA_INFO_TOPIC}"
@@ -197,7 +200,9 @@ start_detector() {
 
 start_landing_target() {
   echo "[run] apriltag_precision_landing_node -> ${LANDING_LOG}"
-  ros2 run apriltag_precision_landing apriltag_precision_landing_node --ros-args \
+  ros2 run apriltag_precision_landing apriltag_precision_landing_node \
+    --ros-args \
+    --params-file "${APRILTAG_CONFIG}" \
     -p input_mode:=camera_pose \
     -p camera_tag_pose_topic:="${TAG_POSE_TOPIC}" \
     -p relay_image_stream:=true \
@@ -240,6 +245,14 @@ main() {
 
   if ! ros2 pkg prefix apriltag_precision_landing >/dev/null 2>&1; then
     echo "[error] apriltag_precision_landing package not found in overlay." >&2
+    exit 1
+  fi
+
+  if [[ -z "${APRILTAG_CONFIG}" ]]; then
+    APRILTAG_CONFIG="$(ros2 pkg prefix apriltag_precision_landing)/share/apriltag_precision_landing/config/apriltag_precision_landing.yaml"
+  fi
+  if [[ ! -f "${APRILTAG_CONFIG}" ]]; then
+    echo "[error] apriltag config not found: ${APRILTAG_CONFIG}" >&2
     exit 1
   fi
 
