@@ -62,6 +62,8 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
     fy_ = declare_parameter<double>("fy", 812.573400);
     cx_ = declare_parameter<double>("cx", 313.820838);
     cy_ = declare_parameter<double>("cy", 232.071864);
+    calibration_width_ = declare_parameter<int>("calibration_width", 640);
+    calibration_height_ = declare_parameter<int>("calibration_height", 480);
     hfov_deg_ = declare_parameter<double>("hfov_deg", 78.0);
     dist_coeffs_vec_ =
     declare_parameter<std::vector<double>>(
@@ -187,12 +189,14 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
                   "cx/cy not provided. Using image center approximation cx=%.1f cy=%.1f", cx, cy);
     }
 
-    camera_matrix_ = cv::Mat::zeros(3, 3, CV_64F);
-    camera_matrix_.at<double>(0, 0) = fx;
-    camera_matrix_.at<double>(0, 2) = cx;
-    camera_matrix_.at<double>(1, 1) = fy;
-    camera_matrix_.at<double>(1, 2) = cy;
-    camera_matrix_.at<double>(2, 2) = 1.0;
+    param_camera_matrix_ = cv::Mat::zeros(3, 3, CV_64F);
+    param_camera_matrix_.at<double>(0, 0) = fx;
+    param_camera_matrix_.at<double>(0, 2) = cx;
+    param_camera_matrix_.at<double>(1, 1) = fy;
+    param_camera_matrix_.at<double>(1, 2) = cy;
+    param_camera_matrix_.at<double>(2, 2) = 1.0;
+
+    camera_matrix_ = param_camera_matrix_.clone();
 
     dist_coeffs_ = cv::Mat::zeros(1, static_cast<int>(dist_coeffs_vec_.size()), CV_64F);
     for (size_t i = 0; i < dist_coeffs_vec_.size(); ++i) {
@@ -200,6 +204,35 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
     }
 
     got_camera_info_ = true;
+  }
+
+  void updateScaledCameraModelForFrame(int width, int height) {
+    if (input_source_ != "device" || param_camera_matrix_.empty()) {
+      return;
+    }
+
+    const int calib_w = calibration_width_ > 0 ? calibration_width_ : std::max(1, device_width_);
+    const int calib_h = calibration_height_ > 0 ? calibration_height_ : std::max(1, device_height_);
+    const double sx = static_cast<double>(width) / static_cast<double>(calib_w);
+    const double sy = static_cast<double>(height) / static_cast<double>(calib_h);
+
+    camera_matrix_ = param_camera_matrix_.clone();
+    camera_matrix_.at<double>(0, 0) *= sx;
+    camera_matrix_.at<double>(0, 2) *= sx;
+    camera_matrix_.at<double>(1, 1) *= sy;
+    camera_matrix_.at<double>(1, 2) *= sy;
+
+    if (width != last_frame_width_ || height != last_frame_height_) {
+      RCLCPP_INFO(get_logger(),
+                  "Using frame %dx%d with calibration %dx%d -> scaled fx=%.2f fy=%.2f cx=%.2f cy=%.2f",
+                  width, height, calib_w, calib_h,
+                  camera_matrix_.at<double>(0, 0),
+                  camera_matrix_.at<double>(1, 1),
+                  camera_matrix_.at<double>(0, 2),
+                  camera_matrix_.at<double>(1, 2));
+      last_frame_width_ = width;
+      last_frame_height_ = height;
+    }
   }
 
   void cameraInfoCb(const sensor_msgs::msg::CameraInfo::SharedPtr msg) {
@@ -289,6 +322,8 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
   }
 
   void publishDeviceStream(const cv::Mat &frame, const rclcpp::Time &stamp, const std::string &frame_id) {
+    updateScaledCameraModelForFrame(frame.cols, frame.rows);
+
     cv::Mat bgr;
     if (frame.channels() == 1) {
       cv::cvtColor(frame, bgr, cv::COLOR_GRAY2BGR);
@@ -336,6 +371,8 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
   }
 
   void detectAndPublish(const cv::Mat &image, const rclcpp::Time &stamp, const std::string &frame_id) {
+    updateScaledCameraModelForFrame(image.cols, image.rows);
+
     cv::Mat gray;
     if (image.channels() == 1) {
       gray = image;
@@ -453,6 +490,8 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
   double fy_{0.0};
   double cx_{0.0};
   double cy_{0.0};
+  int calibration_width_{640};
+  int calibration_height_{480};
   double hfov_deg_{78.0};
   std::vector<double> dist_coeffs_vec_;
 
@@ -464,7 +503,10 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
   double min_tag_area_px_{80.0};
 
   bool got_camera_info_{false};
+  int last_frame_width_{0};
+  int last_frame_height_{0};
 
+  cv::Mat param_camera_matrix_;
   cv::Mat camera_matrix_;
   cv::Mat dist_coeffs_;
   cv::Ptr<cv::aruco::Dictionary> detector_dict_;

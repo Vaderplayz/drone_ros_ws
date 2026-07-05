@@ -17,6 +17,8 @@ apriltag_camera_detector:
     fy: 822.930714
     cx: 308.724037
     cy: 224.611413
+    calibration_width: 640
+    calibration_height: 480
     hfov_deg: 78.0
     dist_coeffs: [0.346669, -1.162089, -0.004623, -0.002351, 0.0]
 
