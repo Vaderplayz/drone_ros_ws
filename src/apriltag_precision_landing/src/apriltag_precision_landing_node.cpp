@@ -52,9 +52,11 @@ class AprilTagPrecisionLandingNode : public rclcpp::Node {
     camera_roll_ = declare_parameter<double>("camera_roll", 0.0);
     camera_pitch_ = declare_parameter<double>("camera_pitch", M_PI);
     camera_yaw_ = declare_parameter<double>("camera_yaw", M_PI_2);
-    optical_roll_ = declare_parameter<double>("optical_roll", -M_PI_2);
+    publish_camera_mount_to_optical_tf_ =
+        declare_parameter<bool>("publish_camera_mount_to_optical_tf", false);
+    optical_roll_ = declare_parameter<double>("optical_roll", 0.0);
     optical_pitch_ = declare_parameter<double>("optical_pitch", 0.0);
-    optical_yaw_ = declare_parameter<double>("optical_yaw", -M_PI_2);
+    optical_yaw_ = declare_parameter<double>("optical_yaw", 0.0);
 
     publish_world_to_drone_tf_ = declare_parameter<bool>("publish_world_to_drone_tf", true);
     publish_static_camera_tf_ = declare_parameter<bool>("publish_static_camera_tf", true);
@@ -165,9 +167,11 @@ class AprilTagPrecisionLandingNode : public rclcpp::Node {
     const auto stamp = now();
     std::vector<geometry_msgs::msg::TransformStamped> transforms;
     transforms.push_back(makeTransformStamped(
-        drone_frame_, camera_mount_frame_, drone_t_camera_mount_, stamp));
-    transforms.push_back(makeTransformStamped(
-        camera_mount_frame_, camera_optical_frame_, camera_mount_t_optical_, stamp));
+        drone_frame_, camera_optical_frame_, drone_t_camera_mount_, stamp));
+    if (publish_camera_mount_to_optical_tf_) {
+      transforms.push_back(makeTransformStamped(
+          camera_mount_frame_, camera_optical_frame_, camera_mount_t_optical_, stamp));
+    }
     static_tf_broadcaster_->sendTransform(transforms);
   }
 
@@ -258,8 +262,7 @@ class AprilTagPrecisionLandingNode : public rclcpp::Node {
       return;
     }
 
-    const tf2::Transform world_t_tag =
-        world_t_drone_ * drone_t_camera_mount_ * camera_mount_t_optical_ * cam_t_tag_;
+    const tf2::Transform world_t_tag = world_t_drone_ * drone_t_camera_mount_ * cam_t_tag_;
     const rclcpp::Time publish_stamp =
         last_drone_pose_time_ > last_tag_time_ ? last_drone_pose_time_ : last_tag_time_;
     const std::string world_frame = world_frame_from_pose_.empty() ? world_frame_ : world_frame_from_pose_;
@@ -328,9 +331,10 @@ class AprilTagPrecisionLandingNode : public rclcpp::Node {
   double camera_roll_{0.0};
   double camera_pitch_{M_PI};
   double camera_yaw_{M_PI_2};
-  double optical_roll_{-M_PI_2};
+  bool publish_camera_mount_to_optical_tf_{false};
+  double optical_roll_{0.0};
   double optical_pitch_{0.0};
-  double optical_yaw_{-M_PI_2};
+  double optical_yaw_{0.0};
 
   bool publish_world_to_drone_tf_{true};
   bool publish_static_camera_tf_{true};
