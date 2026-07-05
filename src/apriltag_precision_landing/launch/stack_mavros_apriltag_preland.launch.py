@@ -18,7 +18,8 @@ def generate_launch_description():
         DeclareLaunchArgument("video_device", default_value="/dev/video0"),
         DeclareLaunchArgument("image_topic", default_value="/image_raw"),
         DeclareLaunchArgument("camera_info_topic", default_value="/camera_info"),
-        DeclareLaunchArgument("camera_frame", default_value="camera_link"),
+        DeclareLaunchArgument("camera_mount_frame", default_value="camera_link"),
+        DeclareLaunchArgument("camera_optical_frame", default_value="camera_optical_frame"),
         IncludeLaunchDescription(
             AnyLaunchDescriptionSource(mavros_launch),
             launch_arguments={
@@ -41,7 +42,7 @@ def generate_launch_description():
                     "image_output_topic": LaunchConfiguration("image_topic"),
                     "camera_info_output_topic": LaunchConfiguration("camera_info_topic"),
                     "publish_image_stream": True,
-                    "camera_frame_id": LaunchConfiguration("camera_frame"),
+                    "camera_frame_id": LaunchConfiguration("camera_optical_frame"),
                 },
             ],
         ),
@@ -56,6 +57,8 @@ def generate_launch_description():
                     "relay_image_stream": True,
                     "image_input_topic": LaunchConfiguration("image_topic"),
                     "image_output_topic": LaunchConfiguration("image_topic"),
+                    "camera_mount_frame": LaunchConfiguration("camera_mount_frame"),
+                    "camera_optical_frame": LaunchConfiguration("camera_optical_frame"),
                 },
             ],
         ),

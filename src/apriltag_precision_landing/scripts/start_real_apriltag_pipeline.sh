@@ -71,7 +71,8 @@ VIDEO_DEVICE="${VIDEO_DEVICE:-/dev/video0}"
 OUTPUT_ENCODING="${OUTPUT_ENCODING:-rgb8}"
 IMAGE_TOPIC="${IMAGE_TOPIC:-/image_raw}"
 CAMERA_INFO_TOPIC="${CAMERA_INFO_TOPIC:-/camera_info}"
-CAMERA_FRAME_ID="${CAMERA_FRAME_ID:-camera_link}"
+CAMERA_MOUNT_FRAME="${CAMERA_MOUNT_FRAME:-camera_link}"
+CAMERA_FRAME_ID="${CAMERA_FRAME_ID:-camera_optical_frame}"
 DETECTOR_DEVICE_WIDTH="${DETECTOR_DEVICE_WIDTH:-640}"
 DETECTOR_DEVICE_HEIGHT="${DETECTOR_DEVICE_HEIGHT:-480}"
 DETECTOR_DEVICE_FPS="${DETECTOR_DEVICE_FPS:-30.0}"
@@ -202,6 +203,9 @@ start_landing_target() {
     -p drone_pose_topic:="${DRONE_POSE_TOPIC}" \
     -p landing_target_topic:="${LANDING_TARGET_TOPIC}" \
     -p world_frame:="${WORLD_FRAME}" \
+    -p drone_frame:=base_link \
+    -p camera_mount_frame:="${CAMERA_MOUNT_FRAME}" \
+    -p camera_optical_frame:="${CAMERA_FRAME_ID}" \
     -p input_timeout_sec:="${INPUT_TIMEOUT_SEC}" \
     -p camera_offset_x:="${CAMERA_OFFSET_X}" \
     -p camera_offset_y:="${CAMERA_OFFSET_Y}" \
@@ -209,8 +213,7 @@ start_landing_target() {
     -p camera_roll:="${CAMERA_ROLL}" \
     -p camera_pitch:="${CAMERA_PITCH}" \
     -p camera_yaw:="${CAMERA_YAW}" \
-    -p publish_debug_tf:="${PUBLISH_DEBUG_TF}" \
-    -p debug_tag_child_frame:="${DEBUG_TAG_CHILD_FRAME}" >"${LANDING_LOG}" 2>&1 &
+    -p publish_debug_tf:="${PUBLISH_DEBUG_TF}" >"${LANDING_LOG}" 2>&1 &
   add_process "$!" "apriltag_landing_target"
 }
 

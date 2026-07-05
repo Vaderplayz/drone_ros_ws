@@ -8,7 +8,8 @@ apriltag_camera_detector:
     device_height: 480
     device_fps: 30.0
     detect_rate_hz: 20.0
-    camera_frame_id: camera_link
+    # OpenCV pose output is in the optical frame, not camera_link/body frame.
+    camera_frame_id: camera_optical_frame
 
     # Optional manual intrinsics for device mode. If fx/fy/cx/cy stay 0,
     # node uses an approximate camera model from hfov_deg and frame size.
@@ -46,6 +47,11 @@ apriltag_precision_landing:
     drone_pose_topic: /mavros/local_position/pose
     landing_target_topic: /mavros/landing_target/pose
     world_frame: map
+    drone_frame: base_link
+    camera_mount_frame: camera_link
+    camera_optical_frame: camera_optical_frame
+    tag_detection_frame: apriltag_detection
+    tag_world_frame: apriltag_world
 
     tag_frame_prefix: id
     tag_frame_exact: ""
@@ -59,6 +65,11 @@ apriltag_precision_landing:
     camera_roll: 0.0
     camera_pitch: 3.141592653589793
     camera_yaw: 1.5707963267948966
+    optical_roll: -1.5707963267948966
+    optical_pitch: 0.0
+    optical_yaw: -1.5707963267948966
 
+    publish_world_to_drone_tf: true
+    publish_static_camera_tf: true
+    publish_camera_tag_tf: true
     publish_debug_tf: true
-    debug_tag_child_frame: apriltag_detected

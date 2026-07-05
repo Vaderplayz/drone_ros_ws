@@ -3,7 +3,9 @@
 #include <cmath>
 #include <memory>
 #include <string>
+#include <vector>
 
+#include "builtin_interfaces/msg/time.hpp"
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "geometry_msgs/msg/transform_stamped.hpp"
 #include "rclcpp/rclcpp.hpp"
@@ -11,6 +13,7 @@
 #include "tf2/LinearMath/Quaternion.hpp"
 #include "tf2/LinearMath/Transform.hpp"
 #include "tf2_msgs/msg/tf_message.hpp"
+#include "tf2_ros/static_transform_broadcaster.h"
 #include "tf2_ros/transform_broadcaster.hpp"
 
 namespace {
@@ -30,6 +33,11 @@ class AprilTagPrecisionLandingNode : public rclcpp::Node {
     drone_pose_topic_ = declare_parameter<std::string>("drone_pose_topic", "/mavros/local_position/pose");
     landing_target_topic_ = declare_parameter<std::string>("landing_target_topic", "/mavros/landing_target/pose");
     world_frame_ = declare_parameter<std::string>("world_frame", "map");
+    drone_frame_ = declare_parameter<std::string>("drone_frame", "base_link");
+    camera_mount_frame_ = declare_parameter<std::string>("camera_mount_frame", "camera_link");
+    camera_optical_frame_ = declare_parameter<std::string>("camera_optical_frame", "camera_optical_frame");
+    tag_detection_frame_ = declare_parameter<std::string>("tag_detection_frame", "apriltag_detection");
+    tag_world_frame_ = declare_parameter<std::string>("tag_world_frame", "apriltag_world");
 
     input_mode_ = declare_parameter<std::string>("input_mode", "camera_pose");
     tag_frame_prefix_ = declare_parameter<std::string>("tag_frame_prefix", "id");
@@ -44,14 +52,24 @@ class AprilTagPrecisionLandingNode : public rclcpp::Node {
     camera_roll_ = declare_parameter<double>("camera_roll", 0.0);
     camera_pitch_ = declare_parameter<double>("camera_pitch", M_PI);
     camera_yaw_ = declare_parameter<double>("camera_yaw", M_PI_2);
+    optical_roll_ = declare_parameter<double>("optical_roll", -M_PI_2);
+    optical_pitch_ = declare_parameter<double>("optical_pitch", 0.0);
+    optical_yaw_ = declare_parameter<double>("optical_yaw", -M_PI_2);
 
+    publish_world_to_drone_tf_ = declare_parameter<bool>("publish_world_to_drone_tf", true);
+    publish_static_camera_tf_ = declare_parameter<bool>("publish_static_camera_tf", true);
+    publish_camera_tag_tf_ = declare_parameter<bool>("publish_camera_tag_tf", true);
     publish_debug_tf_ = declare_parameter<bool>("publish_debug_tf", true);
-    debug_tag_child_frame_ = declare_parameter<std::string>("debug_tag_child_frame", "apriltag_detected");
 
-    tf2::Quaternion q_cam;
-    q_cam.setRPY(camera_roll_, camera_pitch_, camera_yaw_);
-    drone_t_cam_.setOrigin(tf2::Vector3(camera_offset_x_, camera_offset_y_, camera_offset_z_));
-    drone_t_cam_.setRotation(q_cam);
+    tf2::Quaternion q_cam_mount;
+    q_cam_mount.setRPY(camera_roll_, camera_pitch_, camera_yaw_);
+    drone_t_camera_mount_.setOrigin(tf2::Vector3(camera_offset_x_, camera_offset_y_, camera_offset_z_));
+    drone_t_camera_mount_.setRotation(q_cam_mount);
+
+    tf2::Quaternion q_cam_optical;
+    q_cam_optical.setRPY(optical_roll_, optical_pitch_, optical_yaw_);
+    camera_mount_t_optical_.setOrigin(tf2::Vector3(0.0, 0.0, 0.0));
+    camera_mount_t_optical_.setRotation(q_cam_optical);
 
     const auto qos_sensor = rclcpp::SensorDataQoS();
 
@@ -88,6 +106,8 @@ class AprilTagPrecisionLandingNode : public rclcpp::Node {
 
     pub_landing_target_pose_ = create_publisher<geometry_msgs::msg::PoseStamped>(landing_target_topic_, 10);
     tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(this);
+    static_tf_broadcaster_ = std::make_unique<tf2_ros::StaticTransformBroadcaster>(this);
+    publishStaticTransforms();
 
     const auto period = std::chrono::duration<double>(1.0 / std::max(1.0, publish_rate_hz));
     timer_ = create_wall_timer(
@@ -110,6 +130,47 @@ class AprilTagPrecisionLandingNode : public rclcpp::Node {
     return starts_with(frame_id, tag_frame_prefix_);
   }
 
+  rclcpp::Time stampOrNow(const builtin_interfaces::msg::Time &stamp) const {
+    const rclcpp::Time stamp_time(stamp);
+    if (stamp_time.nanoseconds() == 0) {
+      return now();
+    }
+    return stamp_time;
+  }
+
+  geometry_msgs::msg::TransformStamped makeTransformStamped(
+      const std::string &parent,
+      const std::string &child,
+      const tf2::Transform &tf,
+      const rclcpp::Time &stamp) const {
+    geometry_msgs::msg::TransformStamped msg;
+    msg.header.stamp = stamp;
+    msg.header.frame_id = parent;
+    msg.child_frame_id = child;
+    msg.transform.translation.x = tf.getOrigin().x();
+    msg.transform.translation.y = tf.getOrigin().y();
+    msg.transform.translation.z = tf.getOrigin().z();
+    msg.transform.rotation.x = tf.getRotation().x();
+    msg.transform.rotation.y = tf.getRotation().y();
+    msg.transform.rotation.z = tf.getRotation().z();
+    msg.transform.rotation.w = tf.getRotation().w();
+    return msg;
+  }
+
+  void publishStaticTransforms() {
+    if (!publish_static_camera_tf_ || !static_tf_broadcaster_) {
+      return;
+    }
+
+    const auto stamp = now();
+    std::vector<geometry_msgs::msg::TransformStamped> transforms;
+    transforms.push_back(makeTransformStamped(
+        drone_frame_, camera_mount_frame_, drone_t_camera_mount_, stamp));
+    transforms.push_back(makeTransformStamped(
+        camera_mount_frame_, camera_optical_frame_, camera_mount_t_optical_, stamp));
+    static_tf_broadcaster_->sendTransform(transforms);
+  }
+
   void dronePoseCallback(const geometry_msgs::msg::PoseStamped::SharedPtr msg) {
     tf2::Quaternion q(msg->pose.orientation.x,
                       msg->pose.orientation.y,
@@ -123,7 +184,7 @@ class AprilTagPrecisionLandingNode : public rclcpp::Node {
     }
 
     got_world_t_drone_ = true;
-    last_drone_pose_time_ = now();
+    last_drone_pose_time_ = stampOrNow(msg->header.stamp);
   }
 
   void imageRelayCb(const sensor_msgs::msg::Image::SharedPtr msg) {
@@ -131,8 +192,8 @@ class AprilTagPrecisionLandingNode : public rclcpp::Node {
       return;
     }
     auto out = *msg;
-    if (out.header.frame_id.empty() && !camera_frame_id_.empty()) {
-      out.header.frame_id = camera_frame_id_;
+    if (out.header.frame_id.empty()) {
+      out.header.frame_id = camera_optical_frame_;
     }
     pub_image_relay_->publish(out);
   }
@@ -148,10 +209,10 @@ class AprilTagPrecisionLandingNode : public rclcpp::Node {
 
     cam_t_tag_ = tf2::Transform(q, t);
     got_cam_t_tag_ = true;
-    last_tag_time_ = now();
+    last_tag_time_ = stampOrNow(msg->header.stamp);
     input_source_ = "camera_pose";
-    camera_frame_id_ = msg->header.frame_id;
-    tag_frame_id_ = tag_frame_exact_.empty() ? "apriltag" : tag_frame_exact_;
+    camera_frame_id_ = msg->header.frame_id.empty() ? camera_optical_frame_ : msg->header.frame_id;
+    tag_frame_id_ = tag_frame_exact_.empty() ? tag_detection_frame_ : tag_frame_exact_;
   }
 
   void tfCallback(const tf2_msgs::msg::TFMessage::SharedPtr msg) {
@@ -174,10 +235,10 @@ class AprilTagPrecisionLandingNode : public rclcpp::Node {
 
       cam_t_tag_ = tf2::Transform(q, t);
       got_cam_t_tag_ = true;
-      last_tag_time_ = now();
+      last_tag_time_ = stampOrNow(tr.header.stamp);
       input_source_ = "tf";
       tag_frame_id_ = tr.child_frame_id;
-      camera_frame_id_ = tr.header.frame_id;
+      camera_frame_id_ = tr.header.frame_id.empty() ? camera_optical_frame_ : tr.header.frame_id;
       return;
     }
   }
@@ -197,11 +258,15 @@ class AprilTagPrecisionLandingNode : public rclcpp::Node {
       return;
     }
 
-    const tf2::Transform world_t_tag = world_t_drone_ * drone_t_cam_ * cam_t_tag_;
+    const tf2::Transform world_t_tag =
+        world_t_drone_ * drone_t_camera_mount_ * camera_mount_t_optical_ * cam_t_tag_;
+    const rclcpp::Time publish_stamp =
+        last_drone_pose_time_ > last_tag_time_ ? last_drone_pose_time_ : last_tag_time_;
+    const std::string world_frame = world_frame_from_pose_.empty() ? world_frame_ : world_frame_from_pose_;
 
     geometry_msgs::msg::PoseStamped out;
-    out.header.stamp = now();
-    out.header.frame_id = world_frame_from_pose_.empty() ? world_frame_ : world_frame_from_pose_;
+    out.header.stamp = publish_stamp;
+    out.header.frame_id = world_frame;
     out.pose.position.x = world_t_tag.getOrigin().x();
     out.pose.position.y = world_t_tag.getOrigin().y();
     out.pose.position.z = world_t_tag.getOrigin().z();
@@ -212,20 +277,29 @@ class AprilTagPrecisionLandingNode : public rclcpp::Node {
 
     pub_landing_target_pose_->publish(out);
 
+    std::vector<geometry_msgs::msg::TransformStamped> tf_msgs;
+    if (publish_world_to_drone_tf_) {
+      tf_msgs.push_back(makeTransformStamped(
+          world_frame, drone_frame_, world_t_drone_, publish_stamp));
+    }
+    if (publish_camera_tag_tf_) {
+      const std::string camera_parent = camera_frame_id_.empty() ? camera_optical_frame_ : camera_frame_id_;
+      const std::string tag_child = tag_frame_id_.empty() ? tag_detection_frame_ : tag_frame_id_;
+      tf_msgs.push_back(makeTransformStamped(camera_parent, tag_child, cam_t_tag_, publish_stamp));
+    }
     if (publish_debug_tf_) {
-      geometry_msgs::msg::TransformStamped tf_msg;
-      tf_msg.header = out.header;
-      tf_msg.child_frame_id = debug_tag_child_frame_;
-      tf_msg.transform.translation.x = out.pose.position.x;
-      tf_msg.transform.translation.y = out.pose.position.y;
-      tf_msg.transform.translation.z = out.pose.position.z;
-      tf_msg.transform.rotation = out.pose.orientation;
-      tf_broadcaster_->sendTransform(tf_msg);
+      tf_msgs.push_back(makeTransformStamped(
+          world_frame, tag_world_frame_, world_t_tag, publish_stamp));
+    }
+    if (!tf_msgs.empty()) {
+      tf_broadcaster_->sendTransform(tf_msgs);
     }
 
     RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 1000,
-                         "Target source=%s frame=%s pos=[%.2f %.2f %.2f]",
-                         input_source_.c_str(), camera_frame_id_.c_str(),
+                         "Target source=%s optical_frame=%s world_frame=%s pos=[%.2f %.2f %.2f]",
+                         input_source_.c_str(),
+                         (camera_frame_id_.empty() ? camera_optical_frame_.c_str() : camera_frame_id_.c_str()),
+                         world_frame.c_str(),
                          out.pose.position.x, out.pose.position.y, out.pose.position.z);
   }
 
@@ -237,11 +311,15 @@ class AprilTagPrecisionLandingNode : public rclcpp::Node {
   std::string drone_pose_topic_;
   std::string landing_target_topic_;
   std::string world_frame_;
+  std::string drone_frame_;
+  std::string camera_mount_frame_;
+  std::string camera_optical_frame_;
+  std::string tag_detection_frame_;
+  std::string tag_world_frame_;
   std::string input_mode_;
   std::string input_source_{"none"};
   std::string tag_frame_prefix_;
   std::string tag_frame_exact_;
-  std::string debug_tag_child_frame_;
 
   double input_timeout_sec_{0.30};
   double camera_offset_x_{0.0};
@@ -250,7 +328,13 @@ class AprilTagPrecisionLandingNode : public rclcpp::Node {
   double camera_roll_{0.0};
   double camera_pitch_{M_PI};
   double camera_yaw_{M_PI_2};
+  double optical_roll_{-M_PI_2};
+  double optical_pitch_{0.0};
+  double optical_yaw_{-M_PI_2};
 
+  bool publish_world_to_drone_tf_{true};
+  bool publish_static_camera_tf_{true};
+  bool publish_camera_tag_tf_{true};
   bool publish_debug_tf_{true};
   bool got_world_t_drone_{false};
   bool got_cam_t_tag_{false};
@@ -261,7 +345,8 @@ class AprilTagPrecisionLandingNode : public rclcpp::Node {
 
   tf2::Transform world_t_drone_;
   tf2::Transform cam_t_tag_;
-  tf2::Transform drone_t_cam_;
+  tf2::Transform drone_t_camera_mount_;
+  tf2::Transform camera_mount_t_optical_;
 
   rclcpp::Time last_drone_pose_time_{0, 0, RCL_ROS_TIME};
   rclcpp::Time last_tag_time_{0, 0, RCL_ROS_TIME};
@@ -273,6 +358,7 @@ class AprilTagPrecisionLandingNode : public rclcpp::Node {
   rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr pub_image_relay_;
   rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr pub_landing_target_pose_;
   std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
+  std::unique_ptr<tf2_ros::StaticTransformBroadcaster> static_tf_broadcaster_;
   rclcpp::TimerBase::SharedPtr timer_;
 };
 
