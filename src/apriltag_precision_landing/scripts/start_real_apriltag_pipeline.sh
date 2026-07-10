@@ -79,8 +79,8 @@ DETECTOR_DEVICE_FPS="${DETECTOR_DEVICE_FPS:-30.0}"
 
 TAG_DICTIONARY="${TAG_DICTIONARY:-36h11}"
 TAG_SIZE_M="${TAG_SIZE_M:-}"
-TARGET_TAG_ID="${TARGET_TAG_ID:--1}"
-MIN_TAG_AREA_PX="${MIN_TAG_AREA_PX:-40.0}"
+TARGET_TAG_ID="${TARGET_TAG_ID:-0}"
+MIN_TAG_AREA_PX="${MIN_TAG_AREA_PX:-500.0}"
 TAG_POSE_TOPIC="${TAG_POSE_TOPIC:-/precision_landing/tag_pose_camera}"
 APRILTAG_CONFIG="${APRILTAG_CONFIG:-}"
 
@@ -91,7 +91,7 @@ INPUT_TIMEOUT_SEC="${INPUT_TIMEOUT_SEC:-0.30}"
 
 CAMERA_OFFSET_X="${CAMERA_OFFSET_X:-0.0}"
 CAMERA_OFFSET_Y="${CAMERA_OFFSET_Y:-0.0}"
-CAMERA_OFFSET_Z="${CAMERA_OFFSET_Z:-0.0}"
+CAMERA_OFFSET_Z="${CAMERA_OFFSET_Z:--0.07}"
 CAMERA_ROLL="${CAMERA_ROLL:-0.0}"
 CAMERA_PITCH="${CAMERA_PITCH:-3.141592653589793}"
 CAMERA_YAW="${CAMERA_YAW:-1.5707963267948966}"
@@ -169,6 +169,7 @@ start_detector() {
   local cmd=(ros2 run apriltag_precision_landing apriltag_camera_detector_node
     --ros-args
     --params-file "${APRILTAG_CONFIG}"
+    -p "use_sim_time:=false"
     -p "input_source:=${source}"
     -p "image_topic:=${IMAGE_TOPIC}"
     -p "camera_info_topic:=${CAMERA_INFO_TOPIC}"
@@ -203,7 +204,10 @@ start_landing_target() {
   ros2 run apriltag_precision_landing apriltag_precision_landing_node \
     --ros-args \
     --params-file "${APRILTAG_CONFIG}" \
+    -p use_sim_time:=false \
     -p input_mode:=camera_pose \
+    -p output_mode:=camera_pose \
+    -p normalize_input_stamps:=false \
     -p camera_tag_pose_topic:="${TAG_POSE_TOPIC}" \
     -p relay_image_stream:=true \
     -p image_input_topic:="${IMAGE_TOPIC}" \
@@ -299,7 +303,9 @@ main() {
   echo "[info] START_MAVROS=${START_MAVROS} START_CAMERA=${START_CAMERA} START_IMAGE_VIEW=${START_IMAGE_VIEW}"
   echo "[info] detector_input_source=${DETECTOR_INPUT_SOURCE}"
   echo "[info] camera: device=${VIDEO_DEVICE} image=${IMAGE_TOPIC} info=${CAMERA_INFO_TOPIC}"
-  echo "[info] tag: dict=${TAG_DICTIONARY} tag_size_m=${TAG_SIZE_M} target_tag_id=${TARGET_TAG_ID}"
+  echo "[info] tag: dict=${TAG_DICTIONARY} tag_size_m=${TAG_SIZE_M} target_tag_id=${TARGET_TAG_ID} min_area_px=${MIN_TAG_AREA_PX}"
+  echo "[info] timing: use_sim_time=false input_timeout_sec=${INPUT_TIMEOUT_SEC}"
+  echo "[info] transform: camera_offset=[${CAMERA_OFFSET_X},${CAMERA_OFFSET_Y},${CAMERA_OFFSET_Z}] rpy=[${CAMERA_ROLL},${CAMERA_PITCH},${CAMERA_YAW}]"
   echo "[info] topics: tag_pose=${TAG_POSE_TOPIC} landing_target=${LANDING_TARGET_TOPIC} drone_pose=${DRONE_POSE_TOPIC}"
   echo "[info] logs:"
   if is_true "${START_MAVROS}"; then

@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <cstdint>
 #include <limits>
 #include <memory>
 #include <string>
@@ -102,9 +103,14 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
       throw std::runtime_error("invalid input_source");
     }
 
+    diagnostics_timer_ = create_wall_timer(
+        std::chrono::seconds(1),
+        std::bind(&AprilTagCameraDetectorNode::publishDiagnostics, this));
+
     RCLCPP_INFO(get_logger(),
-                "apriltag_camera_detector started source=%s dict=%s tag_size=%.3f out=%s",
-                input_source_.c_str(), dictionary_name_.c_str(), tag_size_m_, tag_pose_topic_.c_str());
+                "apriltag_camera_detector started source=%s dict=%s tag_size=%.3f target_id=%d min_area_px=%.1f out=%s use_sim_time=%s",
+                input_source_.c_str(), dictionary_name_.c_str(), tag_size_m_, target_tag_id_,
+                min_tag_area_px_, tag_pose_topic_.c_str(), useSimTime() ? "true" : "false");
   }
 
   ~AprilTagCameraDetectorNode() override {
@@ -151,13 +157,19 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
     if (device_height_ > 0) cap_.set(cv::CAP_PROP_FRAME_HEIGHT, static_cast<double>(device_height_));
     if (device_fps_ > 0.0) cap_.set(cv::CAP_PROP_FPS, device_fps_);
 
+    const double actual_width = cap_.get(cv::CAP_PROP_FRAME_WIDTH);
+    const double actual_height = cap_.get(cv::CAP_PROP_FRAME_HEIGHT);
+    const double actual_fps = cap_.get(cv::CAP_PROP_FPS);
+
     const auto period = std::chrono::duration<double>(1.0 / std::max(1.0, detect_rate_hz_));
     capture_timer_ = create_wall_timer(
         std::chrono::duration_cast<std::chrono::milliseconds>(period),
         std::bind(&AprilTagCameraDetectorNode::captureLoop, this));
 
-    RCLCPP_INFO(get_logger(), "Device mode video=%s (requested %dx%d @ %.1f)",
-                video_device_.c_str(), device_width_, device_height_, device_fps_);
+    RCLCPP_INFO(get_logger(),
+                "Device mode video=%s requested=%dx%d@%.1f negotiated=%.0fx%.0f@%.1f",
+                video_device_.c_str(), device_width_, device_height_, device_fps_,
+                actual_width, actual_height, actual_fps);
     if (publish_image_stream_) {
       RCLCPP_INFO(get_logger(), "Publishing device stream image=%s camera_info=%s",
                   image_output_topic_.c_str(), camera_info_output_topic_.c_str());
@@ -236,7 +248,10 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
   }
 
   void cameraInfoCb(const sensor_msgs::msg::CameraInfo::SharedPtr msg) {
+    ++camera_info_count_;
+
     if (msg->k.size() != 9) {
+      ++invalid_camera_info_count_;
       RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
                            "CameraInfo K is invalid (size=%zu)", msg->k.size());
       return;
@@ -274,7 +289,10 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
   }
 
   void imageCb(const sensor_msgs::msg::Image::SharedPtr msg) {
+    ++camera_frame_count_;
+
     if (!got_camera_info_) {
+      ++missing_camera_info_count_;
       RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
                            "Waiting camera_info before AprilTag detection.");
       return;
@@ -284,6 +302,7 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
     try {
       cv_ptr = cv_bridge::toCvShare(msg);
     } catch (const cv_bridge::Exception &e) {
+      ++image_conversion_fail_count_;
       RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
                            "cv_bridge exception: %s", e.what());
       return;
@@ -302,6 +321,7 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
 
   void captureLoop() {
     if (!cap_.isOpened()) {
+      ++camera_not_open_count_;
       RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
                            "Video device not open: %s", video_device_.c_str());
       return;
@@ -309,11 +329,13 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
 
     cv::Mat frame;
     if (!cap_.read(frame) || frame.empty()) {
+      ++camera_read_fail_count_;
       RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
                            "Failed to read frame from %s", video_device_.c_str());
       return;
     }
 
+    ++camera_frame_count_;
     const auto stamp = now();
     if (publish_image_stream_) {
       publishDeviceStream(frame, stamp, camera_frame_id_);
@@ -368,9 +390,16 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
     }
 
     pub_camera_info_->publish(info);
+    ++camera_info_count_;
   }
 
   void detectAndPublish(const cv::Mat &image, const rclcpp::Time &stamp, const std::string &frame_id) {
+    ++detector_input_count_;
+    if (last_input_stamp_.nanoseconds() != 0 && stamp <= last_input_stamp_) {
+      ++nonmonotonic_stamp_count_;
+    }
+    last_input_stamp_ = stamp;
+
     updateScaledCameraModelForFrame(image.cols, image.rows);
 
     cv::Mat gray;
@@ -387,18 +416,23 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
     cv::aruco::detectMarkers(gray, detector_dict_, corners, ids, detector_params, rejected);
 
     if (ids.empty()) {
+      ++no_marker_count_;
       return;
     }
 
     int best_idx = -1;
     double best_area_px = 0.0;
+    bool target_id_seen = false;
+    double target_max_area_px = 0.0;
 
     for (size_t i = 0; i < ids.size(); ++i) {
       if (target_tag_id_ >= 0 && ids[i] != target_tag_id_) {
         continue;
       }
 
+      target_id_seen = true;
       const double area_px = quadArea(corners[i]);
+      target_max_area_px = std::max(target_max_area_px, area_px);
       if (area_px < min_tag_area_px_) {
         continue;
       }
@@ -409,7 +443,14 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
       }
     }
 
+    window_max_candidate_area_px_ = std::max(window_max_candidate_area_px_, target_max_area_px);
+
     if (best_idx < 0) {
+      if (target_id_seen) {
+        ++below_area_count_;
+      } else {
+        ++wrong_id_count_;
+      }
       return;
     }
 
@@ -424,11 +465,17 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
         tvecs);
 
     if (rvecs.empty() || tvecs.empty()) {
+      ++pose_fail_count_;
       return;
     }
 
     const cv::Vec3d rvec = rvecs[0];
     const cv::Vec3d tvec = tvecs[0];
+    if (!std::isfinite(rvec[0]) || !std::isfinite(rvec[1]) || !std::isfinite(rvec[2]) ||
+        !std::isfinite(tvec[0]) || !std::isfinite(tvec[1]) || !std::isfinite(tvec[2])) {
+      ++pose_fail_count_;
+      return;
+    }
 
     const double angle = std::sqrt(rvec[0] * rvec[0] + rvec[1] * rvec[1] + rvec[2] * rvec[2]);
     double qx = 0.0;
@@ -459,6 +506,13 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
     out.pose.orientation.w = qw;
 
     pub_tag_pose_->publish(out);
+    ++detector_output_count_;
+    if (last_detection_stamp_.nanoseconds() != 0 && stamp > last_detection_stamp_) {
+      longest_detection_gap_sec_ = std::max(
+          longest_detection_gap_sec_, (stamp - last_detection_stamp_).seconds());
+    }
+    last_detection_stamp_ = stamp;
+    last_detection_area_px_ = best_area_px;
 
     const double fx = camera_matrix_.at<double>(0, 0);
     const double fy = camera_matrix_.at<double>(1, 1);
@@ -469,6 +523,59 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
                          "Tag detected id=%d pos_cam=[%.2f %.2f %.2f] area_m2=%.6f",
                          ids[best_idx], out.pose.position.x, out.pose.position.y,
                          out.pose.position.z, area_m2);
+  }
+
+  bool useSimTime() const {
+    bool use_sim_time = false;
+    get_parameter("use_sim_time", use_sim_time);
+    return use_sim_time;
+  }
+
+  void publishDiagnostics() {
+    const auto current_time = now();
+    const uint64_t input_delta = detector_input_count_ - previous_detector_input_count_;
+    const uint64_t output_delta = detector_output_count_ - previous_detector_output_count_;
+    const double last_age = last_detection_stamp_.nanoseconds() == 0
+                                ? std::numeric_limits<double>::infinity()
+                                : std::max(0.0, (current_time - last_detection_stamp_).seconds());
+    const double visible_percent = input_delta == 0
+                                       ? 0.0
+                                       : 100.0 * static_cast<double>(output_delta) /
+                                             static_cast<double>(input_delta);
+    const double total_visible_percent = detector_input_count_ == 0
+                                             ? 0.0
+                                             : 100.0 * static_cast<double>(detector_output_count_) /
+                                                   static_cast<double>(detector_input_count_);
+
+    RCLCPP_INFO(
+        get_logger(),
+        "DETECTOR_DIAG use_sim_time=%s camera_hz=%llu info_hz=%llu detect_hz=%llu output_hz=%llu "
+        "expected_tag_detected=%s visibility_pct=%.1f visibility_total_pct=%.1f "
+        "last_detection_age_s=%.3f longest_detection_gap_s=%.3f last_stamp_ns=%lld last_area_px=%.1f window_max_area_px=%.1f "
+        "drop_total[read=%llu,no_marker=%llu,wrong_id=%llu,below_area=%llu,pose=%llu,no_info=%llu,convert=%llu,stamp=%llu]",
+        useSimTime() ? "true" : "false",
+        static_cast<unsigned long long>(camera_frame_count_ - previous_camera_frame_count_),
+        static_cast<unsigned long long>(camera_info_count_ - previous_camera_info_count_),
+        static_cast<unsigned long long>(input_delta),
+        static_cast<unsigned long long>(output_delta),
+        output_delta > 0 ? "true" : "false", visible_percent, total_visible_percent,
+        last_age, longest_detection_gap_sec_,
+        static_cast<long long>(last_detection_stamp_.nanoseconds()),
+        last_detection_area_px_, window_max_candidate_area_px_,
+        static_cast<unsigned long long>(camera_read_fail_count_ + camera_not_open_count_),
+        static_cast<unsigned long long>(no_marker_count_),
+        static_cast<unsigned long long>(wrong_id_count_),
+        static_cast<unsigned long long>(below_area_count_),
+        static_cast<unsigned long long>(pose_fail_count_),
+        static_cast<unsigned long long>(missing_camera_info_count_ + invalid_camera_info_count_),
+        static_cast<unsigned long long>(image_conversion_fail_count_),
+        static_cast<unsigned long long>(nonmonotonic_stamp_count_));
+
+    previous_camera_frame_count_ = camera_frame_count_;
+    previous_camera_info_count_ = camera_info_count_;
+    previous_detector_input_count_ = detector_input_count_;
+    previous_detector_output_count_ = detector_output_count_;
+    window_max_candidate_area_px_ = 0.0;
   }
 
   std::string input_source_;
@@ -512,12 +619,37 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
   cv::Ptr<cv::aruco::Dictionary> detector_dict_;
   cv::VideoCapture cap_;
 
+  uint64_t camera_frame_count_{0};
+  uint64_t camera_info_count_{0};
+  uint64_t detector_input_count_{0};
+  uint64_t detector_output_count_{0};
+  uint64_t previous_camera_frame_count_{0};
+  uint64_t previous_camera_info_count_{0};
+  uint64_t previous_detector_input_count_{0};
+  uint64_t previous_detector_output_count_{0};
+  uint64_t camera_not_open_count_{0};
+  uint64_t camera_read_fail_count_{0};
+  uint64_t invalid_camera_info_count_{0};
+  uint64_t missing_camera_info_count_{0};
+  uint64_t image_conversion_fail_count_{0};
+  uint64_t no_marker_count_{0};
+  uint64_t wrong_id_count_{0};
+  uint64_t below_area_count_{0};
+  uint64_t pose_fail_count_{0};
+  uint64_t nonmonotonic_stamp_count_{0};
+  double last_detection_area_px_{0.0};
+  double window_max_candidate_area_px_{0.0};
+  double longest_detection_gap_sec_{0.0};
+  rclcpp::Time last_input_stamp_{0, 0, RCL_ROS_TIME};
+  rclcpp::Time last_detection_stamp_{0, 0, RCL_ROS_TIME};
+
   rclcpp::Subscription<sensor_msgs::msg::CameraInfo>::SharedPtr sub_camera_info_;
   rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr sub_image_;
   rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr pub_image_;
   rclcpp::Publisher<sensor_msgs::msg::CameraInfo>::SharedPtr pub_camera_info_;
   rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr pub_tag_pose_;
   rclcpp::TimerBase::SharedPtr capture_timer_;
+  rclcpp::TimerBase::SharedPtr diagnostics_timer_;
 };
 
 int main(int argc, char **argv) {

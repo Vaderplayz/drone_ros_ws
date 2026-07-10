@@ -63,7 +63,7 @@ apriltag_precision_landing:
 
     camera_offset_x: 0.0
     camera_offset_y: 0.0
-    camera_offset_z: 0.0
+    camera_offset_z: -0.07
     # This tuned transform is applied directly from drone_frame -> camera_optical_frame.
     camera_roll: 0.0
     camera_pitch: 3.141592653589793
