@@ -1,10 +1,13 @@
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <limits>
 #include <memory>
+#include <mutex>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "cv_bridge/cv_bridge.hpp"
@@ -58,6 +61,7 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
     device_height_ = declare_parameter<int>("device_height", 480);
     device_fps_ = declare_parameter<double>("device_fps", 30.0);
     detect_rate_hz_ = declare_parameter<double>("detect_rate_hz", 20.0);
+    capture_buffer_size_ = declare_parameter<int>("capture_buffer_size", 1);
 
     fx_ = declare_parameter<double>("fx", 815.850981);
     fy_ = declare_parameter<double>("fy", 812.573400);
@@ -84,6 +88,7 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
     dictionary_name_ = declare_parameter<std::string>("dictionary", "36h11");
 
     detector_dict_ = cv::aruco::getPredefinedDictionary(dictionaryFromString(dictionary_name_));
+    detector_params_ = cv::aruco::DetectorParameters::create();
     const auto qos_sensor = rclcpp::SensorDataQoS();
     pub_image_ = create_publisher<sensor_msgs::msg::Image>(image_output_topic_, qos_sensor);
     pub_camera_info_ = create_publisher<sensor_msgs::msg::CameraInfo>(camera_info_output_topic_, qos_sensor);
@@ -114,6 +119,10 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
   }
 
   ~AprilTagCameraDetectorNode() override {
+    capture_running_.store(false);
+    if (capture_thread_.joinable()) {
+      capture_thread_.join();
+    }
     if (cap_.isOpened()) {
       cap_.release();
     }
@@ -156,6 +165,9 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
     if (device_width_ > 0) cap_.set(cv::CAP_PROP_FRAME_WIDTH, static_cast<double>(device_width_));
     if (device_height_ > 0) cap_.set(cv::CAP_PROP_FRAME_HEIGHT, static_cast<double>(device_height_));
     if (device_fps_ > 0.0) cap_.set(cv::CAP_PROP_FPS, device_fps_);
+    const bool buffer_size_set = capture_buffer_size_ > 0
+                                     ? cap_.set(cv::CAP_PROP_BUFFERSIZE, static_cast<double>(capture_buffer_size_))
+                                     : false;
 
     const double actual_width = cap_.get(cv::CAP_PROP_FRAME_WIDTH);
     const double actual_height = cap_.get(cv::CAP_PROP_FRAME_HEIGHT);
@@ -164,12 +176,15 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
     const auto period = std::chrono::duration<double>(1.0 / std::max(1.0, detect_rate_hz_));
     capture_timer_ = create_wall_timer(
         std::chrono::duration_cast<std::chrono::milliseconds>(period),
-        std::bind(&AprilTagCameraDetectorNode::captureLoop, this));
+        std::bind(&AprilTagCameraDetectorNode::processLatestFrame, this));
+
+    capture_running_.store(true);
+    capture_thread_ = std::thread(&AprilTagCameraDetectorNode::captureLoop, this);
 
     RCLCPP_INFO(get_logger(),
-                "Device mode video=%s requested=%dx%d@%.1f negotiated=%.0fx%.0f@%.1f",
+                "Device mode video=%s requested=%dx%d@%.1f negotiated=%.0fx%.0f@%.1f buffer_request=%d accepted=%s capture=dedicated_thread queue=latest_only",
                 video_device_.c_str(), device_width_, device_height_, device_fps_,
-                actual_width, actual_height, actual_fps);
+                actual_width, actual_height, actual_fps, capture_buffer_size_, buffer_size_set ? "true" : "false");
     if (publish_image_stream_) {
       RCLCPP_INFO(get_logger(), "Publishing device stream image=%s camera_info=%s",
                   image_output_topic_.c_str(), camera_info_output_topic_.c_str());
@@ -320,23 +335,61 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
   }
 
   void captureLoop() {
-    if (!cap_.isOpened()) {
-      ++camera_not_open_count_;
-      RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
-                           "Video device not open: %s", video_device_.c_str());
-      return;
-    }
+    auto previous_capture = std::chrono::steady_clock::time_point{};
 
+    while (capture_running_.load()) {
+      if (!cap_.isOpened()) {
+        ++camera_not_open_count_;
+        RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
+                             "Video device not open: %s", video_device_.c_str());
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        continue;
+      }
+
+      cv::Mat frame;
+      if (!cap_.read(frame) || frame.empty()) {
+        ++camera_read_fail_count_;
+        RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
+                             "Failed to read frame from %s", video_device_.c_str());
+        continue;
+      }
+
+      const auto capture_time = std::chrono::steady_clock::now();
+      const auto stamp = now();
+      const uint64_t sequence = ++camera_frame_count_;
+      std::lock_guard<std::mutex> lock(latest_frame_mutex_);
+      latest_frame_ = frame;
+      latest_frame_stamp_ = stamp;
+      latest_frame_sequence_ = sequence;
+
+      if (previous_capture != std::chrono::steady_clock::time_point{}) {
+        const double gap_ms = std::chrono::duration<double, std::milli>(capture_time - previous_capture).count();
+        longest_capture_gap_ms_ = std::max(longest_capture_gap_ms_, gap_ms);
+      }
+      previous_capture = capture_time;
+    }
+  }
+
+  void processLatestFrame() {
     cv::Mat frame;
-    if (!cap_.read(frame) || frame.empty()) {
-      ++camera_read_fail_count_;
-      RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
-                           "Failed to read frame from %s", video_device_.c_str());
-      return;
+    rclcpp::Time stamp{0, 0, RCL_ROS_TIME};
+    uint64_t sequence = 0;
+    {
+      std::lock_guard<std::mutex> lock(latest_frame_mutex_);
+      sequence = latest_frame_sequence_;
+      if (sequence == 0 || sequence == processed_frame_sequence_ || latest_frame_.empty()) {
+        ++no_new_frame_count_;
+        return;
+      }
+      frame = latest_frame_;
+      stamp = latest_frame_stamp_;
     }
 
-    ++camera_frame_count_;
-    const auto stamp = now();
+    if (processed_frame_sequence_ != 0 && sequence > processed_frame_sequence_ + 1) {
+      frames_replaced_before_detection_ += sequence - processed_frame_sequence_ - 1;
+    }
+    processed_frame_sequence_ = sequence;
+
     if (publish_image_stream_) {
       publishDeviceStream(frame, stamp, camera_frame_id_);
     }
@@ -394,6 +447,19 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
   }
 
   void detectAndPublish(const cv::Mat &image, const rclcpp::Time &stamp, const std::string &frame_id) {
+    const auto processing_start = std::chrono::steady_clock::now();
+    const double image_age_start_ms = std::max(0.0, (now() - stamp).seconds() * 1000.0);
+    const auto record_processing = [this, processing_start, image_age_start_ms]() {
+      const double processing_ms = std::chrono::duration<double, std::milli>(
+                                       std::chrono::steady_clock::now() - processing_start).count();
+      last_processing_ms_ = processing_ms;
+      max_processing_ms_ = std::max(max_processing_ms_, processing_ms);
+      processing_total_ms_ += processing_ms;
+      ++processing_sample_count_;
+      last_image_age_start_ms_ = image_age_start_ms;
+      max_image_age_start_ms_ = std::max(max_image_age_start_ms_, image_age_start_ms);
+    };
+
     ++detector_input_count_;
     if (last_input_stamp_.nanoseconds() != 0 && stamp <= last_input_stamp_) {
       ++nonmonotonic_stamp_count_;
@@ -412,11 +478,11 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
     std::vector<int> ids;
     std::vector<std::vector<cv::Point2f>> corners;
     std::vector<std::vector<cv::Point2f>> rejected;
-    cv::Ptr<cv::aruco::DetectorParameters> detector_params = cv::aruco::DetectorParameters::create();
-    cv::aruco::detectMarkers(gray, detector_dict_, corners, ids, detector_params, rejected);
+    cv::aruco::detectMarkers(gray, detector_dict_, corners, ids, detector_params_, rejected);
 
     if (ids.empty()) {
       ++no_marker_count_;
+      record_processing();
       return;
     }
 
@@ -451,6 +517,7 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
       } else {
         ++wrong_id_count_;
       }
+      record_processing();
       return;
     }
 
@@ -466,6 +533,7 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
 
     if (rvecs.empty() || tvecs.empty()) {
       ++pose_fail_count_;
+      record_processing();
       return;
     }
 
@@ -474,6 +542,7 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
     if (!std::isfinite(rvec[0]) || !std::isfinite(rvec[1]) || !std::isfinite(rvec[2]) ||
         !std::isfinite(tvec[0]) || !std::isfinite(tvec[1]) || !std::isfinite(tvec[2])) {
       ++pose_fail_count_;
+      record_processing();
       return;
     }
 
@@ -513,6 +582,16 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
     }
     last_detection_stamp_ = stamp;
     last_detection_area_px_ = best_area_px;
+    last_edge_distance_px_ = std::numeric_limits<double>::infinity();
+    for (const auto &point : picked_corners[0]) {
+      last_edge_distance_px_ = std::min(
+          last_edge_distance_px_,
+          std::min({static_cast<double>(point.x), static_cast<double>(point.y),
+                    static_cast<double>(image.cols - 1) - point.x,
+                    static_cast<double>(image.rows - 1) - point.y}));
+    }
+    window_min_edge_distance_px_ = std::min(window_min_edge_distance_px_, last_edge_distance_px_);
+    record_processing();
 
     const double fx = camera_matrix_.at<double>(0, 0);
     const double fy = camera_matrix_.at<double>(1, 1);
@@ -546,15 +625,24 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
                                              ? 0.0
                                              : 100.0 * static_cast<double>(detector_output_count_) /
                                                    static_cast<double>(detector_input_count_);
+    const double average_processing_ms = processing_sample_count_ == 0
+                                             ? 0.0
+                                             : processing_total_ms_ / static_cast<double>(processing_sample_count_);
+    double longest_capture_gap_ms = 0.0;
+    {
+      std::lock_guard<std::mutex> lock(latest_frame_mutex_);
+      longest_capture_gap_ms = longest_capture_gap_ms_;
+    }
 
     RCLCPP_INFO(
         get_logger(),
         "DETECTOR_DIAG use_sim_time=%s camera_hz=%llu info_hz=%llu detect_hz=%llu output_hz=%llu "
         "expected_tag_detected=%s visibility_pct=%.1f visibility_total_pct=%.1f "
         "last_detection_age_s=%.3f longest_detection_gap_s=%.3f last_stamp_ns=%lld last_area_px=%.1f window_max_area_px=%.1f "
-        "drop_total[read=%llu,no_marker=%llu,wrong_id=%llu,below_area=%llu,pose=%llu,no_info=%llu,convert=%llu,stamp=%llu]",
+        "edge_px[last=%.1f,window_min=%.1f] latency_ms[last=%.1f,avg=%.1f,max=%.1f,image_age_start=%.1f,max_image_age_start=%.1f] "
+        "capture_gap_max_ms=%.1f queue=latest_only drop_total[read=%llu,replaced=%llu,no_new=%llu,no_marker=%llu,wrong_id=%llu,below_area=%llu,pose=%llu,no_info=%llu,convert=%llu,stamp=%llu]",
         useSimTime() ? "true" : "false",
-        static_cast<unsigned long long>(camera_frame_count_ - previous_camera_frame_count_),
+        static_cast<unsigned long long>(camera_frame_count_.load() - previous_camera_frame_count_),
         static_cast<unsigned long long>(camera_info_count_ - previous_camera_info_count_),
         static_cast<unsigned long long>(input_delta),
         static_cast<unsigned long long>(output_delta),
@@ -562,7 +650,13 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
         last_age, longest_detection_gap_sec_,
         static_cast<long long>(last_detection_stamp_.nanoseconds()),
         last_detection_area_px_, window_max_candidate_area_px_,
-        static_cast<unsigned long long>(camera_read_fail_count_ + camera_not_open_count_),
+        last_edge_distance_px_,
+        std::isfinite(window_min_edge_distance_px_) ? window_min_edge_distance_px_ : -1.0,
+        last_processing_ms_, average_processing_ms, max_processing_ms_,
+        last_image_age_start_ms_, max_image_age_start_ms_, longest_capture_gap_ms,
+        static_cast<unsigned long long>(camera_read_fail_count_.load() + camera_not_open_count_.load()),
+        static_cast<unsigned long long>(frames_replaced_before_detection_),
+        static_cast<unsigned long long>(no_new_frame_count_),
         static_cast<unsigned long long>(no_marker_count_),
         static_cast<unsigned long long>(wrong_id_count_),
         static_cast<unsigned long long>(below_area_count_),
@@ -571,11 +665,12 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
         static_cast<unsigned long long>(image_conversion_fail_count_),
         static_cast<unsigned long long>(nonmonotonic_stamp_count_));
 
-    previous_camera_frame_count_ = camera_frame_count_;
+    previous_camera_frame_count_ = camera_frame_count_.load();
     previous_camera_info_count_ = camera_info_count_;
     previous_detector_input_count_ = detector_input_count_;
     previous_detector_output_count_ = detector_output_count_;
     window_max_candidate_area_px_ = 0.0;
+    window_min_edge_distance_px_ = std::numeric_limits<double>::infinity();
   }
 
   std::string input_source_;
@@ -592,6 +687,7 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
   int device_height_{480};
   double device_fps_{30.0};
   double detect_rate_hz_{20.0};
+  int capture_buffer_size_{1};
 
   double fx_{0.0};
   double fy_{0.0};
@@ -617,9 +713,18 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
   cv::Mat camera_matrix_;
   cv::Mat dist_coeffs_;
   cv::Ptr<cv::aruco::Dictionary> detector_dict_;
+  cv::Ptr<cv::aruco::DetectorParameters> detector_params_;
   cv::VideoCapture cap_;
+  std::atomic<bool> capture_running_{false};
+  std::thread capture_thread_;
+  std::mutex latest_frame_mutex_;
+  cv::Mat latest_frame_;
+  rclcpp::Time latest_frame_stamp_{0, 0, RCL_ROS_TIME};
+  uint64_t latest_frame_sequence_{0};
+  uint64_t processed_frame_sequence_{0};
+  double longest_capture_gap_ms_{0.0};
 
-  uint64_t camera_frame_count_{0};
+  std::atomic<uint64_t> camera_frame_count_{0};
   uint64_t camera_info_count_{0};
   uint64_t detector_input_count_{0};
   uint64_t detector_output_count_{0};
@@ -627,8 +732,10 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
   uint64_t previous_camera_info_count_{0};
   uint64_t previous_detector_input_count_{0};
   uint64_t previous_detector_output_count_{0};
-  uint64_t camera_not_open_count_{0};
-  uint64_t camera_read_fail_count_{0};
+  std::atomic<uint64_t> camera_not_open_count_{0};
+  std::atomic<uint64_t> camera_read_fail_count_{0};
+  uint64_t frames_replaced_before_detection_{0};
+  uint64_t no_new_frame_count_{0};
   uint64_t invalid_camera_info_count_{0};
   uint64_t missing_camera_info_count_{0};
   uint64_t image_conversion_fail_count_{0};
@@ -639,7 +746,15 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
   uint64_t nonmonotonic_stamp_count_{0};
   double last_detection_area_px_{0.0};
   double window_max_candidate_area_px_{0.0};
+  double last_edge_distance_px_{-1.0};
+  double window_min_edge_distance_px_{std::numeric_limits<double>::infinity()};
   double longest_detection_gap_sec_{0.0};
+  double last_processing_ms_{0.0};
+  double max_processing_ms_{0.0};
+  double processing_total_ms_{0.0};
+  uint64_t processing_sample_count_{0};
+  double last_image_age_start_ms_{0.0};
+  double max_image_age_start_ms_{0.0};
   rclcpp::Time last_input_stamp_{0, 0, RCL_ROS_TIME};
   rclcpp::Time last_detection_stamp_{0, 0, RCL_ROS_TIME};
 

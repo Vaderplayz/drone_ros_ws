@@ -8,6 +8,7 @@ apriltag_camera_detector:
     device_height: 480
     device_fps: 30.0
     detect_rate_hz: 20.0
+    capture_buffer_size: 1
     # OpenCV pose output is in the optical frame, not camera_link/body frame.
     camera_frame_id: camera_optical_frame
 
@@ -26,10 +27,10 @@ apriltag_camera_detector:
     image_topic: /image_raw
     camera_info_topic: /camera_info
 
-    # Publish a live camera stream even in input_source:=device mode.
+    # Keep image transport off in flight unless explicitly enabled for a bench test.
     image_output_topic: /image_raw
     camera_info_output_topic: /camera_info
-    publish_image_stream: true
+    publish_image_stream: false
 
     tag_pose_topic: /precision_landing/tag_pose_camera
     dictionary: 36h11
@@ -42,7 +43,7 @@ apriltag_precision_landing:
     input_mode: camera_pose
     tf_topic: /tf
     camera_tag_pose_topic: /precision_landing/tag_pose_camera
-    relay_image_stream: true
+    relay_image_stream: false
     image_input_topic: /image_raw
     image_output_topic: /image_raw
 

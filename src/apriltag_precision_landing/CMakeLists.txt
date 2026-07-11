@@ -14,6 +14,7 @@ find_package(tf2_msgs REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(OpenCV REQUIRED COMPONENTS core imgproc calib3d aruco videoio)
+find_package(Threads REQUIRED)
 
 add_executable(apriltag_camera_detector_node src/apriltag_camera_detector_node.cpp)
 target_link_libraries(apriltag_camera_detector_node PUBLIC
@@ -26,6 +27,7 @@ target_link_libraries(apriltag_camera_detector_node PUBLIC
   opencv_calib3d
   opencv_aruco
   opencv_videoio
+  Threads::Threads
 )
 
 add_executable(apriltag_precision_landing_node src/apriltag_precision_landing_node.cpp)
@@ -46,6 +48,7 @@ install(TARGETS
 
 install(PROGRAMS
   scripts/start_real_apriltag_pipeline.sh
+  scripts/monitor_real_pipeline_system.sh
   DESTINATION lib/${PROJECT_NAME}
 )
 

@@ -365,6 +365,10 @@ class AprilTagPrecisionLandingNode : public rclcpp::Node {
     ++landing_target_output_count_;
     ++transform_success_count_;
     last_output_stamp_ = publish_stamp;
+    const double output_latency_ms = std::max(0.0, (now() - publish_stamp).seconds() * 1000.0);
+    last_output_latency_ms_ = output_latency_ms;
+    max_output_latency_ms_ = std::max(max_output_latency_ms_, output_latency_ms);
+    output_latency_total_ms_ += output_latency_ms;
     if (!have_output_bounds_) {
       min_output_x_ = max_output_x_ = out.pose.position.x;
       min_output_y_ = max_output_y_ = out.pose.position.y;
@@ -441,11 +445,19 @@ class AprilTagPrecisionLandingNode : public rclcpp::Node {
     const double tag_age = last_tag_time_.nanoseconds() == 0
                                ? std::numeric_limits<double>::infinity()
                                : std::max(0.0, (current_time - last_tag_time_).seconds());
+    const double drone_pose_age = last_drone_pose_time_.nanoseconds() == 0
+                                      ? std::numeric_limits<double>::infinity()
+                                      : std::max(0.0, (current_time - last_drone_pose_time_).seconds());
+    const double average_output_latency_ms = landing_target_output_count_ == 0
+                                                 ? 0.0
+                                                 : output_latency_total_ms_ /
+                                                       static_cast<double>(landing_target_output_count_);
 
     RCLCPP_INFO(
         get_logger(),
-        "LANDING_PIPELINE_DIAG use_sim_time=%s tag_input_hz=%llu drone_pose_hz=%llu local_target_output_hz=%llu landing_target_send_request_hz=%llu "
+        "LANDING_PIPELINE_DIAG use_sim_time=%s tag_input_hz=%llu drone_pose_hz=%llu local_target_output_hz=%llu mavros_input_topic_publish_hz=%llu mavros_serial_tx=not_observed "
         "last_detection_age_s=%.3f longest_detection_gap_s=%.3f last_detection_stamp_ns=%lld last_output_stamp_ns=%lld "
+        "drone_pose_age_s=%.3f output_latency_ms[last=%.1f,avg=%.1f,max=%.1f] "
         "transform=direct tf_lookup=not_used success_hz=%llu tf_failure_total=%llu stale_episodes=%llu "
         "local_xy_spread_enu_m=[%.3f,%.3f] "
         "drop_total[no_tag=%llu,stale_tag=%llu,no_drone_pose=%llu,stale_drone_pose=%llu] duplicate_publish_suppressed=%llu "
@@ -458,6 +470,7 @@ class AprilTagPrecisionLandingNode : public rclcpp::Node {
         tag_age, longest_tag_gap_sec_,
         static_cast<long long>(last_tag_time_.nanoseconds()),
         static_cast<long long>(last_output_stamp_.nanoseconds()),
+        drone_pose_age, last_output_latency_ms_, average_output_latency_ms, max_output_latency_ms_,
         static_cast<unsigned long long>(transform_success_count_ - previous_transform_success_count_),
         static_cast<unsigned long long>(invalid_transform_count_),
         static_cast<unsigned long long>(stale_tag_episode_count_),
@@ -555,6 +568,9 @@ class AprilTagPrecisionLandingNode : public rclcpp::Node {
   bool tag_update_pending_{false};
   bool have_output_bounds_{false};
   double longest_tag_gap_sec_{0.0};
+  double last_output_latency_ms_{0.0};
+  double max_output_latency_ms_{0.0};
+  double output_latency_total_ms_{0.0};
   double min_output_x_{0.0};
   double max_output_x_{0.0};
   double min_output_y_{0.0};

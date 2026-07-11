@@ -61,6 +61,7 @@ KILL_BEFORE_LAUNCH="${KILL_BEFORE_LAUNCH:-1}"
 START_MAVROS="${START_MAVROS:-1}"
 START_CAMERA="${START_CAMERA:-0}"
 START_IMAGE_VIEW="${START_IMAGE_VIEW:-0}"
+START_SYSTEM_MONITOR="${START_SYSTEM_MONITOR:-1}"
 DETECTOR_INPUT_SOURCE="${DETECTOR_INPUT_SOURCE:-device}"
 
 MAVROS_LAUNCH_FILE="${MAVROS_LAUNCH_FILE:-px4.launch}"
@@ -76,6 +77,9 @@ CAMERA_FRAME_ID="${CAMERA_FRAME_ID:-camera_optical_frame}"
 DETECTOR_DEVICE_WIDTH="${DETECTOR_DEVICE_WIDTH:-640}"
 DETECTOR_DEVICE_HEIGHT="${DETECTOR_DEVICE_HEIGHT:-480}"
 DETECTOR_DEVICE_FPS="${DETECTOR_DEVICE_FPS:-30.0}"
+DETECTOR_CAPTURE_BUFFER_SIZE="${DETECTOR_CAPTURE_BUFFER_SIZE:-1}"
+DETECTOR_PUBLISH_IMAGE_STREAM="${DETECTOR_PUBLISH_IMAGE_STREAM:-0}"
+V4L2_CONTROLS="${V4L2_CONTROLS:-}"
 
 TAG_DICTIONARY="${TAG_DICTIONARY:-36h11}"
 TAG_SIZE_M="${TAG_SIZE_M:-}"
@@ -104,6 +108,8 @@ CAMERA_LOG="${CAMERA_LOG:-/tmp/v4l2_camera_apriltag.log}"
 DETECTOR_LOG="${DETECTOR_LOG:-/tmp/apriltag_detector.log}"
 LANDING_LOG="${LANDING_LOG:-/tmp/apriltag_landing_target.log}"
 IMAGE_VIEW_LOG="${IMAGE_VIEW_LOG:-/tmp/rqt_image_view_apriltag.log}"
+CAMERA_CAPABILITIES_LOG="${CAMERA_CAPABILITIES_LOG:-/tmp/apriltag_v4l2_capabilities.log}"
+SYSTEM_MONITOR_LOG="${SYSTEM_MONITOR_LOG:-/tmp/apriltag_system_monitor.log}"
 
 PIDS=()
 NAMES=()
@@ -133,6 +139,7 @@ kill_existing_stack() {
   kill_if_running "ros2 run apriltag_precision_landing apriltag_camera_detector_node"
   kill_if_running "ros2 run apriltag_precision_landing apriltag_precision_landing_node"
   kill_if_running "ros2 run rqt_image_view rqt_image_view"
+  kill_if_running "monitor_real_pipeline_system.sh"
 }
 
 start_mavros() {
@@ -175,7 +182,7 @@ start_detector() {
     -p "camera_info_topic:=${CAMERA_INFO_TOPIC}"
     -p "image_output_topic:=${IMAGE_TOPIC}"
     -p "camera_info_output_topic:=${CAMERA_INFO_TOPIC}"
-    -p "publish_image_stream:=true"
+    -p "publish_image_stream:=${DETECTOR_PUBLISH_IMAGE_STREAM}"
     -p "camera_frame_id:=${CAMERA_FRAME_ID}"
     -p "dictionary:=${TAG_DICTIONARY}"
     -p "target_tag_id:=${TARGET_TAG_ID}"
@@ -192,6 +199,7 @@ start_detector() {
       -p "device_width:=${DETECTOR_DEVICE_WIDTH}"
       -p "device_height:=${DETECTOR_DEVICE_HEIGHT}"
       -p "device_fps:=${DETECTOR_DEVICE_FPS}"
+      -p "capture_buffer_size:=${DETECTOR_CAPTURE_BUFFER_SIZE}"
     )
   fi
 
@@ -209,7 +217,7 @@ start_landing_target() {
     -p output_mode:=camera_pose \
     -p normalize_input_stamps:=false \
     -p camera_tag_pose_topic:="${TAG_POSE_TOPIC}" \
-    -p relay_image_stream:=true \
+    -p relay_image_stream:=false \
     -p image_input_topic:="${IMAGE_TOPIC}" \
     -p image_output_topic:=/image_raw \
     -p drone_pose_topic:="${DRONE_POSE_TOPIC}" \
@@ -233,6 +241,12 @@ start_image_view() {
   echo "[run] rqt_image_view (${IMAGE_TOPIC}) -> ${IMAGE_VIEW_LOG}"
   ros2 run rqt_image_view rqt_image_view "${IMAGE_TOPIC}" >"${IMAGE_VIEW_LOG}" 2>&1 &
   add_process "$!" "rqt_image_view"
+}
+
+start_system_monitor() {
+  echo "[run] system monitor -> ${SYSTEM_MONITOR_LOG}"
+  "${SCRIPT_DIR}/monitor_real_pipeline_system.sh" >"${SYSTEM_MONITOR_LOG}" 2>&1 &
+  add_process "$!" "pipeline_system_monitor"
 }
 
 main() {
@@ -266,7 +280,7 @@ main() {
   fi
 
   if is_true "${START_CAMERA}"; then
-    echo "[warn] START_CAMERA=1 requested, but this pipeline is configured to avoid v4l2. Forcing START_CAMERA=0." >&2
+    echo "[warn] START_CAMERA=1 requested, but the detector owns the video device directly. Forcing external v4l2_camera off." >&2
     START_CAMERA="0"
   fi
 
@@ -281,10 +295,27 @@ main() {
     sleep 1
   fi
 
+  if [[ "${DETECTOR_INPUT_SOURCE}" != "ros_topics" ]] && command -v v4l2-ctl >/dev/null 2>&1; then
+    echo "[prep] recording supported V4L2 formats and controls -> ${CAMERA_CAPABILITIES_LOG}"
+    v4l2-ctl --device="${VIDEO_DEVICE}" --all --list-formats-ext --list-ctrls-menus \
+      >"${CAMERA_CAPABILITIES_LOG}" 2>&1 || true
+
+    if [[ -n "${V4L2_CONTROLS}" ]]; then
+      echo "[prep] applying explicitly requested V4L2 controls: ${V4L2_CONTROLS}"
+      v4l2-ctl --device="${VIDEO_DEVICE}" --set-ctrl="${V4L2_CONTROLS}"
+      v4l2-ctl --device="${VIDEO_DEVICE}" --all --list-ctrls-menus \
+        >>"${CAMERA_CAPABILITIES_LOG}" 2>&1 || true
+    fi
+  fi
+
   trap cleanup EXIT INT TERM
 
   if is_true "${START_MAVROS}"; then
     start_mavros
+  fi
+
+  if is_true "${START_SYSTEM_MONITOR}"; then
+    start_system_monitor
   fi
 
   if is_true "${START_CAMERA}"; then
@@ -300,9 +331,10 @@ main() {
 
   echo "[ok] apriltag precision-landing pipeline started"
   echo "[info] startup mode: non-blocking best-effort (no topic wait gates)"
-  echo "[info] START_MAVROS=${START_MAVROS} START_CAMERA=${START_CAMERA} START_IMAGE_VIEW=${START_IMAGE_VIEW}"
+  echo "[info] START_MAVROS=${START_MAVROS} START_CAMERA=${START_CAMERA} START_IMAGE_VIEW=${START_IMAGE_VIEW} START_SYSTEM_MONITOR=${START_SYSTEM_MONITOR}"
   echo "[info] detector_input_source=${DETECTOR_INPUT_SOURCE}"
   echo "[info] camera: device=${VIDEO_DEVICE} image=${IMAGE_TOPIC} info=${CAMERA_INFO_TOPIC}"
+  echo "[info] capture: latest_only buffer_request=${DETECTOR_CAPTURE_BUFFER_SIZE} publish_image_stream=${DETECTOR_PUBLISH_IMAGE_STREAM} image_view=${START_IMAGE_VIEW}"
   echo "[info] tag: dict=${TAG_DICTIONARY} tag_size_m=${TAG_SIZE_M} target_tag_id=${TARGET_TAG_ID} min_area_px=${MIN_TAG_AREA_PX}"
   echo "[info] timing: use_sim_time=false input_timeout_sec=${INPUT_TIMEOUT_SEC}"
   echo "[info] transform: camera_offset=[${CAMERA_OFFSET_X},${CAMERA_OFFSET_Y},${CAMERA_OFFSET_Z}] rpy=[${CAMERA_ROLL},${CAMERA_PITCH},${CAMERA_YAW}]"
@@ -318,6 +350,9 @@ main() {
   echo "  - ${LANDING_LOG}"
   if is_true "${START_IMAGE_VIEW}"; then
     echo "  - ${IMAGE_VIEW_LOG}"
+  fi
+  if is_true "${START_SYSTEM_MONITOR}"; then
+    echo "  - ${SYSTEM_MONITOR_LOG}"
   fi
 
   set +e
