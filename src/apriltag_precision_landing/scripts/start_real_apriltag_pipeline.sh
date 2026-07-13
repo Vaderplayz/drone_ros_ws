@@ -68,7 +68,8 @@ MAVROS_LAUNCH_FILE="${MAVROS_LAUNCH_FILE:-px4.launch}"
 FCU_URL="${FCU_URL:-serial:///dev/ttyACM0:115200}"
 MAVROS_RESPAWN="${MAVROS_RESPAWN:-true}"
 
-VIDEO_DEVICE="${VIDEO_DEVICE:-/dev/video0}"
+VIDEO_DEVICE_INPUT="${VIDEO_DEVICE_INPUT:-${VIDEO_DEVICE:-/dev/video0}}"
+VIDEO_DEVICE="${VIDEO_DEVICE_INPUT}"
 OUTPUT_ENCODING="${OUTPUT_ENCODING:-rgb8}"
 IMAGE_TOPIC="${IMAGE_TOPIC:-/image_raw}"
 CAMERA_INFO_TOPIC="${CAMERA_INFO_TOPIC:-/camera_info}"
@@ -249,6 +250,24 @@ start_system_monitor() {
   add_process "$!" "pipeline_system_monitor"
 }
 
+resolve_video_device() {
+  if [[ ! -e "${VIDEO_DEVICE_INPUT}" ]]; then
+    echo "[error] configured camera path does not exist on this Raspberry Pi: ${VIDEO_DEVICE_INPUT}" >&2
+    return 1
+  fi
+
+  local resolved
+  resolved="$(readlink -f -- "${VIDEO_DEVICE_INPUT}")"
+
+  if [[ ! "${resolved}" =~ ^/dev/video[0-9]+$ ]]; then
+    echo "[error] camera path must resolve to /dev/videoX, got: ${resolved}" >&2
+    return 1
+  fi
+
+  VIDEO_DEVICE="${resolved}"
+  echo "[info] camera path: input=${VIDEO_DEVICE_INPUT} resolved=${VIDEO_DEVICE}"
+}
+
 main() {
   require_cmd ros2
 
@@ -284,6 +303,11 @@ main() {
     START_CAMERA="0"
   fi
 
+  if [[ "${DETECTOR_INPUT_SOURCE}" != "ros_topics" ]]; then
+    require_cmd readlink
+    resolve_video_device
+  fi
+
   if is_true "${START_IMAGE_VIEW}" && ! ros2 pkg prefix rqt_image_view >/dev/null 2>&1; then
     echo "[warn] rqt_image_view package not found; continuing without image viewer." >&2
     START_IMAGE_VIEW="0"
@@ -295,12 +319,32 @@ main() {
     sleep 1
   fi
 
-  if [[ "${DETECTOR_INPUT_SOURCE}" != "ros_topics" ]] && command -v v4l2-ctl >/dev/null 2>&1; then
-    echo "[prep] recording supported V4L2 formats and controls -> ${CAMERA_CAPABILITIES_LOG}"
-    v4l2-ctl --device="${VIDEO_DEVICE}" --all --list-formats-ext --list-ctrls-menus \
-      >"${CAMERA_CAPABILITIES_LOG}" 2>&1 || true
+  if [[ "${DETECTOR_INPUT_SOURCE}" != "ros_topics" ]]; then
+    echo "[prep] recording Raspberry Pi V4L2 inventory and controls -> ${CAMERA_CAPABILITIES_LOG}"
+    {
+      echo "camera_input=${VIDEO_DEVICE_INPUT}"
+      echo "camera_resolved=${VIDEO_DEVICE}"
+      echo "-- v4l2-ctl --list-devices --"
+      if command -v v4l2-ctl >/dev/null 2>&1; then
+        v4l2-ctl --list-devices || true
+      else
+        echo "v4l2-ctl not installed"
+      fi
+      echo "-- /dev/video* --"
+      ls -l /dev/video* 2>/dev/null || true
+      echo "-- /dev/v4l/by-id/ --"
+      ls -l /dev/v4l/by-id/ 2>/dev/null || true
+      echo "-- selected device capabilities --"
+      if command -v v4l2-ctl >/dev/null 2>&1; then
+        v4l2-ctl --device="${VIDEO_DEVICE}" --all --list-formats-ext --list-ctrls-menus || true
+      fi
+    } >"${CAMERA_CAPABILITIES_LOG}" 2>&1
 
     if [[ -n "${V4L2_CONTROLS}" ]]; then
+      if ! command -v v4l2-ctl >/dev/null 2>&1; then
+        echo "[error] V4L2_CONTROLS requires v4l2-ctl" >&2
+        exit 1
+      fi
       echo "[prep] applying explicitly requested V4L2 controls: ${V4L2_CONTROLS}"
       v4l2-ctl --device="${VIDEO_DEVICE}" --set-ctrl="${V4L2_CONTROLS}"
       v4l2-ctl --device="${VIDEO_DEVICE}" --all --list-ctrls-menus \
@@ -333,7 +377,7 @@ main() {
   echo "[info] startup mode: non-blocking best-effort (no topic wait gates)"
   echo "[info] START_MAVROS=${START_MAVROS} START_CAMERA=${START_CAMERA} START_IMAGE_VIEW=${START_IMAGE_VIEW} START_SYSTEM_MONITOR=${START_SYSTEM_MONITOR}"
   echo "[info] detector_input_source=${DETECTOR_INPUT_SOURCE}"
-  echo "[info] camera: device=${VIDEO_DEVICE} image=${IMAGE_TOPIC} info=${CAMERA_INFO_TOPIC}"
+  echo "[info] camera: input=${VIDEO_DEVICE_INPUT} resolved_device=${VIDEO_DEVICE} image=${IMAGE_TOPIC} info=${CAMERA_INFO_TOPIC}"
   echo "[info] capture: latest_only buffer_request=${DETECTOR_CAPTURE_BUFFER_SIZE} publish_image_stream=${DETECTOR_PUBLISH_IMAGE_STREAM} image_view=${START_IMAGE_VIEW}"
   echo "[info] tag: dict=${TAG_DICTIONARY} tag_size_m=${TAG_SIZE_M} target_tag_id=${TARGET_TAG_ID} min_area_px=${MIN_TAG_AREA_PX}"
   echo "[info] timing: use_sim_time=false input_timeout_sec=${INPUT_TIMEOUT_SEC}"

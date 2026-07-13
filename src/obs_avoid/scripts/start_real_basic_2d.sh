@@ -3,21 +3,17 @@
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PKG_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-ROS_WS_DEFAULT="$(cd "${PKG_DIR}/../.." && pwd)"
+ROS_WS_DEFAULT="/home/pi5drone/drone_ros_ws"
 ROS_WS="${ROS_WS:-${ROS_WS_DEFAULT}}"
 ROS_SETUP="${ROS_SETUP:-${ROS_WS}/install/setup.bash}"
 
 WAIT_TIMEOUT_SEC="${WAIT_TIMEOUT_SEC:-60}"
-FC_SERIAL_PATH="${FC_SERIAL_PATH:-/dev/serial/by-id/usb-MicoAir_MicoAir743AIO_0-if00}"
-RPLIDAR_SERIAL_PORT="${RPLIDAR_SERIAL_PORT:-/dev/serial/by-id/usb-Silicon_Labs_CP2102_USB_to_UART_Bridge_Controller_0001-if00-port0}"
+RPLIDAR_SERIAL_PORT="${RPLIDAR_SERIAL_PORT:-/dev/ttyUSB0}"
 RPLIDAR_BAUDRATE="${RPLIDAR_BAUDRATE:-115200}"
 RPLIDAR_FRAME_ID="${RPLIDAR_FRAME_ID:-laser_frame}"
 RPLIDAR_INVERTED="${RPLIDAR_INVERTED:-false}"
 RPLIDAR_ANGLE_COMPENSATE="${RPLIDAR_ANGLE_COMPENSATE:-true}"
 SCAN_TOPIC="${SCAN_TOPIC:-/scan}"
-WEBCAM_PATH="${WEBCAM_PATH:-/dev/v4l/by-id/usb-Sonix_Technology_Co.__Ltd._USB2.0_HD_UVC_WebCam-video-index0}"
 
 ODOM_TOPIC="${ODOM_TOPIC:-/mavros/local_position/odom}"
 ODOM_PARENT_FRAME="${ODOM_PARENT_FRAME:-odom}"
@@ -26,7 +22,7 @@ BASE_FRAME="${BASE_FRAME:-base_link}"
 LIDAR_FRAME="${LIDAR_FRAME:-${RPLIDAR_FRAME_ID}}"
 LIDAR_X="${LIDAR_X:-0.0}"
 LIDAR_Y="${LIDAR_Y:-0.0}"
-LIDAR_Z="${LIDAR_Z:-0.05}"
+LIDAR_Z="${LIDAR_Z:-0.1}"
 LIDAR_ROLL="${LIDAR_ROLL:-0.0}"
 LIDAR_PITCH="${LIDAR_PITCH:-0.0}"
 LIDAR_YAW="${LIDAR_YAW:-0.0}"
@@ -277,21 +273,15 @@ main() {
     printf 'workspace=%s\n' "${ROS_WS}"
     printf 'git_branch=%s\n' "$(git -C "${ROS_WS}" branch --show-current)"
     printf 'git_commit=%s\n' "$(git -C "${ROS_WS}" rev-parse HEAD)"
-    printf 'fc_path=%s\n' "${FC_SERIAL_PATH}"
     printf 'rplidar_path=%s baud=%s topic=%s frame=%s inverted=%s angle_compensate=%s\n' \
       "${RPLIDAR_SERIAL_PORT}" "${RPLIDAR_BAUDRATE}" "${SCAN_TOPIC}" "${RPLIDAR_FRAME_ID}" \
       "${RPLIDAR_INVERTED}" "${RPLIDAR_ANGLE_COMPENSATE}"
-    printf 'webcam_path=%s\n' "${WEBCAM_PATH}"
     printf 'precland_mode=%s\n' "${PRECLAND_MODE:-NOT_CONFIGURED}"
   } >>"${SYSTEM_SNAPSHOT}"
-  record_device "flight_controller" "${FC_SERIAL_PATH}"
   record_device "rplidar" "${RPLIDAR_SERIAL_PORT}"
-  record_device "webcam" "${WEBCAM_PATH}"
 
   log "Reusing existing MAVROS and boot-time AprilTag pipeline; this launcher will not manage them"
-  log "Selected FC path: ${FC_SERIAL_PATH} -> $(readlink -f "${FC_SERIAL_PATH}" 2>/dev/null || printf 'not-present')"
   log "Selected LiDAR path: ${RPLIDAR_SERIAL_PORT} -> $(readlink -f "${RPLIDAR_SERIAL_PORT}" 2>/dev/null || printf 'not-present')"
-  log "Observed webcam path only (not opened): ${WEBCAM_PATH} -> $(readlink -f "${WEBCAM_PATH}" 2>/dev/null || printf 'not-present')"
 
   wait_for_topic /mavros/state
   wait_for_topic /mavros/local_position/pose
