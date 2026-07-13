@@ -9,12 +9,15 @@
 // - Backward-time prevention with automatic recovery on time reset
 // - Does NOT declare use_sim_time (safe to pass via CLI)
 
+#include <cmath>
 #include <memory>
 #include <string>
 
 #include "rclcpp/rclcpp.hpp"
 #include "nav_msgs/msg/odometry.hpp"
 #include "geometry_msgs/msg/transform_stamped.hpp"
+#include "tf2/LinearMath/Matrix3x3.hpp"
+#include "tf2/LinearMath/Quaternion.hpp"
 #include "tf2_ros/transform_broadcaster.h"
 
 class Px4OdomFlattenNode : public rclcpp::Node
@@ -99,11 +102,43 @@ private:
     tf_msg.header.frame_id = parent_frame_;
     tf_msg.child_frame_id  = child_frame_;
 
-    // Pose from odometry
+    const auto & orientation = msg->pose.pose.orientation;
+
+    if (!std::isfinite(orientation.x) || !std::isfinite(orientation.y) ||
+        !std::isfinite(orientation.z) || !std::isfinite(orientation.w)) {
+      RCLCPP_WARN_THROTTLE(
+        this->get_logger(), *this->get_clock(), 1000,
+        "Dropping odom with non-finite orientation from %s", odom_topic_.c_str());
+      return;
+    }
+
+    tf2::Quaternion odom_q(orientation.x, orientation.y, orientation.z, orientation.w);
+
+    if (odom_q.length2() < 1e-12) {
+      RCLCPP_WARN_THROTTLE(
+        this->get_logger(), *this->get_clock(), 1000,
+        "Dropping odom with invalid zero-length orientation from %s", odom_topic_.c_str());
+      return;
+    }
+
+    odom_q.normalize();
+    double roll = 0.0;
+    double pitch = 0.0;
+    double yaw = 0.0;
+    tf2::Matrix3x3(odom_q).getRPY(roll, pitch, yaw);
+
+    tf2::Quaternion yaw_q;
+    yaw_q.setRPY(0.0, 0.0, yaw);
+    yaw_q.normalize();
+
+    // Publish the planar projection used by slam_toolbox.
     tf_msg.transform.translation.x = msg->pose.pose.position.x;
     tf_msg.transform.translation.y = msg->pose.pose.position.y;
-    tf_msg.transform.translation.z = msg->pose.pose.position.z;
-    tf_msg.transform.rotation      = msg->pose.pose.orientation;
+    tf_msg.transform.translation.z = 0.0;
+    tf_msg.transform.rotation.x = yaw_q.x();
+    tf_msg.transform.rotation.y = yaw_q.y();
+    tf_msg.transform.rotation.z = yaw_q.z();
+    tf_msg.transform.rotation.w = yaw_q.w();
 
     tf_broadcaster_->sendTransform(tf_msg);
   }

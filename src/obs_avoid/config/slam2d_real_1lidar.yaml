@@ -3,7 +3,7 @@ slam_toolbox:
     scan_topic: /scan
     map_frame: map
     odom_frame: odom
-    base_frame: base_link
+    base_frame: base_footprint
     mode: mapping
 
     solver_plugin: solver_plugins::CeresSolver

@@ -17,8 +17,8 @@ SCAN_TOPIC="${SCAN_TOPIC:-/scan}"
 
 ODOM_TOPIC="${ODOM_TOPIC:-/mavros/local_position/odom}"
 ODOM_PARENT_FRAME="${ODOM_PARENT_FRAME:-odom}"
-ODOM_CHILD_FRAME="${ODOM_CHILD_FRAME:-base_link}"
-BASE_FRAME="${BASE_FRAME:-base_link}"
+ODOM_CHILD_FRAME="${ODOM_CHILD_FRAME:-base_footprint}"
+BASE_FRAME="${BASE_FRAME:-base_footprint}"
 LIDAR_FRAME="${LIDAR_FRAME:-${RPLIDAR_FRAME_ID}}"
 LIDAR_X="${LIDAR_X:-0.0}"
 LIDAR_Y="${LIDAR_Y:-0.0}"
@@ -73,7 +73,7 @@ wait_for_topic() {
   local start_ts
   start_ts="$(date +%s)"
   while true; do
-    if ros2 topic list 2>/dev/null | grep -Fxq "${topic}"; then
+    if ros2 topic list 2>/dev/null | grep -Fx "${topic}" >/dev/null; then
       log "Topic available: ${topic}"
       return 0
     fi
@@ -90,7 +90,7 @@ wait_for_service() {
   local start_ts
   start_ts="$(date +%s)"
   while true; do
-    if ros2 service list 2>/dev/null | grep -Fxq "${service}"; then
+    if ros2 service list 2>/dev/null | grep -Fx "${service}" >/dev/null; then
       log "Service available: ${service}"
       return 0
     fi
