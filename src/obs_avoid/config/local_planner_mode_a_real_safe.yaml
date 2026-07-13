@@ -1,0 +1,12 @@
+dwa_local_planner_skeleton:
+  ros__parameters:
+    v_max: 0.30
+    vy_max: 0.25
+    w_max: 0.30
+    vz_max: 0.20
+    ax_max: 0.30
+    ay_max: 0.30
+    safety_radius: 0.75
+    collision_radius: 0.45
+    max_use_range: 8.0
+    obstacle_cloud_range: 8.0

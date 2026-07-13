@@ -71,6 +71,17 @@ target_link_libraries(local_planner_mode_a PUBLIC
 )
 install(TARGETS local_planner_mode_a DESTINATION lib/${PROJECT_NAME})
 
+add_executable(real_slam_command_console src/real_slam_command_console.cpp)
+target_link_libraries(real_slam_command_console PUBLIC
+  rclcpp::rclcpp
+  ${mavros_msgs_TARGETS}
+  ${geometry_msgs_TARGETS}
+  ${sensor_msgs_TARGETS}
+  sensor_msgs::sensor_msgs_library
+  ${nav_msgs_TARGETS}
+)
+install(TARGETS real_slam_command_console DESTINATION lib/${PROJECT_NAME})
+
 add_executable(local_planner_sector_mode src/local_planner_sector_mode.cpp)
 target_link_libraries(local_planner_sector_mode PUBLIC
   rclcpp::rclcpp
