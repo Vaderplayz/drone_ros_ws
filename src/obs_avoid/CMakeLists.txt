@@ -136,10 +136,21 @@ add_executable(lidar_odom_monitor src/lidar_odom_monitor.cpp)
 target_link_libraries(lidar_odom_monitor PUBLIC
   rclcpp::rclcpp
   ${nav_msgs_TARGETS}
+  ${sensor_msgs_TARGETS}
+  sensor_msgs::sensor_msgs_library
   ${diagnostic_msgs_TARGETS}
   tf2::tf2
 )
 install(TARGETS lidar_odom_monitor DESTINATION lib/${PROJECT_NAME})
+
+add_executable(laser_scan_canonicalizer src/laser_scan_canonicalizer.cpp)
+target_link_libraries(laser_scan_canonicalizer PUBLIC
+  rclcpp::rclcpp
+  ${sensor_msgs_TARGETS}
+  sensor_msgs::sensor_msgs_library
+  ${diagnostic_msgs_TARGETS}
+)
+install(TARGETS laser_scan_canonicalizer DESTINATION lib/${PROJECT_NAME})
 
 add_executable(lidar_odom_px4_bridge src/lidar_odom_px4_bridge.cpp)
 target_link_libraries(lidar_odom_px4_bridge PUBLIC

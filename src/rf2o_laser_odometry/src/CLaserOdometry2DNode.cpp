@@ -93,7 +93,9 @@ void CLaserOdometry2DNode::LaserCallBack(const sensor_msgs::msg::LaserScan::Shar
       // copy laser range data to rf2o internal variable
       if (new_scan->ranges.size() != rf2o_ref.width)
       {
-        RCLCPP_ERROR(get_logger(), "Laser scan width changed from %u to %zu; ignoring scan",
+        RCLCPP_WARN_THROTTLE(
+          get_logger(), *get_clock(), 5000,
+          "Canonical scan width changed from %u to %zu; ignoring scan",
           rf2o_ref.width, new_scan->ranges.size());
         return;
       }
