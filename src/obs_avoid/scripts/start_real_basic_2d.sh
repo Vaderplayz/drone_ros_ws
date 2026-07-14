@@ -8,6 +8,9 @@ ROS_WS="${ROS_WS:-${ROS_WS_DEFAULT}}"
 ROS_SETUP="${ROS_SETUP:-${ROS_WS}/install/setup.bash}"
 
 WAIT_TIMEOUT_SEC="${WAIT_TIMEOUT_SEC:-60}"
+RPLIDAR_START_RETRIES="${RPLIDAR_START_RETRIES:-3}"
+RPLIDAR_SCAN_WAIT_SEC="${RPLIDAR_SCAN_WAIT_SEC:-20}"
+RPLIDAR_RETRY_DELAY_SEC="${RPLIDAR_RETRY_DELAY_SEC:-2}"
 RPLIDAR_SERIAL_PORT="${RPLIDAR_SERIAL_PORT:-/dev/ttyUSB0}"
 RPLIDAR_BAUDRATE="${RPLIDAR_BAUDRATE:-115200}"
 RPLIDAR_FRAME_ID="${RPLIDAR_FRAME_ID:-laser_frame}"
@@ -221,6 +224,68 @@ start_process() {
   add_process "$!" "${name}"
 }
 
+wait_for_process_message() {
+  local topic="$1"
+  local pid="$2"
+  local timeout_sec="$3"
+  local logfile="$4"
+  local start_ts
+  start_ts="$(date +%s)"
+
+  while true; do
+    if ! kill -0 "${pid}" 2>/dev/null; then
+      log "ERROR process exited before publishing ${topic}; pid=${pid}"
+      tail -n 30 "${logfile}" 2>/dev/null || true
+      return 1
+    fi
+    if timeout 2 ros2 topic echo "${topic}" --once \
+      --qos-reliability best_effort >/dev/null 2>&1; then
+      log "Message received: ${topic}"
+      return 0
+    fi
+    if (( $(date +%s) - start_ts >= timeout_sec )); then
+      log "ERROR no ${topic} message within ${timeout_sec}s; pid=${pid} is still running"
+      tail -n 30 "${logfile}" 2>/dev/null || true
+      return 1
+    fi
+  done
+}
+
+start_rplidar_with_retry() {
+  local attempt pid
+  for ((attempt=1; attempt<=RPLIDAR_START_RETRIES; attempt++)); do
+    log "Starting RPLIDAR attempt ${attempt}/${RPLIDAR_START_RETRIES}"
+    start_process "rplidar_attempt_${attempt}" "${RPLIDAR_LOG}" \
+      ros2 run rplidar_ros rplidar_composition --ros-args \
+        -p channel_type:=serial \
+        -p serial_port:="${RPLIDAR_SERIAL_PORT}" \
+        -p serial_baudrate:="${RPLIDAR_BAUDRATE}" \
+        -p frame_id:="${RPLIDAR_FRAME_ID}" \
+        -p inverted:="${RPLIDAR_INVERTED}" \
+        -p angle_compensate:="${RPLIDAR_ANGLE_COMPENSATE}" \
+        -p topic_name:="${SCAN_TOPIC#/}"
+    pid="${PIDS[${#PIDS[@]} - 1]}"
+
+    if wait_for_process_message \
+      "${SCAN_TOPIC}" "${pid}" "${RPLIDAR_SCAN_WAIT_SEC}" "${RPLIDAR_LOG}"; then
+      return 0
+    fi
+
+    if kill -0 "${pid}" 2>/dev/null; then
+      log "Stopping launcher-owned RPLIDAR retry pid=${pid}"
+      kill "${pid}" 2>/dev/null || true
+      wait "${pid}" 2>/dev/null || true
+    fi
+    if (( attempt < RPLIDAR_START_RETRIES )); then
+      sleep "${RPLIDAR_RETRY_DELAY_SEC}"
+    fi
+  done
+
+  log "ERROR RPLIDAR produced no scan after ${RPLIDAR_START_RETRIES} attempts"
+  log "Check USB power, cable, motor rotation, permissions, and whether another process owns ${RPLIDAR_SERIAL_PORT}"
+  return 1
+}
+
 monitor_processes() {
   declare -A reported=()
   while true; do
@@ -383,16 +448,7 @@ main() {
     exit 1
   fi
 
-  start_process rplidar "${RPLIDAR_LOG}" \
-    ros2 run rplidar_ros rplidar_composition --ros-args \
-      -p channel_type:=serial \
-      -p serial_port:="${RPLIDAR_SERIAL_PORT}" \
-      -p serial_baudrate:="${RPLIDAR_BAUDRATE}" \
-      -p frame_id:="${RPLIDAR_FRAME_ID}" \
-      -p inverted:="${RPLIDAR_INVERTED}" \
-      -p angle_compensate:="${RPLIDAR_ANGLE_COMPENSATE}" \
-      -p topic_name:="${SCAN_TOPIC#/}"
-  wait_for_message "${SCAN_TOPIC}"
+  start_rplidar_with_retry
 
   start_process odom_flatten "${ODOM_FLATTEN_LOG}" \
     ros2 run odom_flatten px4_odom_flatten_node --ros-args \
