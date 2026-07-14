@@ -19,6 +19,7 @@ find_package(tf2  REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
+find_package(std_srvs REQUIRED)
 
 ## System dependencies are found with CMake's conventions
 find_package(Boost REQUIRED)
@@ -52,17 +53,12 @@ set(DEPENDENCIES
   "tf2_ros"
   "sensor_msgs"
   "nav_msgs"
+  "std_srvs"
   "eigen3_cmake_module"
 )
 
 ##target_include_directories(${PROJECT_NAME} PUBLIC ${Eigen3_INCLUDE_DIRS})
 ament_target_dependencies(${EXECUTABLE_NAME} ${DEPENDENCIES})
-
-## Declare a cpp library
-add_library(${PROJECT_NAME} src/CLaserOdometry2D.cpp)
-
-## Declare a cpp executable
-ament_target_dependencies(${PROJECT_NAME} ${DEPENDENCIES})
 
 install(TARGETS ${EXECUTABLE_NAME}
   DESTINATION lib/${PROJECT_NAME})
@@ -72,4 +68,3 @@ install(
   DESTINATION share/${PROJECT_NAME})
 
 ament_package()
-

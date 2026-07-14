@@ -152,6 +152,15 @@ target_link_libraries(laser_scan_canonicalizer PUBLIC
 )
 install(TARGETS laser_scan_canonicalizer DESTINATION lib/${PROJECT_NAME})
 
+add_executable(laser_scan_stream_audit src/laser_scan_stream_audit.cpp)
+target_link_libraries(laser_scan_stream_audit PUBLIC
+  rclcpp::rclcpp
+  ${sensor_msgs_TARGETS}
+  sensor_msgs::sensor_msgs_library
+  ${diagnostic_msgs_TARGETS}
+)
+install(TARGETS laser_scan_stream_audit DESTINATION lib/${PROJECT_NAME})
+
 add_executable(lidar_odom_px4_bridge src/lidar_odom_px4_bridge.cpp)
 target_link_libraries(lidar_odom_px4_bridge PUBLIC
   rclcpp::rclcpp
@@ -166,6 +175,7 @@ install(TARGETS lidar_odom_px4_bridge DESTINATION lib/${PROJECT_NAME})
 
 install(DIRECTORY
   config
+  docs
   launch
   scripts
   DESTINATION share/${PROJECT_NAME}

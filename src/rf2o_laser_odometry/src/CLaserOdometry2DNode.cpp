@@ -17,6 +17,10 @@
 
 #include "rf2o_laser_odometry/CLaserOdometry2DNode.hpp"
 
+#include <algorithm>
+#include <cmath>
+#include <stdexcept>
+
 using namespace rf2o;
 
 CLaserOdometry2DNode::CLaserOdometry2DNode(): Node("CLaserOdometry2DNode")
@@ -25,20 +29,35 @@ CLaserOdometry2DNode::CLaserOdometry2DNode(): Node("CLaserOdometry2DNode")
 
   // Read Parameters
   //----------------
-  this->declare_parameter<std::string>("laser_scan_topic", "/scan");
+  this->declare_parameter<std::string>("laser_scan_topic", "/scan_rf2o");
   this->get_parameter("laser_scan_topic", laser_scan_topic);
-  this->declare_parameter<std::string>("odom_topic", "/odom_rf2o");
+  this->declare_parameter<std::string>("odom_topic", "/lidar/odom_raw");
   this->get_parameter("odom_topic", odom_topic);
-  this->declare_parameter<std::string>("base_frame_id", "base_link");
+  this->declare_parameter<std::string>("base_frame_id", "base_footprint");
   this->get_parameter("base_frame_id", base_frame_id);
-  this->declare_parameter<std::string>("odom_frame_id", "odom");
+  this->declare_parameter<std::string>("odom_frame_id", "lidar_odom");
   this->get_parameter("odom_frame_id", odom_frame_id);
-  this->declare_parameter<bool>("publish_tf", true);
+  this->declare_parameter<bool>("publish_tf", false);
   this->get_parameter("publish_tf", publish_tf);
-  this->declare_parameter<std::string>("init_pose_from_topic", "/base_pose_ground_truth");
+  this->declare_parameter<std::string>("init_pose_from_topic", "");
   this->get_parameter("init_pose_from_topic", init_pose_from_topic);
   this->declare_parameter<double>("freq", 10.0);
   this->get_parameter("freq", freq);
+  this->declare_parameter<int>("expected_scan_bins", 720);
+  this->get_parameter("expected_scan_bins", expected_scan_bins);
+  this->declare_parameter<int>("required_consecutive_valid_scans", 5);
+  this->get_parameter("required_consecutive_valid_scans", required_consecutive_valid_scans);
+  this->declare_parameter<int>("sustained_invalid_scan_count", 20);
+  this->get_parameter("sustained_invalid_scan_count", sustained_invalid_scan_count);
+  this->declare_parameter<double>("minimum_finite_return_ratio", 0.05);
+  this->get_parameter("minimum_finite_return_ratio", minimum_finite_return_ratio);
+
+  if (expected_scan_bins < 2 || required_consecutive_valid_scans < 1 ||
+      sustained_invalid_scan_count < 1 || minimum_finite_return_ratio < 0.0 ||
+      minimum_finite_return_ratio > 1.0)
+  {
+    throw std::invalid_argument("Invalid RF2O canonical scan validation parameters");
+  }
 
   // Init Publishers and Subscribers
   //---------------------------------
@@ -48,6 +67,9 @@ CLaserOdometry2DNode::CLaserOdometry2DNode(): Node("CLaserOdometry2DNode")
   odom_pub  = this->create_publisher<nav_msgs::msg::Odometry>(odom_topic, 5);
   laser_sub = this->create_subscription<sensor_msgs::msg::LaserScan>(laser_scan_topic,rclcpp::QoS(rclcpp::KeepLast(1)).best_effort().durability_volatile(),
       std::bind(&CLaserOdometry2DNode::LaserCallBack, this, std::placeholders::_1));
+  reset_service = this->create_service<std_srvs::srv::Trigger>(
+      "/rf2o/reset", std::bind(&CLaserOdometry2DNode::resetCallback, this,
+      std::placeholders::_1, std::placeholders::_2));
 
   // Initialize pose
   if (init_pose_from_topic != "")
@@ -76,6 +98,103 @@ CLaserOdometry2DNode::CLaserOdometry2DNode(): Node("CLaserOdometry2DNode")
 }
 
 
+bool CLaserOdometry2DNode::validateScan(
+    const sensor_msgs::msg::LaserScan & scan, std::string & reason)
+{
+  if (get_publishers_info_by_topic(laser_scan_topic).size() != 1)
+  {
+    reason = "canonical_scan_publisher_count_not_one";
+    return false;
+  }
+  if (scan.ranges.size() != static_cast<std::size_t>(expected_scan_bins))
+  {
+    reason = "canonical_scan_width_mismatch";
+    return false;
+  }
+  if (scan.header.frame_id.empty() || !std::isfinite(scan.angle_min) ||
+      !std::isfinite(scan.angle_max) || !std::isfinite(scan.angle_increment) ||
+      scan.angle_increment <= 0.0F || !std::isfinite(scan.range_min) ||
+      !std::isfinite(scan.range_max) || scan.range_max < scan.range_min)
+  {
+    reason = "invalid_canonical_scan_metadata";
+    return false;
+  }
+
+  const rclcpp::Time stamp(scan.header.stamp);
+  if (stamp.nanoseconds() <= 0 || (have_input_stamp && stamp <= last_input_stamp))
+  {
+    reason = "nonmonotonic_canonical_scan_timestamp";
+    return false;
+  }
+
+  const double declared_span = std::abs(
+      static_cast<double>(scan.angle_max) - static_cast<double>(scan.angle_min));
+  const double indexed_span = static_cast<double>(scan.angle_increment) *
+      static_cast<double>(scan.ranges.size() - 1);
+  if (declared_span < 5.8 || indexed_span < 5.8)
+  {
+    reason = "insufficient_canonical_angular_span";
+    return false;
+  }
+
+  const std::size_t finite_count = static_cast<std::size_t>(std::count_if(
+      scan.ranges.begin(), scan.ranges.end(), [&scan](float range) {
+        return std::isfinite(range) && range >= scan.range_min && range <= scan.range_max;
+      }));
+  if (static_cast<double>(finite_count) / static_cast<double>(scan.ranges.size()) <
+      minimum_finite_return_ratio)
+  {
+    reason = "insufficient_finite_returns";
+    return false;
+  }
+
+  if (!have_candidate_geometry)
+  {
+    candidate_angle_min = scan.angle_min;
+    candidate_angle_max = scan.angle_max;
+    candidate_angle_increment = scan.angle_increment;
+    candidate_frame_id = scan.header.frame_id;
+    have_candidate_geometry = true;
+  }
+  const double tolerance = 1e-5;
+  if (scan.header.frame_id != candidate_frame_id ||
+      std::abs(scan.angle_min - candidate_angle_min) > tolerance ||
+      std::abs(scan.angle_max - candidate_angle_max) > tolerance ||
+      std::abs(scan.angle_increment - candidate_angle_increment) > tolerance)
+  {
+    reason = "unstable_canonical_scan_geometry";
+    return false;
+  }
+
+  last_input_stamp = stamp;
+  have_input_stamp = true;
+  reason = "none";
+  return true;
+}
+
+
+void CLaserOdometry2DNode::resetEstimator(const std::string & reason)
+{
+  rf2o_ref.reset();
+  new_scan_available = false;
+  consecutive_valid_scans = 0;
+  consecutive_invalid_scans = 0;
+  have_candidate_geometry = false;
+  have_input_stamp = false;
+  RCLCPP_WARN(get_logger(), "RF2O reset: %s", reason.c_str());
+}
+
+
+void CLaserOdometry2DNode::resetCallback(
+    const std::shared_ptr<std_srvs::srv::Trigger::Request>,
+    std::shared_ptr<std_srvs::srv::Trigger::Response> response)
+{
+  resetEstimator("explicit_service_request");
+  response->success = true;
+  response->message = "RF2O reset; waiting for consecutive valid canonical scans";
+}
+
+
 /**
  * Keeps the last scan from the 2D lidar to be latter processed
  * On the first laser scan, the node is initialized.
@@ -84,22 +203,29 @@ void CLaserOdometry2DNode::LaserCallBack(const sensor_msgs::msg::LaserScan::Shar
 {
   if (GT_pose_initialized)
   {
-    // Keep in memory the last received laser_scan
+    std::string rejection_reason;
+    if (!validateScan(*new_scan, rejection_reason))
+    {
+      consecutive_valid_scans = 0;
+      ++consecutive_invalid_scans;
+      RCLCPP_WARN_THROTTLE(
+        get_logger(), *get_clock(), 5000, "Skipping invalid canonical scan: %s",
+        rejection_reason.c_str());
+      if (rf2o_ref.is_initialized() &&
+          consecutive_invalid_scans >= static_cast<std::size_t>(sustained_invalid_scan_count))
+      {
+        resetEstimator("sustained_invalid_canonical_input");
+      }
+      return;
+    }
+
+    consecutive_invalid_scans = 0;
+    ++consecutive_valid_scans;
     last_scan = *new_scan;
     rf2o_ref.current_scan_time = last_scan.header.stamp;
 
     if (rf2o_ref.first_laser_scan == false)
     {
-      // copy laser range data to rf2o internal variable
-      if (new_scan->ranges.size() != rf2o_ref.width)
-      {
-        RCLCPP_WARN_THROTTLE(
-          get_logger(), *get_clock(), 5000,
-          "Canonical scan width changed from %u to %zu; ignoring scan",
-          rf2o_ref.width, new_scan->ranges.size());
-        return;
-      }
-
       for (unsigned int i = 0; i < rf2o_ref.width; i++)
         rf2o_ref.range_wf(i) = new_scan->ranges[i];
       // inform of new scan available
@@ -107,6 +233,14 @@ void CLaserOdometry2DNode::LaserCallBack(const sensor_msgs::msg::LaserScan::Shar
     }
     else
     {
+      if (consecutive_valid_scans < static_cast<std::size_t>(required_consecutive_valid_scans))
+      {
+        RCLCPP_INFO_THROTTLE(
+          get_logger(), *get_clock(), 1000,
+          "RF2O canonical scan qualification: %zu/%d",
+          consecutive_valid_scans, required_consecutive_valid_scans);
+        return;
+      }
       // Initialize module on first scan (from laser params)
       if (!setLaserPoseFromTf())
       {
@@ -139,7 +273,7 @@ bool CLaserOdometry2DNode::setLaserPoseFromTf()
   }
   catch (tf2::TransformException &ex)
   {
-    RCLCPP_ERROR(get_logger(), "%s",ex.what());
+    RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 5000, "%s", ex.what());
     retrieved = false;
   }
 
@@ -185,10 +319,11 @@ void CLaserOdometry2DNode::process()
   if( rf2o_ref.is_initialized() && scan_available() )
   {
     // Process odometry estimation
-    rf2o_ref.odometryCalculation(last_scan);
-
-    // Publish odometry over ROS2 (tf/topic)
-    publish();
+    if (rf2o_ref.odometryCalculation(last_scan))
+    {
+      // Publish only when RF2O accepted and processed this scan.
+      publish();
+    }
 
     // Do not run on the same data!
     new_scan_available = false;
@@ -196,7 +331,7 @@ void CLaserOdometry2DNode::process()
   else
   {
     // This is a warning. We depend on laser scans, so no meaning running faster than scan freq.
-    RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000, "Waiting for laser_scans....");
+    RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 5000, "Waiting for qualified laser scans");
   }
 }
 

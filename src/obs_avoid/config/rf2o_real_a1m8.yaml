@@ -1,4 +1,4 @@
-rf2o_laser_odometry:
+/**:
   ros__parameters:
     laser_scan_topic: /scan_rf2o
     odom_topic: /lidar/odom_raw
@@ -7,3 +7,7 @@ rf2o_laser_odometry:
     odom_frame_id: lidar_odom
     init_pose_from_topic: ""
     freq: 10.0
+    expected_scan_bins: 720
+    required_consecutive_valid_scans: 5
+    sustained_invalid_scan_count: 20
+    minimum_finite_return_ratio: 0.05

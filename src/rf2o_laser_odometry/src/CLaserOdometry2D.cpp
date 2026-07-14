@@ -57,6 +57,31 @@ bool CLaserOdometry2D::is_initialized()
 }
 
 
+void CLaserOdometry2D::reset()
+{
+  module_initialized = false;
+  first_laser_scan = true;
+  last_increment_ = Pose3d::Identity();
+  laser_pose_ = Pose3d::Identity();
+  laser_oldpose_ = Pose3d::Identity();
+  robot_pose_ = Pose3d::Identity();
+  robot_oldpose_ = Pose3d::Identity();
+  kai_abs_.setZero();
+  kai_loc_old_.setZero();
+  lin_speed = 0.0F;
+  ang_speed = 0.0F;
+  range_wf.resize(0, 0);
+  range.clear();
+  range_old.clear();
+  range_inter.clear();
+  range_warped.clear();
+  xx.clear();
+  xx_old.clear();
+  yy.clear();
+  yy_old.clear();
+}
+
+
 /**
  * On the first laser scan, gets its parameters and initialize the node
  *
@@ -273,8 +298,8 @@ bool CLaserOdometry2D::odometryCalculation(const sensor_msgs::msg::LaserScan& sc
 
   // Get computation time
   auto m_runtime = get_clock()->now() - start;
-  RCLCPP_INFO(get_logger(), "execution time (ms): %f",
-                m_runtime.seconds()*double(1000));
+  RCLCPP_DEBUG(get_logger(), "execution time (ms): %f",
+               m_runtime.seconds() * double(1000));
 
   // Update poses with the new odom
   PoseUpdate();
@@ -839,7 +864,9 @@ bool CLaserOdometry2D::filterLevelSolution()
   Eigen::SelfAdjointEigenSolver<Eigen::MatrixXf> eigensolver(cov_odo);
   if (eigensolver.info() != Eigen::Success)
   {
-    RCLCPP_WARN(get_logger(), "WARNING: Eigensolver couldn't find a solution. Pose is not updated");
+    RCLCPP_WARN_THROTTLE(
+      get_logger(), *get_clock(), 5000,
+      "Eigensolver could not find a solution; RF2O pose was not updated");
     return false;
   }
 
@@ -966,18 +993,18 @@ void CLaserOdometry2D::PoseUpdate()
   kai_loc_old_(1) = -kai_abs_(0)*std::sin(phi) + kai_abs_(1)*std::cos(phi);
   kai_loc_old_(2) =  kai_abs_(2);
 
-  RCLCPP_INFO(get_logger(), "Laser odom [x,y,yaw]=[%f %f %f]",
-                laser_pose_.translation()(0),
-                laser_pose_.translation()(1),
-                rf2o::getYaw(laser_pose_.rotation()));
+  RCLCPP_DEBUG(get_logger(), "Laser odom [x,y,yaw]=[%f %f %f]",
+               laser_pose_.translation()(0),
+               laser_pose_.translation()(1),
+               rf2o::getYaw(laser_pose_.rotation()));
 
   // Compose Transformations (robot odom)
   robot_pose_ = laser_pose_ * laser_pose_on_robot_inv_;
 
-  RCLCPP_INFO(get_logger(), "Robot-base odom [x,y,yaw]=[%f %f %f]",
-                robot_pose_.translation()(0),
-                robot_pose_.translation()(1),
-                rf2o::getYaw(robot_pose_.rotation()));
+  RCLCPP_DEBUG(get_logger(), "Robot-base odom [x,y,yaw]=[%f %f %f]",
+               robot_pose_.translation()(0),
+               robot_pose_.translation()(1),
+               rf2o::getYaw(robot_pose_.rotation()));
 
   // Estimate linear/angular speeds (mandatory for base_local_planner)
   // last_scan -> the last scan received

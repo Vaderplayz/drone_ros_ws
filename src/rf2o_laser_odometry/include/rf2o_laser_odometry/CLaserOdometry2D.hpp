@@ -83,6 +83,8 @@ public:
 
   bool odometryCalculation(const sensor_msgs::msg::LaserScan& scan);
 
+  void reset();
+
   void setLaserPose(const Pose3d& laser_pose);
 
   const Pose3d& getIncrement() const;

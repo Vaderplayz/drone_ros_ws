@@ -1,6 +1,7 @@
 lidar_odom_monitor:
   ros__parameters:
     scan_topic: /scan_rf2o
+    scan_diagnostics_topic: /scan_rf2o/diagnostics
     raw_odom_topic: /lidar/odom_raw
     imu_topic: /mavros/imu/data
     output_odom_topic: /lidar/odom
@@ -8,16 +9,22 @@ lidar_odom_monitor:
     expected_parent_frame: lidar_odom
     expected_child_frame: base_footprint
     expected_scan_bins: 720
-    min_valid_beam_ratio: 0.05
-    min_scan_rate_hz: 1.0
-    scan_timeout_sec: 0.75
-    odom_timeout_sec: 0.75
-    imu_timeout_sec: 0.75
-    max_position_jump_m: 0.50
-    max_yaw_jump_rad: 0.50
+    minimum_angular_coverage_ratio: 0.70
+    minimum_finite_return_ratio: 0.05
+    minimum_scan_rate_hz: 1.0
+    scan_timeout_sec: 0.50
+    odom_timeout_sec: 0.50
+    imu_timeout_sec: 0.50
+    scan_diagnostics_timeout_sec: 1.50
+    max_translation_step_m: 0.25
+    max_yaw_step_deg: 15.0
+    max_translation_speed_mps: 1.0
+    max_yaw_rate_degps: 120.0
+    max_roll_deg: 10.0
+    max_pitch_deg: 10.0
     max_abs_z_m: 0.05
-    max_rf2o_roll_pitch_rad: 0.10
-    max_vehicle_roll_pitch_rad: 0.35
+    required_consecutive_valid_odom: 5
+    health_publish_hz: 1.0
 
 lidar_odom_px4_bridge:
   ros__parameters:
