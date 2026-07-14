@@ -135,12 +135,14 @@ wait_for_diagnostic_true() {
 require_vehicle_disarmed() {
   local state
   state="$(timeout 5 ros2 topic echo /mavros/state --once 2>/dev/null || true)"
-  if grep -Eq '^armed: true$' <<<"${state}"; then
+  if grep -Eq '^[[:space:]]*armed:[[:space:]]*true[[:space:]]*$' <<<"${state}"; then
     log "ERROR vehicle is armed; refusing to start LiDAR/PX4 frame alignment"
     return 1
   fi
-  if ! grep -Eq '^armed: false$' <<<"${state}"; then
+  if ! grep -Eq '^[[:space:]]*armed:[[:space:]]*false[[:space:]]*$' <<<"${state}"; then
     log "ERROR could not confirm that the vehicle is disarmed"
+    log "Last /mavros/state sample follows:"
+    printf '%s\n' "${state}"
     return 1
   fi
   log "Confirmed vehicle disarmed before LiDAR/PX4 alignment"
@@ -168,12 +170,14 @@ wait_for_mavros_connection() {
   start_ts="$(date +%s)"
   while true; do
     state="$(timeout 3 ros2 topic echo /mavros/state --once 2>/dev/null || true)"
-    if grep -Eq '^connected: true$' <<<"${state}"; then
+    if grep -Eq '^[[:space:]]*connected:[[:space:]]*true[[:space:]]*$' <<<"${state}"; then
       log "Existing MAVROS reports FCU connected"
       return 0
     fi
     if (( $(date +%s) - start_ts >= WAIT_TIMEOUT_SEC )); then
       log "ERROR MAVROS topic exists but FCU did not report connected"
+      log "Last /mavros/state sample follows:"
+      printf '%s\n' "${state}"
       return 1
     fi
     sleep 1
@@ -412,7 +416,7 @@ main() {
       -p publish_tf:=false \
       -p base_frame_id:="${RF2O_BASE_FRAME}" \
       -p odom_frame_id:="${RF2O_ODOM_FRAME}" \
-      -p init_pose_from_topic:="" \
+      -p "init_pose_from_topic:=''" \
       -p freq:="${RF2O_RATE_HZ}"
   wait_for_message "${RF2O_RAW_ODOM_TOPIC}"
 
