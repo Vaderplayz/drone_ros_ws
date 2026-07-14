@@ -14,6 +14,7 @@ find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
+find_package(diagnostic_msgs REQUIRED)
 
 
 if(BUILD_TESTING)
@@ -130,6 +131,27 @@ target_link_libraries(nav2_cmd_vel_bridge PUBLIC
   ${geometry_msgs_TARGETS}
 )
 install(TARGETS nav2_cmd_vel_bridge DESTINATION lib/${PROJECT_NAME})
+
+add_executable(lidar_odom_monitor src/lidar_odom_monitor.cpp)
+target_link_libraries(lidar_odom_monitor PUBLIC
+  rclcpp::rclcpp
+  ${nav_msgs_TARGETS}
+  ${diagnostic_msgs_TARGETS}
+  tf2::tf2
+)
+install(TARGETS lidar_odom_monitor DESTINATION lib/${PROJECT_NAME})
+
+add_executable(lidar_odom_px4_bridge src/lidar_odom_px4_bridge.cpp)
+target_link_libraries(lidar_odom_px4_bridge PUBLIC
+  rclcpp::rclcpp
+  ${nav_msgs_TARGETS}
+  ${sensor_msgs_TARGETS}
+  sensor_msgs::sensor_msgs_library
+  ${diagnostic_msgs_TARGETS}
+  ${mavros_msgs_TARGETS}
+  tf2::tf2
+)
+install(TARGETS lidar_odom_px4_bridge DESTINATION lib/${PROJECT_NAME})
 
 install(DIRECTORY
   config

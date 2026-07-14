@@ -14,6 +14,16 @@ RPLIDAR_FRAME_ID="${RPLIDAR_FRAME_ID:-laser_frame}"
 RPLIDAR_INVERTED="${RPLIDAR_INVERTED:-false}"
 RPLIDAR_ANGLE_COMPENSATE="${RPLIDAR_ANGLE_COMPENSATE:-true}"
 SCAN_TOPIC="${SCAN_TOPIC:-/scan}"
+START_LIDAR_PX4_BRIDGE="${START_LIDAR_PX4_BRIDGE:-1}"
+PX4_ODOMETRY_OUT_TOPIC="${PX4_ODOMETRY_OUT_TOPIC:-/mavros/odometry/out}"
+RF2O_RAW_ODOM_TOPIC="${RF2O_RAW_ODOM_TOPIC:-/lidar/odom_raw}"
+LIDAR_ODOM_TOPIC="${LIDAR_ODOM_TOPIC:-/lidar/odom}"
+RF2O_ODOM_FRAME="${RF2O_ODOM_FRAME:-lidar_odom}"
+RF2O_BASE_FRAME="${RF2O_BASE_FRAME:-base_footprint}"
+RF2O_RATE_HZ="${RF2O_RATE_HZ:-10.0}"
+LIDAR_ODOM_DIAGNOSTICS_TOPIC="${LIDAR_ODOM_DIAGNOSTICS_TOPIC:-/lidar_odom/diagnostics}"
+LIDAR_PX4_DIAGNOSTICS_TOPIC="${LIDAR_PX4_DIAGNOSTICS_TOPIC:-/lidar_odom_px4_bridge/diagnostics}"
+RECORD_BAG="${RECORD_BAG:-0}"
 
 ODOM_TOPIC="${ODOM_TOPIC:-/mavros/local_position/odom}"
 ODOM_PARENT_FRAME="${ODOM_PARENT_FRAME:-odom}"
@@ -29,6 +39,8 @@ LIDAR_YAW="${LIDAR_YAW:-0.0}"
 
 SLAM_PARAMS_FILE="${SLAM_PARAMS_FILE:-${ROS_WS}/src/obs_avoid/config/slam2d_real_1lidar.yaml}"
 PLANNER_PARAMS_FILE="${PLANNER_PARAMS_FILE:-${ROS_WS}/src/obs_avoid/config/local_planner_mode_a_real_safe.yaml}"
+LIDAR_BRIDGE_PARAMS_FILE="${LIDAR_BRIDGE_PARAMS_FILE:-${ROS_WS}/src/obs_avoid/config/lidar_odom_px4_bridge.yaml}"
+PX4_EKF_CHECK_SCRIPT="${PX4_EKF_CHECK_SCRIPT:-${ROS_WS}/src/obs_avoid/scripts/check_px4_lidar_ekf.sh}"
 PRECLAND_MODE="${PRECLAND_MODE:-}"
 SETPOINT_HZ="${SETPOINT_HZ:-20.0}"
 OFFBOARD_WARMUP_SEC="${OFFBOARD_WARMUP_SEC:-2.0}"
@@ -43,6 +55,12 @@ RPLIDAR_LOG="${LOG_DIR}/rplidar.log"
 SLAM_LOG="${LOG_DIR}/slam_toolbox.log"
 ODOM_FLATTEN_LOG="${LOG_DIR}/odom_flatten.log"
 STATIC_TF_LOG="${LOG_DIR}/static_tf.log"
+RF2O_LOG="${LOG_DIR}/rf2o.log"
+LIDAR_ODOM_MONITOR_LOG="${LOG_DIR}/lidar_odom_monitor.log"
+LIDAR_PX4_BRIDGE_LOG="${LOG_DIR}/lidar_px4_bridge.log"
+LIDAR_PX4_HEALTH_CSV="${LOG_DIR}/lidar_px4_bridge_health.csv"
+PX4_EKF_FUSION_SNAPSHOT="${LOG_DIR}/px4_ekf_fusion_snapshot.txt"
+ROSBAG_LOG="${LOG_DIR}/rosbag.log"
 PLANNER_LOG="${LOG_DIR}/planner.log"
 CONSOLE_LOG="${LOG_DIR}/command_console.log"
 SYSTEM_SNAPSHOT="${LOG_DIR}/system_snapshot.txt"
@@ -83,6 +101,49 @@ wait_for_topic() {
     fi
     sleep 1
   done
+}
+
+wait_for_message() {
+  local topic="$1"
+  wait_for_topic "${topic}"
+  if ! timeout "${WAIT_TIMEOUT_SEC}" ros2 topic echo "${topic}" --once >/dev/null 2>&1; then
+    log "ERROR topic exists but no message arrived: ${topic}"
+    return 1
+  fi
+  log "Message received: ${topic}"
+}
+
+wait_for_diagnostic_true() {
+  local topic="$1"
+  local key="$2"
+  local start_ts sample
+  start_ts="$(date +%s)"
+  while true; do
+    sample="$(timeout 3 ros2 topic echo "${topic}" --once 2>/dev/null || true)"
+    if grep -A1 -F "key: ${key}" <<<"${sample}" | grep -Eq "value: ['\"]?true['\"]?"; then
+      log "Diagnostic ready: ${topic} ${key}=true"
+      return 0
+    fi
+    if (( $(date +%s) - start_ts >= WAIT_TIMEOUT_SEC )); then
+      log "ERROR timed out waiting for diagnostic: ${topic} ${key}=true"
+      return 1
+    fi
+    sleep 1
+  done
+}
+
+require_vehicle_disarmed() {
+  local state
+  state="$(timeout 5 ros2 topic echo /mavros/state --once 2>/dev/null || true)"
+  if grep -Eq '^armed: true$' <<<"${state}"; then
+    log "ERROR vehicle is armed; refusing to start LiDAR/PX4 frame alignment"
+    return 1
+  fi
+  if ! grep -Eq '^armed: false$' <<<"${state}"; then
+    log "ERROR could not confirm that the vehicle is disarmed"
+    return 1
+  fi
+  log "Confirmed vehicle disarmed before LiDAR/PX4 alignment"
 }
 
 wait_for_service() {
@@ -225,19 +286,32 @@ capture_runtime_snapshot() {
     timeout 8 ros2 topic hz /scan || true
     printf '\n-- odometry rate --\n'
     timeout 8 ros2 topic hz /mavros/local_position/odom || true
+    printf '\n-- RF2O raw odometry rate --\n'
+    timeout 8 ros2 topic hz "${RF2O_RAW_ODOM_TOPIC}" || true
+    printf '\n-- monitored LiDAR odometry rate --\n'
+    timeout 8 ros2 topic hz "${LIDAR_ODOM_TOPIC}" || true
+    if [[ "${START_LIDAR_PX4_BRIDGE}" == "1" ]]; then
+      printf '\n-- MAVROS external odometry rate --\n'
+      timeout 8 ros2 topic hz "${PX4_ODOMETRY_OUT_TOPIC}" || true
+      printf '\n-- LiDAR/PX4 bridge diagnostics --\n'
+      timeout 5 ros2 topic echo "${LIDAR_PX4_DIAGNOSTICS_TOPIC}" --once || true
+    fi
     printf '\n-- TF map to odom --\n'
     timeout 5 ros2 run tf2_ros tf2_echo map odom || true
-    printf '\n-- TF odom to base_link --\n'
-    timeout 5 ros2 run tf2_ros tf2_echo odom base_link || true
-    printf '\n-- TF base_link to laser_frame --\n'
-    timeout 5 ros2 run tf2_ros tf2_echo base_link laser_frame || true
+    printf '\n-- TF odom to base_footprint --\n'
+    timeout 5 ros2 run tf2_ros tf2_echo odom base_footprint || true
+    printf '\n-- TF base_footprint to laser_frame --\n'
+    timeout 5 ros2 run tf2_ros tf2_echo base_footprint laser_frame || true
   } >>"${SYSTEM_SNAPSHOT}" 2>&1
 }
 
 main() {
   mkdir -p "${LOG_DIR}"
   touch "${MASTER_LOG}" "${RPLIDAR_LOG}" "${SLAM_LOG}" "${ODOM_FLATTEN_LOG}" \
-    "${STATIC_TF_LOG}" "${PLANNER_LOG}" "${CONSOLE_LOG}" "${SYSTEM_SNAPSHOT}"
+    "${STATIC_TF_LOG}" "${RF2O_LOG}" "${LIDAR_ODOM_MONITOR_LOG}" \
+    "${LIDAR_PX4_BRIDGE_LOG}" "${LIDAR_PX4_HEALTH_CSV}" \
+    "${PX4_EKF_FUSION_SNAPSHOT}" "${ROSBAG_LOG}" "${PLANNER_LOG}" \
+    "${CONSOLE_LOG}" "${SYSTEM_SNAPSHOT}"
   exec > >(tee -a "${MASTER_LOG}") 2>&1
 
   trap cleanup EXIT
@@ -257,8 +331,9 @@ main() {
     log "ERROR workspace setup not found: ${ROS_SETUP}"
     exit 1
   fi
-  if [[ ! -f "${SLAM_PARAMS_FILE}" || ! -f "${PLANNER_PARAMS_FILE}" ]]; then
-    log "ERROR SLAM or planner parameter file missing"
+  if [[ ! -f "${SLAM_PARAMS_FILE}" || ! -f "${PLANNER_PARAMS_FILE}" ||
+    ! -f "${LIDAR_BRIDGE_PARAMS_FILE}" || ! -x "${PX4_EKF_CHECK_SCRIPT}" ]]; then
+    log "ERROR SLAM, planner, LiDAR bridge configuration, or EKF checker is missing"
     exit 1
   fi
 
@@ -277,6 +352,11 @@ main() {
       "${RPLIDAR_SERIAL_PORT}" "${RPLIDAR_BAUDRATE}" "${SCAN_TOPIC}" "${RPLIDAR_FRAME_ID}" \
       "${RPLIDAR_INVERTED}" "${RPLIDAR_ANGLE_COMPENSATE}"
     printf 'precland_mode=%s\n' "${PRECLAND_MODE:-NOT_CONFIGURED}"
+    printf 'rf2o_upstream_commit=b38c68e46387b98845ecbfeb6660292f967a00d3\n'
+    printf 'rf2o_raw_topic=%s lidar_odom_topic=%s rf2o_frame=%s rf2o_base=%s\n' \
+      "${RF2O_RAW_ODOM_TOPIC}" "${LIDAR_ODOM_TOPIC}" "${RF2O_ODOM_FRAME}" "${RF2O_BASE_FRAME}"
+    printf 'start_lidar_px4_bridge=%s px4_odometry_out_topic=%s\n' \
+      "${START_LIDAR_PX4_BRIDGE}" "${PX4_ODOMETRY_OUT_TOPIC}"
   } >>"${SYSTEM_SNAPSHOT}"
   record_device "rplidar" "${RPLIDAR_SERIAL_PORT}"
 
@@ -285,7 +365,7 @@ main() {
 
   wait_for_topic /mavros/state
   wait_for_topic /mavros/local_position/pose
-  wait_for_topic /mavros/local_position/odom
+  wait_for_message /mavros/local_position/odom
   wait_for_service /mavros/set_mode
   wait_for_service /mavros/cmd/arming
   wait_for_mavros_connection
@@ -308,7 +388,7 @@ main() {
       -p inverted:="${RPLIDAR_INVERTED}" \
       -p angle_compensate:="${RPLIDAR_ANGLE_COMPENSATE}" \
       -p topic_name:="${SCAN_TOPIC#/}"
-  wait_for_topic "${SCAN_TOPIC}"
+  wait_for_message "${SCAN_TOPIC}"
 
   start_process odom_flatten "${ODOM_FLATTEN_LOG}" \
     ros2 run odom_flatten px4_odom_flatten_node --ros-args \
@@ -323,6 +403,60 @@ main() {
       --roll "${LIDAR_ROLL}" --pitch "${LIDAR_PITCH}" --yaw "${LIDAR_YAW}" \
       --frame-id "${BASE_FRAME}" --child-frame-id "${LIDAR_FRAME}" \
       --ros-args -p use_sim_time:=false
+
+  start_process rf2o "${RF2O_LOG}" \
+    ros2 run rf2o_laser_odometry rf2o_laser_odometry_node --ros-args \
+      -p use_sim_time:=false \
+      -p laser_scan_topic:="${SCAN_TOPIC}" \
+      -p odom_topic:="${RF2O_RAW_ODOM_TOPIC}" \
+      -p publish_tf:=false \
+      -p base_frame_id:="${RF2O_BASE_FRAME}" \
+      -p odom_frame_id:="${RF2O_ODOM_FRAME}" \
+      -p init_pose_from_topic:="" \
+      -p freq:="${RF2O_RATE_HZ}"
+  wait_for_message "${RF2O_RAW_ODOM_TOPIC}"
+
+  start_process lidar_odom_monitor "${LIDAR_ODOM_MONITOR_LOG}" \
+    ros2 run obs_avoid lidar_odom_monitor --ros-args \
+      --params-file "${LIDAR_BRIDGE_PARAMS_FILE}" \
+      -p use_sim_time:=false \
+      -p raw_odom_topic:="${RF2O_RAW_ODOM_TOPIC}" \
+      -p output_odom_topic:="${LIDAR_ODOM_TOPIC}" \
+      -p diagnostics_topic:="${LIDAR_ODOM_DIAGNOSTICS_TOPIC}" \
+      -p expected_parent_frame:="${RF2O_ODOM_FRAME}" \
+      -p expected_child_frame:="${RF2O_BASE_FRAME}"
+  wait_for_diagnostic_true "${LIDAR_ODOM_DIAGNOSTICS_TOPIC}" valid
+  wait_for_message "${LIDAR_ODOM_TOPIC}"
+
+  if [[ "${START_LIDAR_PX4_BRIDGE}" == "1" ]]; then
+    require_vehicle_disarmed
+    start_process lidar_odom_px4_bridge "${LIDAR_PX4_BRIDGE_LOG}" \
+      ros2 run obs_avoid lidar_odom_px4_bridge --ros-args \
+        --params-file "${LIDAR_BRIDGE_PARAMS_FILE}" \
+        -p use_sim_time:=false \
+        -p lidar_odom_topic:="${LIDAR_ODOM_TOPIC}" \
+        -p monitor_diagnostics_topic:="${LIDAR_ODOM_DIAGNOSTICS_TOPIC}" \
+        -p px4_odom_topic:="${ODOM_TOPIC}" \
+        -p scan_topic:="${SCAN_TOPIC}" \
+        -p output_topic:="${PX4_ODOMETRY_OUT_TOPIC}" \
+        -p diagnostics_topic:="${LIDAR_PX4_DIAGNOSTICS_TOPIC}" \
+        -p expected_lidar_frame:="${RF2O_ODOM_FRAME}" \
+        -p health_csv_path:="${LIDAR_PX4_HEALTH_CSV}"
+    wait_for_diagnostic_true "${LIDAR_PX4_DIAGNOSTICS_TOPIC}" alignment_complete
+    wait_for_message "${PX4_ODOMETRY_OUT_TOPIC}"
+    "${PX4_EKF_CHECK_SCRIPT}" >"${PX4_EKF_FUSION_SNAPSHOT}" 2>&1 ||
+      log "WARNING PX4 EKF parameter snapshot is incomplete; inspect ${PX4_EKF_FUSION_SNAPSHOT}"
+  else
+    log "LiDAR/PX4 bridge disabled by START_LIDAR_PX4_BRIDGE=${START_LIDAR_PX4_BRIDGE}"
+  fi
+
+  if [[ "${RECORD_BAG}" == "1" ]]; then
+    start_process rosbag "${ROSBAG_LOG}" \
+      ros2 bag record -o "${LOG_DIR}/lidar_px4_bag" \
+        "${PX4_ODOMETRY_OUT_TOPIC}" "${RF2O_RAW_ODOM_TOPIC}" "${LIDAR_ODOM_TOPIC}" \
+        "${LIDAR_ODOM_DIAGNOSTICS_TOPIC}" "${LIDAR_PX4_DIAGNOSTICS_TOPIC}" \
+        "${ODOM_TOPIC}" /mavros/imu/data "${SCAN_TOPIC}" /tf /tf_static
+  fi
 
   start_process slam_toolbox "${SLAM_LOG}" \
     ros2 launch slam_toolbox online_async_launch.py \

@@ -5,7 +5,7 @@
 //
 // Features:
 // - Forces TF frame IDs (doesn't trust msg header frames)
-// - Uses msg->header.stamp for TF stamps (best practice)
+// - Uses local ROS receipt time for TF so Pi LiDAR and odometry share a clock domain
 // - Backward-time prevention with automatic recovery on time reset
 // - Does NOT declare use_sim_time (safe to pass via CLI)
 
@@ -96,7 +96,10 @@ private:
     }
 
     geometry_msgs::msg::TransformStamped tf_msg;
-    tf_msg.header.stamp = msg->header.stamp;
+    // MAVROS odometry stamps lag the Pi-hosted LiDAR stamps on the real vehicle.
+    // Stamp the latest planar pose in the Pi ROS clock domain so scan consumers
+    // can interpolate it instead of continuously requesting future extrapolation.
+    tf_msg.header.stamp = this->now();
 
     // Force frames as requested
     tf_msg.header.frame_id = parent_frame_;
