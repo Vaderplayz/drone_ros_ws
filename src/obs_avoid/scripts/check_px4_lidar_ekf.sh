@@ -2,7 +2,8 @@
 
 set -euo pipefail
 
-PARAM_GET_SERVICE="${PARAM_GET_SERVICE:-/mavros/param/get}"
+MAVROS_PARAM_NODE="${MAVROS_PARAM_NODE:-}"
+LEGACY_PARAM_GET_SERVICE="${LEGACY_PARAM_GET_SERVICE:-/mavros/param/get}"
 SERVICE_TIMEOUT_SEC="${SERVICE_TIMEOUT_SEC:-10}"
 
 PARAMETERS=(
@@ -29,29 +30,98 @@ if ! command -v ros2 >/dev/null 2>&1; then
   exit 1
 fi
 
-if ! timeout "${SERVICE_TIMEOUT_SEC}" ros2 service type "${PARAM_GET_SERVICE}" 2>/dev/null |
+discover_modern_param_node() {
+  local start_ts service_line service_name
+  start_ts="$(date +%s)"
+  while true; do
+    service_line="$(ros2 service list -t 2>/dev/null |
+      awk '$1 ~ /\/param\/get_parameters$/ && $0 ~ /rcl_interfaces\/srv\/GetParameters/ {print; exit}')"
+    if [[ -n "${service_line}" ]]; then
+      service_name="${service_line%% *}"
+      MAVROS_PARAM_NODE="${service_name%/get_parameters}"
+      return 0
+    fi
+    if (( $(date +%s) - start_ts >= SERVICE_TIMEOUT_SEC )); then
+      return 1
+    fi
+    sleep 1
+  done
+}
+
+query_modern_parameter() {
+  local parameter="$1"
+  timeout "${SERVICE_TIMEOUT_SEC}" ros2 param get \
+    --timeout "${SERVICE_TIMEOUT_SEC}" "${MAVROS_PARAM_NODE}" "${parameter}" 2>&1
+}
+
+query_legacy_parameter() {
+  local parameter="$1"
+  timeout "${SERVICE_TIMEOUT_SEC}" ros2 service call \
+    "${LEGACY_PARAM_GET_SERVICE}" mavros_msgs/srv/ParamGet \
+    "{param_id: '${parameter}'}" 2>&1
+}
+
+interface=""
+if [[ -n "${MAVROS_PARAM_NODE}" ]]; then
+  if timeout "${SERVICE_TIMEOUT_SEC}" ros2 service type \
+    "${MAVROS_PARAM_NODE}/get_parameters" 2>/dev/null |
+    grep -Fx 'rcl_interfaces/srv/GetParameters' >/dev/null; then
+    interface="modern"
+  fi
+elif discover_modern_param_node; then
+  interface="modern"
+fi
+
+if [[ -z "${interface}" ]] && timeout "${SERVICE_TIMEOUT_SEC}" ros2 service type \
+  "${LEGACY_PARAM_GET_SERVICE}" 2>/dev/null |
   grep -Fx 'mavros_msgs/srv/ParamGet' >/dev/null; then
-  printf 'ERROR: MAVROS parameter service unavailable: %s\n' "${PARAM_GET_SERVICE}" >&2
+  interface="legacy"
+fi
+
+if [[ -z "${interface}" ]]; then
+  printf 'ERROR: no MAVROS parameter read interface found.\n' >&2
+  printf 'Expected modern service: */param/get_parameters [rcl_interfaces/srv/GetParameters]\n' >&2
+  printf 'Available MAVROS parameter services:\n' >&2
+  ros2 service list -t 2>/dev/null | grep '/param/' >&2 || true
   exit 1
 fi
 
 printf 'PX4 LiDAR EKF parameter inspection\n'
 printf 'timestamp=%s\n' "$(timestamp)"
-printf 'service=%s\n' "${PARAM_GET_SERVICE}"
+if [[ "${interface}" == "modern" ]]; then
+  printf 'interface=ROS 2 parameters\n'
+  printf 'node=%s\n' "${MAVROS_PARAM_NODE}"
+  printf 'service=%s/get_parameters\n' "${MAVROS_PARAM_NODE}"
+else
+  printf 'interface=legacy ParamGet\n'
+  printf 'service=%s\n' "${LEGACY_PARAM_GET_SERVICE}"
+fi
 printf 'mode=read-only (this script never calls a parameter-set service)\n'
 printf 'firmware_metadata_EKF2_EV_NOISE_MD_0=EV reported variance (parameter lower bound)\n'
 printf 'required_EKF2_EV_CTRL=9 (horizontal position + yaw; no vertical position or velocity)\n\n'
 
 failures=0
 for parameter in "${PARAMETERS[@]}"; do
-  response="$(timeout "${SERVICE_TIMEOUT_SEC}" ros2 service call \
-    "${PARAM_GET_SERVICE}" mavros_msgs/srv/ParamGet "{param_id: '${parameter}'}" 2>&1 || true)"
-  if grep -q 'success=True' <<<"${response}"; then
-    values="$(sed -n 's/.*integer=\([^,)]*\), real=\([^,)]*\).*/integer=\1 real=\2/p' <<<"${response}" | tail -n1)"
-    printf '%-18s %s\n' "${parameter}" "${values:-response_parse_failed}"
+  if [[ "${interface}" == "modern" ]]; then
+    response="$(query_modern_parameter "${parameter}" || true)"
+    if grep -Eq '^(Integer|Double) value is:' <<<"${response}"; then
+      value="$(sed -n 's/^\(Integer\|Double\) value is: /\1=/p' <<<"${response}" | tail -n1)"
+      printf '%-18s %s\n' "${parameter}" "${value}"
+    else
+      printf '%-18s ERROR unavailable (%s)\n' "${parameter}" \
+        "$(tr '\n' ' ' <<<"${response}" | sed 's/[[:space:]]\+/ /g')"
+      failures=$((failures + 1))
+    fi
   else
-    printf '%-18s ERROR unavailable\n' "${parameter}"
-    failures=$((failures + 1))
+    response="$(query_legacy_parameter "${parameter}" || true)"
+    if grep -q 'success=True' <<<"${response}"; then
+      values="$(sed -n 's/.*integer=\([^,)]*\), real=\([^,)]*\).*/integer=\1 real=\2/p' \
+        <<<"${response}" | tail -n1)"
+      printf '%-18s %s\n' "${parameter}" "${values:-response_parse_failed}"
+    else
+      printf '%-18s ERROR unavailable\n' "${parameter}"
+      failures=$((failures + 1))
+    fi
   fi
 done
 
