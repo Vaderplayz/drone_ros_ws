@@ -23,6 +23,11 @@ colcon build \
 source install/setup.bash
 ```
 
+The launcher reuses one compatible existing RPLIDAR process on `/dev/ttyUSB0`
+by default. It verifies that `/scan` has exactly one publisher and receives a
+real message before continuing. Set `REUSE_EXISTING_RPLIDAR=0` to require the
+launcher to start and own the driver instead.
+
 ## Mapping Only
 
 ```bash

@@ -14,6 +14,7 @@ RECORD_LIDAR_DIAGNOSTIC_BAG="${RECORD_LIDAR_DIAGNOSTIC_BAG:-${RECORD_BAG:-0}}"
 
 WAIT_TIMEOUT_SEC="${WAIT_TIMEOUT_SEC:-60}"
 RPLIDAR_START_RETRIES=2
+REUSE_EXISTING_RPLIDAR="${REUSE_EXISTING_RPLIDAR:-1}"
 RPLIDAR_SCAN_WAIT_SEC="${RPLIDAR_SCAN_WAIT_SEC:-60}"
 RPLIDAR_RETRY_DELAY_SEC="${RPLIDAR_RETRY_DELAY_SEC:-2}"
 RPLIDAR_SERIAL_PORT="${RPLIDAR_SERIAL_PORT:-/dev/ttyUSB0}"
@@ -89,6 +90,7 @@ COMPONENTS=(
 PIDS=()
 NAMES=()
 LAST_STARTED_PID=""
+EXISTING_RPLIDAR_PID=""
 CONSOLE_PID=""
 PROCESS_MONITOR_PID=""
 HEALTH_MONITOR_PID=""
@@ -159,11 +161,36 @@ require_publisher_count() {
   log "Publisher count verified: ${topic}=${actual}"
 }
 
+discover_existing_rplidar() {
+  local -a processes=()
+  mapfile -t processes < <(pgrep -af '[r]plidar_composition|[r]plidar_node' 2>/dev/null || true)
+  if (( ${#processes[@]} > 1 )); then
+    log "ERROR multiple existing RPLIDAR processes detected:"
+    printf '%s\n' "${processes[@]}"
+    return 1
+  fi
+  if (( ${#processes[@]} == 0 )); then
+    return 0
+  fi
+  if [[ "${REUSE_EXISTING_RPLIDAR}" != "1" ]]; then
+    log "ERROR existing RPLIDAR process detected and reuse is disabled:"
+    printf '%s\n' "${processes[0]}"
+    return 1
+  fi
+  if [[ "${processes[0]}" != *"serial_port:=${RPLIDAR_SERIAL_PORT}"* ]]; then
+    log "ERROR existing RPLIDAR does not use configured port ${RPLIDAR_SERIAL_PORT}:"
+    printf '%s\n' "${processes[0]}"
+    return 1
+  fi
+  EXISTING_RPLIDAR_PID="${processes[0]%% *}"
+  printf '%s\n' "${EXISTING_RPLIDAR_PID}" >"${LOG_DIR}/external_rplidar.pid"
+  log "Reusing one existing compatible RPLIDAR process; pid=${EXISTING_RPLIDAR_PID}"
+}
+
 require_no_duplicate_processes() {
   local pattern output
   local patterns=(
-    '[r]plidar_composition' '[r]plidar_node' '[l]aser_scan_stream_audit'
-    '[l]aser_scan_canonicalizer'
+    '[l]aser_scan_stream_audit' '[l]aser_scan_canonicalizer'
     '[r]f2o_laser_odometry_node' '[l]idar_odom_monitor' '[a]sync_slam_toolbox_node'
     '[p]x4_odom_flatten_node' '[l]idar_odom_px4_bridge'
   )
@@ -175,6 +202,7 @@ require_no_duplicate_processes() {
       return 1
     fi
   done
+  discover_existing_rplidar
 }
 
 record_device() {
@@ -204,9 +232,18 @@ start_process() {
   local name="$1"
   local logfile="$2"
   shift 2
-  "$@" >"${logfile}" 2>&1 &
+  setsid "$@" >"${logfile}" 2>&1 &
   LAST_STARTED_PID="$!"
   add_process "${LAST_STARTED_PID}" "${name}"
+}
+
+stop_process_group() {
+  local pid="$1"
+  if kill -0 -- "-${pid}" 2>/dev/null; then
+    kill -TERM -- "-${pid}" 2>/dev/null || true
+  elif kill -0 "${pid}" 2>/dev/null; then
+    kill -TERM "${pid}" 2>/dev/null || true
+  fi
 }
 
 wait_for_topic_message_alive() {
@@ -309,6 +346,21 @@ wait_for_mavros_connection() {
 
 start_rplidar() {
   local attempt pid status=0
+  if [[ -n "${EXISTING_RPLIDAR_PID}" ]]; then
+    set_component_state RPLIDAR STARTING "reusing_external_pid=${EXISTING_RPLIDAR_PID}"
+    set_component_state RAW_SCAN STARTING "deadline=${RPLIDAR_SCAN_WAIT_SEC}s"
+    if ! wait_for_rplidar_scan \
+      "${EXISTING_RPLIDAR_PID}" "${RPLIDAR_SCAN_WAIT_SEC}" "${RPLIDAR_LOG}"; then
+      set_component_state RPLIDAR FAILED "external_driver_has_no_scan"
+      set_component_state RAW_SCAN FAILED "external_driver_has_no_scan"
+      log "ERROR reused RPLIDAR was not stopped because the launcher does not own it"
+      return 1
+    fi
+    require_publisher_count "${SCAN_TOPIC}" 1
+    set_component_state RPLIDAR READY "external_pid=${EXISTING_RPLIDAR_PID}"
+    set_component_state RAW_SCAN READY "topic=${SCAN_TOPIC} external_driver=true"
+    return 0
+  fi
   require_publisher_count "${SCAN_TOPIC}" 0
   for ((attempt=1; attempt<=RPLIDAR_START_RETRIES; attempt++)); do
     set_component_state RPLIDAR STARTING "attempt=${attempt}/${RPLIDAR_START_RETRIES}"
@@ -344,10 +396,8 @@ start_rplidar() {
       set_component_state RAW_SCAN FAILED "driver_process_exit"
       return 1
     fi
-    if kill -0 "${pid}" 2>/dev/null; then
-      kill "${pid}" 2>/dev/null || true
-      wait "${pid}" 2>/dev/null || true
-    fi
+    stop_process_group "${pid}"
+    wait "${pid}" 2>/dev/null || true
     if (( attempt < RPLIDAR_START_RETRIES )); then
       log "Actual RPLIDAR failure detected; using the single permitted restart"
       sleep "${RPLIDAR_RETRY_DELAY_SEC}"
@@ -428,8 +478,22 @@ diagnostic_value() {
   local sample="$1"
   local key="$2"
   awk -v wanted="${key}" '
-    $0 ~ "key: " wanted {found=1; next}
-    found && /value:/ {gsub(/[\047\"]/, "", $2); print $2; exit}
+    /key:[[:space:]]*/ {
+      candidate=$0
+      sub(/^.*key:[[:space:]]*/, "", candidate)
+      gsub(/[\047\"]/, "", candidate)
+      sub(/[[:space:]]+$/, "", candidate)
+      found=(candidate == wanted)
+      next
+    }
+    found && /value:[[:space:]]*/ {
+      value=$0
+      sub(/^.*value:[[:space:]]*/, "", value)
+      gsub(/[\047\"]/, "", value)
+      sub(/[[:space:]]+$/, "", value)
+      print value
+      exit
+    }
   ' <<<"${sample}"
 }
 
@@ -861,15 +925,15 @@ cleanup() {
     fi
   done
   if [[ -n "${CONSOLE_PID}" ]] && kill -0 "${CONSOLE_PID}" 2>/dev/null; then
-    kill "${CONSOLE_PID}" 2>/dev/null
+    stop_process_group "${CONSOLE_PID}"
     wait "${CONSOLE_PID}" 2>/dev/null
   fi
   local index pid component state
   for ((index=${#PIDS[@]} - 1; index>=0; index--)); do
     pid="${PIDS[$index]}"
-    if kill -0 "${pid}" 2>/dev/null; then
+    if kill -0 -- "-${pid}" 2>/dev/null || kill -0 "${pid}" 2>/dev/null; then
       log "Stopping launcher-owned process only: ${NAMES[$index]} pid=${pid}"
-      kill "${pid}" 2>/dev/null
+      stop_process_group "${pid}"
     fi
   done
   for index in "${!PIDS[@]}"; do
@@ -882,6 +946,9 @@ cleanup() {
     fi
   done
   log "MAVROS, FCU, webcam, AprilTag detector, and precision-landing pipeline were not stopped"
+  if [[ -n "${EXISTING_RPLIDAR_PID}" ]]; then
+    log "Reused external RPLIDAR pid=${EXISTING_RPLIDAR_PID} was not stopped"
+  fi
   exit "${exit_code}"
 }
 
@@ -913,7 +980,7 @@ start_command_console() {
   if [[ -n "${PRECLAND_MODE}" ]]; then
     console_cmd+=(-p precland_mode:="${PRECLAND_MODE}")
   fi
-  "${console_cmd[@]}" </dev/tty > >(tee -a "${CONSOLE_LOG}") 2>&1 &
+  setsid "${console_cmd[@]}" </dev/tty > >(tee -a "${CONSOLE_LOG}") 2>&1 &
   CONSOLE_PID="$!"
   log "Started command console pid=${CONSOLE_PID}; it sends no command until user input"
 }
@@ -937,6 +1004,7 @@ main() {
   require_cmd ros2
   require_cmd timeout
   require_cmd pgrep
+  require_cmd setsid
   require_cmd python3
   require_cmd awk
   case "${LIDAR_MODE}" in
