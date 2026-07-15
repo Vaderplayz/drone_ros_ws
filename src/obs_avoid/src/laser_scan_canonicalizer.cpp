@@ -286,7 +286,8 @@ private:
   }
 
   bool publish_grid(
-    const rclcpp::Time & stamp, float scan_time, float range_min, float range_max,
+    const rclcpp::Time & stamp, float scan_time, float time_increment,
+    float range_min, float range_max,
     const std::vector<float> & ranges, const std::vector<bool> & observed,
     const std::string & success_state)
   {
@@ -319,8 +320,7 @@ private:
     output.range_min = range_min;
     output.range_max = range_max;
     output.scan_time = scan_time;
-    output.time_increment = scan_time > 0.0F ?
-      scan_time / static_cast<float>(output_bins_) : 0.0F;
+    output.time_increment = time_increment;
     output.ranges = ranges;
     output.intensities.clear();
     output_pub_->publish(output);
@@ -343,10 +343,28 @@ private:
     rebin_scan(scan, ranges, observed);
     update_coverage(ranges, observed);
     last_segment_count_ = 1;
-    last_revolution_duration_sec_ = std::max(0.0, static_cast<double>(scan.scan_time));
+    const double indexed_duration = scan.ranges.size() > 1 &&
+      std::isfinite(scan.time_increment) && scan.time_increment > 0.0F ?
+      static_cast<double>(scan.time_increment) * static_cast<double>(scan.ranges.size() - 1) :
+      0.0;
+    last_revolution_duration_sec_ = indexed_duration > 0.0 ? indexed_duration :
+      std::max(0.0, static_cast<double>(scan.scan_time));
+    const double normalized_start_angle = normalize_angle(scan.angle_min);
+    const double start_angle_error = std::abs(std::atan2(
+      std::sin(normalized_start_angle - output_angle_min_),
+      std::cos(normalized_start_angle - output_angle_min_)));
+    last_per_ray_timing_valid_ = scan.angle_increment > 0.0F &&
+      last_revolution_duration_sec_ > 0.0 &&
+      start_angle_error <= 2.0 * output_angle_increment_;
+    const float output_time_increment = last_per_ray_timing_valid_ ?
+      static_cast<float>(last_revolution_duration_sec_ /
+      static_cast<double>(output_bins_ - 1)) : 0.0F;
+    const float output_scan_time = scan.scan_time > 0.0F ? scan.scan_time :
+      static_cast<float>(last_revolution_duration_sec_);
     ++completed_revolutions_;
     if (!publish_grid(
-        stamp, scan.scan_time, scan.range_min, scan.range_max, ranges, observed,
+        stamp, output_scan_time, output_time_increment,
+        scan.range_min, scan.range_max, ranges, observed,
         "OK_FULL_SCAN"))
     {
       ++discarded_revolutions_;
@@ -403,6 +421,7 @@ private:
     last_segment_count_ = assembly_segment_count_;
     last_revolution_duration_sec_ = std::max(
       0.0, (assembly_last_stamp_ - assembly_first_stamp_).seconds());
+    last_per_ray_timing_valid_ = false;
     const bool coherent = angular_coverage_ratio_ >= minimum_angular_coverage_ratio_ &&
       finite_return_ratio_ >= minimum_finite_return_ratio_ &&
       last_revolution_duration_sec_ <= maximum_revolution_duration_sec_;
@@ -410,7 +429,7 @@ private:
     if (coherent) {
       ++completed_revolutions_;
       published = publish_grid(
-        assembly_first_stamp_, static_cast<float>(last_revolution_duration_sec_),
+        assembly_first_stamp_, static_cast<float>(last_revolution_duration_sec_), 0.0F,
         assembly_range_min_, assembly_range_max_, assembly_ranges_, assembly_observed_,
         "OK_ASSEMBLED_REVOLUTION");
       if (!published) {
@@ -623,6 +642,8 @@ private:
       "accumulated_segment_count", std::to_string(last_segment_count_)));
     status.values.push_back(key_value(
       "revolution_duration_sec", std::to_string(last_revolution_duration_sec_)));
+    status.values.push_back(key_value(
+      "per_ray_timing_valid", bool_string(last_per_ray_timing_valid_)));
     status.values.push_back(key_value("input_rate_hz", std::to_string(input_rate_hz_)));
     status.values.push_back(key_value("output_rate_hz", std::to_string(output_rate_hz_)));
     status.values.push_back(key_value("timestamp_monotonic", bool_string(timestamp_monotonic_)));
@@ -691,6 +712,7 @@ private:
   double last_output_angular_coverage_ratio_{0.0};
   double last_output_finite_return_ratio_{0.0};
   double last_revolution_duration_sec_{0.0};
+  bool last_per_ray_timing_valid_{false};
   double input_rate_hz_{0.0};
   double output_rate_hz_{0.0};
   std::string last_input_frame_;

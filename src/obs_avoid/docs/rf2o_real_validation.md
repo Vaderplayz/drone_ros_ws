@@ -17,7 +17,7 @@ export MAKEFLAGS="-j1"
 colcon build \
   --executor sequential \
   --symlink-install \
-  --packages-select rf2o_laser_odometry obs_avoid \
+  --packages-select odom_flatten obs_avoid rf2o_laser_odometry \
   --cmake-args -DBUILD_TESTING=OFF -DCMAKE_BUILD_TYPE=Release
 
 source install/setup.bash
@@ -37,6 +37,41 @@ START_LIDAR_PX4_BRIDGE=0 \
 RECORD_LIDAR_DIAGNOSTIC_BAG=1 \
 ./src/obs_avoid/scripts/start_real_basic_2d.sh
 ```
+
+The normal profile uses `/scan_rf2o`. It now starts the timestamp-preserving
+`odom -> base_footprint` publisher before the LiDAR and refuses to start SLAM
+until both `odom -> base_footprint` and `odom -> laser_frame` are available at
+the exact canonical scan timestamp.
+
+## Timing Debug
+
+Start with deskew disabled to measure TF timing separately from intra-scan
+motion distortion:
+
+```bash
+cd /home/pi5drone/drone_ros_ws
+SLAM_PROFILE=timing_debug \
+USE_DESKEWED_SCAN=0 \
+LIDAR_MODE=mapping_only \
+START_LIDAR_PX4_BRIDGE=0 \
+RECORD_LIDAR_DIAGNOSTIC_BAG=1 \
+./src/obs_avoid/scripts/start_real_basic_2d.sh
+```
+
+After the non-deskewed timing run is healthy, make a separate comparison run:
+
+```bash
+cd /home/pi5drone/drone_ros_ws
+SLAM_PROFILE=timing_debug \
+USE_DESKEWED_SCAN=1 \
+LIDAR_MODE=mapping_only \
+START_LIDAR_PX4_BRIDGE=0 \
+RECORD_LIDAR_DIAGNOSTIC_BAG=1 \
+./src/obs_avoid/scripts/start_real_basic_2d.sh
+```
+
+Deskew remains disabled by default. It is only available for canonical full
+revolutions with valid per-ray timing; ambiguous assembled scans are rejected.
 
 ## RF2O Validation
 
@@ -63,6 +98,9 @@ ros2 topic hz /lidar/odom
 
 ros2 topic echo /scan_stream_audit/diagnostics
 ros2 topic echo /scan_rf2o/diagnostics
+ros2 topic echo /scan_tf_timing_audit/diagnostics
+ros2 topic echo /scan_deskewed/diagnostics
+ros2 topic echo /odom_flatten/diagnostics
 ros2 topic echo /lidar_odom/diagnostics
 
 ros2 run tf2_ros tf2_echo odom base_footprint
@@ -70,11 +108,21 @@ ros2 run tf2_ros tf2_echo base_footprint laser_frame
 pgrep -af 'rplidar|canonicalizer|rf2o|slam_toolbox'
 ```
 
-For the first stationary scan test, use RViz with fixed frame `odom`, enable
-`/scan_rf2o`, enable TF, and leave the map display disabled. Hold still for 60
+For the first stationary scan test, use RViz with fixed frame `odom`, disable
+Map, enable TF, and enable only the selected LaserScan (`/scan_rf2o` or
+`/scan_deskewed`). During rotation, `base_footprint` and `laser_frame` should
+rotate while walls remain approximately stationary in `odom`. Hold still for 60
 seconds and inspect the run's `raw_scan_audit.csv` and
-`canonical_scan_health.csv`. These files determine whether `/scan` contains
+`canonical_scan_health.csv`. Also inspect `scan_tf_timing_audit.csv`,
+`scan_motion_diagnostics.csv`, and, when enabled, `deskew_health.csv`.
+These files determine whether `/scan` contains
 full revolutions or partial sectors; do not infer that from array length alone.
+
+Run controlled comparisons with propellers removed, the vehicle disarmed, and
+the LiDAR level: 60 seconds stationary, then approximately 30, 60, and 90
+degrees/second yaw, followed by a stop. Compare both live scan stability and
+persistent map quality. A live scan returning to the wall after stopping does
+not repair scans already inserted incorrectly into the map.
 
 For stationary RF2O validation, hold still for 60 seconds. Initial screening
 limits are total XY drift below 0.10 m, total yaw drift below 2 degrees, no
