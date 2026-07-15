@@ -7,7 +7,6 @@ ROS_WS_DEFAULT="/home/pi5drone/drone_ros_ws"
 ROS_WS="${ROS_WS:-${ROS_WS_DEFAULT}}"
 ROS_SETUP="${ROS_SETUP:-${ROS_WS}/install/setup.bash}"
 LIDAR_MODE="${LIDAR_MODE:-mapping_only}"
-USE_SIM_TIME="${USE_SIM_TIME:-false}"
 START_LIDAR_PX4_BRIDGE="${START_LIDAR_PX4_BRIDGE:-0}"
 START_RF2O_OBSERVER="${START_RF2O_OBSERVER:-0}"
 START_SLAM_IN_RF2O_VALIDATION="${START_SLAM_IN_RF2O_VALIDATION:-1}"
@@ -28,13 +27,9 @@ SCAN_TOPIC="${SCAN_TOPIC:-/scan}"
 SCAN_AUDIT_DIAGNOSTICS_TOPIC="${SCAN_AUDIT_DIAGNOSTICS_TOPIC:-/scan_stream_audit/diagnostics}"
 RF2O_SCAN_TOPIC="${RF2O_SCAN_TOPIC:-/scan_rf2o}"
 RF2O_SCAN_DIAGNOSTICS_TOPIC="${RF2O_SCAN_DIAGNOSTICS_TOPIC:-/scan_rf2o/diagnostics}"
-DESKEWED_SCAN_TOPIC="${DESKEWED_SCAN_TOPIC:-/scan_deskewed}"
-DESKEW_DIAGNOSTICS_TOPIC="${DESKEW_DIAGNOSTICS_TOPIC:-/scan_deskewed/diagnostics}"
-SELECTED_SCAN_TOPIC="${DESKEWED_SCAN_TOPIC}"
 RF2O_SCAN_BINS="${RF2O_SCAN_BINS:-720}"
 SCAN_AUDIT_WAIT_SEC="${SCAN_AUDIT_WAIT_SEC:-30}"
 CANONICAL_SCAN_WAIT_SEC="${CANONICAL_SCAN_WAIT_SEC:-45}"
-DESKEW_SCAN_WAIT_SEC="${DESKEW_SCAN_WAIT_SEC:-30}"
 RF2O_ODOM_WAIT_SEC="${RF2O_ODOM_WAIT_SEC:-30}"
 RF2O_RAW_ODOM_TOPIC="${RF2O_RAW_ODOM_TOPIC:-/lidar/odom_raw}"
 LIDAR_ODOM_TOPIC="${LIDAR_ODOM_TOPIC:-/lidar/odom}"
@@ -74,7 +69,6 @@ SCAN_AUDIT_LOG="${LOG_DIR}/scan_stream_audit.log"
 RAW_SCAN_AUDIT_CSV="${LOG_DIR}/raw_scan_audit.csv"
 CANONICALIZER_LOG="${LOG_DIR}/canonicalizer.log"
 CANONICAL_SCAN_HEALTH_CSV="${LOG_DIR}/canonical_scan_health.csv"
-DESKEWER_LOG="${LOG_DIR}/laser_scan_deskewer.log"
 RF2O_LOG="${LOG_DIR}/rf2o.log"
 LIDAR_ODOM_MONITOR_LOG="${LOG_DIR}/lidar_odom_monitor.log"
 LIDAR_ODOM_HEALTH_CSV="${LOG_DIR}/lidar_odom_health.csv"
@@ -91,8 +85,7 @@ TF_HEALTH_CSV="${LOG_DIR}/tf_health.csv"
 
 COMPONENTS=(
   MAVROS RPLIDAR RAW_SCAN ODOM_FLATTEN STATIC_TF SCAN_AUDIT CANONICALIZER
-  CANONICAL_SCAN TF_CHAIN DESKEWER DESKEWED_SCAN RF2O RF2O_MONITOR
-  SLAM MAP PLANNER PX4_BRIDGE
+  CANONICAL_SCAN RF2O RF2O_MONITOR SLAM MAP PLANNER PX4_BRIDGE
 )
 PIDS=()
 NAMES=()
@@ -147,28 +140,6 @@ require_cmd() {
   fi
 }
 
-validate_clock_configuration() {
-  case "${USE_SIM_TIME}" in
-    true|false) ;;
-    *) log "ERROR USE_SIM_TIME must be true or false"; return 1 ;;
-  esac
-  if [[ "${USE_SIM_TIME}" == "true" ]]; then
-    if ! timeout 5 ros2 topic echo /clock --once >/dev/null 2>&1; then
-      log "ERROR USE_SIM_TIME=true requires a live /clock publisher"
-      return 1
-    fi
-    local mavros_clock
-    mavros_clock="$(timeout 5 ros2 param get /mavros use_sim_time 2>/dev/null || true)"
-    if ! grep -Eq '(^|[[:space:]])true$' <<<"${mavros_clock}"; then
-      log "ERROR MAVROS is not using simulation time; mixed clock domains are forbidden"
-      return 1
-    fi
-    log "ROS clock mode verified: simulation time with live /clock and MAVROS use_sim_time=true"
-  else
-    log "ROS clock mode verified: system time for the real-vehicle pipeline"
-  fi
-}
-
 publisher_count() {
   local topic="$1"
   local info count
@@ -219,7 +190,7 @@ discover_existing_rplidar() {
 require_no_duplicate_processes() {
   local pattern output
   local patterns=(
-    '[l]aser_scan_stream_audit' '[l]aser_scan_canonicalizer' '[l]aser_scan_deskewer'
+    '[l]aser_scan_stream_audit' '[l]aser_scan_canonicalizer'
     '[r]f2o_laser_odometry_node' '[l]idar_odom_monitor' '[a]sync_slam_toolbox_node'
     '[p]x4_odom_flatten_node' '[l]idar_odom_px4_bridge'
   )
@@ -396,7 +367,6 @@ start_rplidar() {
     set_component_state RAW_SCAN STARTING "deadline=${RPLIDAR_SCAN_WAIT_SEC}s"
     start_process "rplidar_attempt_${attempt}" "${RPLIDAR_LOG}" \
       ros2 run rplidar_ros rplidar_composition --ros-args \
-        -p use_sim_time:="${USE_SIM_TIME}" \
         -p channel_type:=serial \
         -p serial_port:="${RPLIDAR_SERIAL_PORT}" \
         -p serial_baudrate:="${RPLIDAR_BAUDRATE}" \
@@ -468,95 +438,6 @@ wait_for_transform() {
     fi
     sleep 1
   done
-}
-
-verify_tf_topology() {
-  local phase="$1"
-  if python3 - "${phase}" "${ODOM_PARENT_FRAME}" "${BASE_FRAME}" "${LIDAR_FRAME}" <<'PY'
-import sys
-import time
-
-import rclpy
-from rclpy.node import Node
-from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
-from tf2_msgs.msg import TFMessage
-
-phase, odom_frame, base_frame, laser_frame = sys.argv[1:5]
-frames = {odom_frame, base_frame, laser_frame, "map"}
-edges = set()
-
-rclpy.init()
-node = Node(f"tf_topology_check_{phase}")
-dynamic_qos = QoSProfile(depth=100, reliability=ReliabilityPolicy.RELIABLE)
-static_qos = QoSProfile(
-    depth=100,
-    reliability=ReliabilityPolicy.RELIABLE,
-    durability=DurabilityPolicy.TRANSIENT_LOCAL,
-)
-
-
-def receive(message):
-    for transform in message.transforms:
-        parent = transform.header.frame_id.lstrip("/")
-        child = transform.child_frame_id.lstrip("/")
-        if parent in frames or child in frames:
-            edges.add((parent, child))
-
-
-dynamic_sub = node.create_subscription(TFMessage, "/tf", receive, dynamic_qos)
-static_sub = node.create_subscription(TFMessage, "/tf_static", receive, static_qos)
-deadline = time.monotonic() + 3.0
-while time.monotonic() < deadline:
-    rclpy.spin_once(node, timeout_sec=0.1)
-
-node.destroy_node()
-rclpy.shutdown()
-
-required = {(odom_frame, base_frame), (base_frame, laser_frame)}
-if phase == "post_slam":
-    required.add(("map", odom_frame))
-missing = required - edges
-
-controlled_children = {base_frame, laser_frame}
-if phase == "post_slam":
-    controlled_children.add(odom_frame)
-parents = {
-    child: {parent for parent, candidate in edges if candidate == child}
-    for child in controlled_children
-}
-expected_parents = {base_frame: {odom_frame}, laser_frame: {base_frame}}
-if phase == "post_slam":
-    expected_parents[odom_frame] = {"map"}
-
-wrong_parents = {
-    child: found for child, found in parents.items()
-    if found != expected_parents[child]
-}
-shortcuts = {
-    ("map", base_frame), ("map", laser_frame), (odom_frame, laser_frame)
-} & edges
-if phase == "pre_slam" and any(child == odom_frame for _, child in edges):
-    wrong_parents[odom_frame] = {
-        parent for parent, child in edges if child == odom_frame
-    }
-
-if missing or wrong_parents or shortcuts:
-    print(
-        f"TF topology invalid: phase={phase} missing={sorted(missing)} "
-        f"wrong_parents={wrong_parents} shortcuts={sorted(shortcuts)} "
-        f"observed={sorted(edges)}",
-        file=sys.stderr,
-    )
-    sys.exit(1)
-
-print(f"TF topology valid: phase={phase} edges={sorted(required)}")
-PY
-  then
-    set_component_state TF_CHAIN READY "phase=${phase} single_path"
-    return 0
-  fi
-  set_component_state TF_CHAIN FAILED "phase=${phase} duplicate_or_missing_path"
-  return 1
 }
 
 wait_for_diagnostic_true_alive() {
@@ -723,7 +604,7 @@ start_odom_and_tf() {
   set_component_state ODOM_FLATTEN STARTING
   start_process odom_flatten "${ODOM_FLATTEN_LOG}" \
     ros2 run odom_flatten px4_odom_flatten_node --ros-args \
-      -p use_sim_time:="${USE_SIM_TIME}" -p odom_topic:="${ODOM_TOPIC}" \
+      -p use_sim_time:=false -p odom_topic:="${ODOM_TOPIC}" \
       -p parent_frame:="${ODOM_PARENT_FRAME}" -p child_frame:="${ODOM_CHILD_FRAME}"
   ODOM_FLATTEN_PID="${LAST_STARTED_PID}"
 
@@ -733,7 +614,7 @@ start_odom_and_tf() {
       --x "${LIDAR_X}" --y "${LIDAR_Y}" --z "${LIDAR_Z}" \
       --roll "${LIDAR_ROLL}" --pitch "${LIDAR_PITCH}" --yaw "${LIDAR_YAW}" \
       --frame-id "${BASE_FRAME}" --child-frame-id "${LIDAR_FRAME}" \
-      --ros-args -p use_sim_time:="${USE_SIM_TIME}"
+      --ros-args -p use_sim_time:=false
   STATIC_TF_PID="${LAST_STARTED_PID}"
 
   if wait_for_transform "${ODOM_PARENT_FRAME}" "${ODOM_CHILD_FRAME}" \
@@ -756,7 +637,6 @@ start_scan_audit() {
   set_component_state SCAN_AUDIT STARTING "window=20"
   start_process scan_stream_audit "${SCAN_AUDIT_LOG}" \
     ros2 run obs_avoid laser_scan_stream_audit --ros-args \
-      -p use_sim_time:="${USE_SIM_TIME}" \
       -p input_topic:="${SCAN_TOPIC}" \
       -p diagnostics_topic:="${SCAN_AUDIT_DIAGNOSTICS_TOPIC}" \
       -p csv_path:="${RAW_SCAN_AUDIT_CSV}" \
@@ -784,7 +664,6 @@ start_canonicalizer() {
   set_component_state CANONICAL_SCAN STARTING "bins=${RF2O_SCAN_BINS}"
   start_process canonicalizer "${CANONICALIZER_LOG}" \
     ros2 run obs_avoid laser_scan_canonicalizer --ros-args \
-      -p use_sim_time:="${USE_SIM_TIME}" \
       -p input_topic:="${SCAN_TOPIC}" -p output_topic:="${RF2O_SCAN_TOPIC}" \
       -p output_frame:="${LIDAR_FRAME}" -p processing_mode:=auto \
       -p output_bins:="${RF2O_SCAN_BINS}" \
@@ -819,47 +698,12 @@ start_canonicalizer() {
   set_component_state CANONICAL_SCAN READY "five_coherent_scans coverage=${coverage}"
 }
 
-start_deskewer() {
-  require_publisher_count "${DESKEWED_SCAN_TOPIC}" 0
-  set_component_state DESKEWER STARTING "input_stamp=end reference=midpoint"
-  set_component_state DESKEWED_SCAN STARTING "bins=${RF2O_SCAN_BINS}"
-  start_process laser_scan_deskewer "${DESKEWER_LOG}" \
-    ros2 run obs_avoid laser_scan_deskewer --ros-args \
-      -p use_sim_time:="${USE_SIM_TIME}" \
-      -p input_topic:="${RF2O_SCAN_TOPIC}" -p output_topic:="${DESKEWED_SCAN_TOPIC}" \
-      -p output_frame:="${LIDAR_FRAME}" -p odom_frame:="${ODOM_PARENT_FRAME}" \
-      -p diagnostics_topic:="${DESKEW_DIAGNOSTICS_TOPIC}" \
-      -p input_stamp_is_end:=true -p pose_sample_stride:=24 \
-      -p tf_lookup_timeout_sec:=0.03 -p output_bins:="${RF2O_SCAN_BINS}" \
-      -p output_angle_min:=-3.141592653589793 -p output_angle_max:=3.141592653589793 \
-      -p diagnostics_rate_hz:=1.0
-  DESKEWER_PID="${LAST_STARTED_PID}"
-  if ! validate_message_series scan "${DESKEWED_SCAN_TOPIC}" 5 "${RF2O_SCAN_BINS}" \
-    "${DESKEWER_PID}" "${DESKEW_SCAN_WAIT_SEC}"; then
-    set_component_state DESKEWER FAILED "no_five_coherent_outputs"
-    set_component_state DESKEWED_SCAN FAILED "validation_failed"
-    tail -n 40 "${DESKEWER_LOG}" 2>/dev/null || true
-    return 1
-  fi
-  require_publisher_count "${DESKEWED_SCAN_TOPIC}" 1
-  if ! wait_for_diagnostic_true_alive "${DESKEW_DIAGNOSTICS_TOPIC}" published \
-    "${DESKEWER_PID}" 10 "${DESKEWER_LOG}"; then
-    set_component_state DESKEWER FAILED "diagnostics_not_healthy"
-    set_component_state DESKEWED_SCAN FAILED "diagnostics_not_healthy"
-    return 1
-  fi
-  set_component_state DESKEWER READY "per_ray_tf midpoint_reference"
-  set_component_state DESKEWED_SCAN READY "five_coherent_scans"
-}
-
 start_rf2o_stack() {
   require_publisher_count "${LIDAR_ODOM_TOPIC}" 0
   set_component_state RF2O_MONITOR STARTING "before_rf2o"
   start_process lidar_odom_monitor "${LIDAR_ODOM_MONITOR_LOG}" \
     ros2 run obs_avoid lidar_odom_monitor --ros-args \
       --params-file "${LIDAR_MONITOR_PARAMS_FILE}" \
-      -p use_sim_time:="${USE_SIM_TIME}" \
-      -p scan_topic:="${SELECTED_SCAN_TOPIC}" \
       -p health_csv_path:="${LIDAR_ODOM_HEALTH_CSV}"
   RF2O_MONITOR_PID="${LAST_STARTED_PID}"
   if wait_for_topic_message_alive "${LIDAR_ODOM_DIAGNOSTICS_TOPIC}" \
@@ -871,12 +715,10 @@ start_rf2o_stack() {
   fi
 
   require_publisher_count "${RF2O_RAW_ODOM_TOPIC}" 0
-  set_component_state RF2O STARTING "scan=${SELECTED_SCAN_TOPIC}"
+  set_component_state RF2O STARTING "scan=${RF2O_SCAN_TOPIC}"
   start_process rf2o "${RF2O_LOG}" \
     ros2 run rf2o_laser_odometry rf2o_laser_odometry_node --ros-args \
-      -r __node:=rf2o_laser_odometry --params-file "${RF2O_PARAMS_FILE}" \
-      -p use_sim_time:="${USE_SIM_TIME}" \
-      -p laser_scan_topic:="${SELECTED_SCAN_TOPIC}" -p publish_tf:=false
+      -r __node:=rf2o_laser_odometry --params-file "${RF2O_PARAMS_FILE}"
   RF2O_PID="${LAST_STARTED_PID}"
   if validate_message_series odom "${RF2O_RAW_ODOM_TOPIC}" 5 0 \
     "${RF2O_PID}" "${RF2O_ODOM_WAIT_SEC}"; then
@@ -903,11 +745,11 @@ start_rf2o_stack() {
 
 start_slam() {
   require_publisher_count /map 0
-  set_component_state SLAM STARTING "scan=${SELECTED_SCAN_TOPIC} odom_prior=${ODOM_PARENT_FRAME}"
+  set_component_state SLAM STARTING "scan=${RF2O_SCAN_TOPIC} odom=${ODOM_PARENT_FRAME}"
   set_component_state MAP STARTING "deadline=${WAIT_TIMEOUT_SEC}s"
   start_process slam_toolbox "${SLAM_LOG}" \
     ros2 launch slam_toolbox online_async_launch.py \
-      slam_params_file:="${SLAM_PARAMS_FILE}" use_sim_time:="${USE_SIM_TIME}"
+      slam_params_file:="${SLAM_PARAMS_FILE}" use_sim_time:=false
   SLAM_PID="${LAST_STARTED_PID}"
   if wait_for_topic_message_alive /map "${SLAM_PID}" "${WAIT_TIMEOUT_SEC}" "${SLAM_LOG}"; then
     require_publisher_count /map 1
@@ -926,25 +768,13 @@ start_slam() {
 
   local node_info
   node_info="$(timeout 5 ros2 node info /slam_toolbox 2>/dev/null || true)"
-  if ! grep -qF "${SELECTED_SCAN_TOPIC}:" <<<"${node_info}" ||
+  if ! grep -qF "${RF2O_SCAN_TOPIC}:" <<<"${node_info}" ||
     grep -Eq '^[[:space:]]*/scan:' <<<"${node_info}"; then
     set_component_state SLAM FAILED "incorrect_scan_subscription"
-    log "ERROR slam_toolbox is not exclusively subscribed to ${SELECTED_SCAN_TOPIC}"
+    log "ERROR slam_toolbox is not exclusively subscribed to ${RF2O_SCAN_TOPIC}"
     printf '%s\n' "${node_info}"
     return 1
   fi
-  local odom_parameter base_parameter scan_matching_parameter
-  odom_parameter="$(timeout 5 ros2 param get /slam_toolbox odom_frame 2>/dev/null || true)"
-  base_parameter="$(timeout 5 ros2 param get /slam_toolbox base_frame 2>/dev/null || true)"
-  scan_matching_parameter="$(timeout 5 ros2 param get /slam_toolbox use_scan_matching 2>/dev/null || true)"
-  if ! grep -Fq "${ODOM_PARENT_FRAME}" <<<"${odom_parameter}" ||
-    ! grep -Fq "${BASE_FRAME}" <<<"${base_parameter}" ||
-    ! grep -Eq '(^|[[:space:]])true$' <<<"${scan_matching_parameter}"; then
-    set_component_state SLAM FAILED "motion_prior_configuration_invalid"
-    log "ERROR slam_toolbox motion prior is not ${ODOM_PARENT_FRAME} -> ${BASE_FRAME} with scan matching"
-    return 1
-  fi
-  verify_tf_topology post_slam
 }
 
 start_planner() {
@@ -955,8 +785,8 @@ start_planner() {
   set_component_state PLANNER STARTING "after_map"
   start_process planner "${PLANNER_LOG}" \
     ros2 run obs_avoid local_planner_mode_a --ros-args \
-      --params-file "${PLANNER_PARAMS_FILE}" -p use_sim_time:="${USE_SIM_TIME}" \
-      -r /scan_horizontal:="${SELECTED_SCAN_TOPIC}"
+      --params-file "${PLANNER_PARAMS_FILE}" -p use_sim_time:=false \
+      -r /scan_horizontal:="${RF2O_SCAN_TOPIC}"
   PLANNER_PID="${LAST_STARTED_PID}"
   sleep 2
   if kill -0 "${PLANNER_PID}" 2>/dev/null; then
@@ -977,7 +807,6 @@ start_px4_bridge() {
   start_process lidar_odom_px4_bridge "${PX4_BRIDGE_LOG}" \
     ros2 run obs_avoid lidar_odom_px4_bridge --ros-args \
       --params-file "${LIDAR_MONITOR_PARAMS_FILE}" \
-      -p use_sim_time:="${USE_SIM_TIME}" -p scan_topic:="${SELECTED_SCAN_TOPIC}" \
       -p health_csv_path:="${PX4_BRIDGE_HEALTH_CSV}"
   PX4_BRIDGE_PID="${LAST_STARTED_PID}"
   if wait_for_topic_message_alive "${LIDAR_PX4_DIAGNOSTICS_TOPIC}" \
@@ -995,8 +824,7 @@ start_diagnostic_bag() {
   fi
   start_process lidar_diagnostic_bag "${ROSBAG_LOG}" \
     ros2 bag record -o "${LOG_DIR}/lidar_diagnostic_bag" \
-      "${SCAN_TOPIC}" "${RF2O_SCAN_TOPIC}" "${DESKEWED_SCAN_TOPIC}" \
-      "${SCAN_AUDIT_DIAGNOSTICS_TOPIC}" "${DESKEW_DIAGNOSTICS_TOPIC}" \
+      "${SCAN_TOPIC}" "${RF2O_SCAN_TOPIC}" "${SCAN_AUDIT_DIAGNOSTICS_TOPIC}" \
       "${RF2O_SCAN_DIAGNOSTICS_TOPIC}" "${RF2O_RAW_ODOM_TOPIC}" "${LIDAR_ODOM_TOPIC}" \
       "${LIDAR_ODOM_DIAGNOSTICS_TOPIC}" "${ODOM_TOPIC}" /mavros/imu/data /map /tf /tf_static
 }
@@ -1004,20 +832,18 @@ start_diagnostic_bag() {
 capture_runtime_snapshot() {
   {
     printf '\n[%s] runtime snapshot\n' "$(timestamp)"
-    printf 'lidar_mode=%s\nuse_sim_time=%s\nraw_scan_topic=%s\nrf2o_scan_topic=%s\nselected_scan_topic=%s\ncanonical_scan_bins=%s\n' \
-      "${LIDAR_MODE}" "${USE_SIM_TIME}" "${SCAN_TOPIC}" "${RF2O_SCAN_TOPIC}" \
-      "${SELECTED_SCAN_TOPIC}" "${RF2O_SCAN_BINS}"
+    printf 'lidar_mode=%s\nraw_scan_topic=%s\nrf2o_scan_topic=%s\ncanonical_scan_bins=%s\n' \
+      "${LIDAR_MODE}" "${SCAN_TOPIC}" "${RF2O_SCAN_TOPIC}" "${RF2O_SCAN_BINS}"
     printf '\n-- component states --\n'
     local component
     for component in "${COMPONENTS[@]}"; do
       printf '%s_STATE=%s\n' "${component}" "${COMPONENT_STATE[${component}]}"
     done
     printf '\n-- process list --\n'
-    pgrep -af 'rplidar|scan_stream_audit|canonicalizer|deskewer|rf2o|slam_toolbox|odom_flatten|lidar_odom' || true
+    pgrep -af 'rplidar|scan_stream_audit|canonicalizer|rf2o|slam_toolbox|odom_flatten|lidar_odom' || true
     printf '\n-- topic endpoints --\n'
     ros2 topic info "${SCAN_TOPIC}" -v || true
     ros2 topic info "${RF2O_SCAN_TOPIC}" -v || true
-    ros2 topic info "${DESKEWED_SCAN_TOPIC}" -v || true
     ros2 topic info "${RF2O_RAW_ODOM_TOPIC}" -v || true
     ros2 topic info "${LIDAR_ODOM_TOPIC}" -v || true
     ros2 topic info /map -v || true
@@ -1025,8 +851,6 @@ capture_runtime_snapshot() {
     timeout 5 ros2 topic echo "${SCAN_AUDIT_DIAGNOSTICS_TOPIC}" --once || true
     printf '\n-- canonical scan --\n'
     timeout 5 ros2 topic echo "${RF2O_SCAN_DIAGNOSTICS_TOPIC}" --once || true
-    printf '\n-- deskewed scan --\n'
-    timeout 5 ros2 topic echo "${DESKEW_DIAGNOSTICS_TOPIC}" --once || true
     printf '\n-- RF2O monitor --\n'
     timeout 5 ros2 topic echo "${LIDAR_ODOM_DIAGNOSTICS_TOPIC}" --once || true
     printf '\n-- SLAM node --\n'
@@ -1148,7 +972,6 @@ start_command_console() {
   local console_cmd=(
     ros2 run obs_avoid real_slam_command_console --ros-args
     -p setpoint_hz:="${SETPOINT_HZ}"
-    -p use_sim_time:="${USE_SIM_TIME}"
     -p offboard_warmup_sec:="${OFFBOARD_WARMUP_SEC}"
     -p odom_timeout_sec:="${ODOM_TIMEOUT_SEC}"
     -p scan_timeout_sec:="${SCAN_TIMEOUT_SEC}"
@@ -1166,7 +989,6 @@ main() {
   mkdir -p "${LOG_DIR}"
   touch "${MASTER_LOG}" "${SYSTEM_SNAPSHOT}" "${RPLIDAR_LOG}" "${SCAN_AUDIT_LOG}" \
     "${RAW_SCAN_AUDIT_CSV}" "${CANONICALIZER_LOG}" "${CANONICAL_SCAN_HEALTH_CSV}" \
-    "${DESKEWER_LOG}" \
     "${RF2O_LOG}" "${LIDAR_ODOM_MONITOR_LOG}" "${LIDAR_ODOM_HEALTH_CSV}" \
     "${SLAM_LOG}" "${ODOM_FLATTEN_LOG}" "${STATIC_TF_LOG}" "${PLANNER_LOG}" \
     "${CONSOLE_LOG}" "${PX4_BRIDGE_LOG}" "${PX4_BRIDGE_HEALTH_CSV}" "${ROSBAG_LOG}"
@@ -1212,15 +1034,13 @@ main() {
     printf 'workspace=%s\nlidar_mode=%s\ngit_branch=%s\ngit_commit=%s\n' \
       "${ROS_WS}" "${LIDAR_MODE}" "$(git -C "${ROS_WS}" branch --show-current)" \
       "$(git -C "${ROS_WS}" rev-parse HEAD)"
-    printf 'start_lidar_px4_bridge=%s\npx4_output_topic=%s\nuse_sim_time=%s\nselected_scan_topic=%s\n' \
-      "${START_LIDAR_PX4_BRIDGE}" "${PX4_ODOMETRY_OUT_TOPIC}" \
-      "${USE_SIM_TIME}" "${SELECTED_SCAN_TOPIC}"
+    printf 'start_lidar_px4_bridge=%s\npx4_output_topic=%s\n' \
+      "${START_LIDAR_PX4_BRIDGE}" "${PX4_ODOMETRY_OUT_TOPIC}"
   } >>"${SYSTEM_SNAPSHOT}"
   record_device rplidar "${RPLIDAR_SERIAL_PORT}"
 
   log "Mode=${LIDAR_MODE}; existing MAVROS and AprilTag services will not be managed"
   wait_for_mavros_connection
-  validate_clock_configuration
   require_no_duplicate_processes
   if [[ "${LIDAR_MODE}" != "px4_fusion" ]]; then
     require_publisher_count "${PX4_ODOMETRY_OUT_TOPIC}" 0
@@ -1234,20 +1054,11 @@ main() {
   start_diagnostic_bag
   start_rplidar
   start_odom_and_tf
-  if ! verify_tf_topology pre_slam; then
-    log "ERROR required single TF path is invalid before SLAM startup"
-    exit 1
-  fi
   start_scan_audit
   if ! start_canonicalizer; then
     log "ERROR coherent canonical scans are unavailable; SLAM and RF2O will not start"
     exit 1
   fi
-  if ! start_deskewer; then
-    log "ERROR deskewed scan is unavailable; SLAM and RF2O will not start"
-    exit 1
-  fi
-  log "Selected SLAM/RF2O scan topic: ${SELECTED_SCAN_TOPIC}"
 
   if [[ "${LIDAR_MODE}" == "mapping_only" ]]; then
     if start_slam; then

@@ -96,19 +96,18 @@ private:
     }
 
     geometry_msgs::msg::TransformStamped tf_msg;
-    // Preserve measurement time so TF can interpolate the vehicle pose at each
-    // LiDAR ray timestamp. All real-pipeline nodes use the system ROS clock.
+    // Preserve measurement time so TF can interpolate the vehicle pose at the
+    // timestamp carried by each LiDAR scan.
     tf_msg.header.stamp = msg->header.stamp;
 
     // Force frames as requested
     tf_msg.header.frame_id = parent_frame_;
-    tf_msg.child_frame_id = child_frame_;
+    tf_msg.child_frame_id  = child_frame_;
 
     const auto & orientation = msg->pose.pose.orientation;
 
     if (!std::isfinite(orientation.x) || !std::isfinite(orientation.y) ||
-      !std::isfinite(orientation.z) || !std::isfinite(orientation.w))
-    {
+        !std::isfinite(orientation.z) || !std::isfinite(orientation.w)) {
       RCLCPP_WARN_THROTTLE(
         this->get_logger(), *this->get_clock(), 1000,
         "Dropping odom with non-finite orientation from %s", odom_topic_.c_str());
