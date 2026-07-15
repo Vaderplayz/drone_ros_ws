@@ -278,6 +278,38 @@ wait_for_topic_message_alive() {
   done
 }
 
+wait_for_map_message_alive() {
+  local topic="$1"
+  local pid="$2"
+  local timeout_sec="$3"
+  local logfile="$4"
+  local start_ts elapsed last_progress=-1
+  start_ts="$(date +%s)"
+  while true; do
+    if ! kill -0 "${pid}" 2>/dev/null; then
+      log "ERROR process pid=${pid} exited before publishing ${topic}"
+      tail -n 40 "${logfile}" 2>/dev/null || true
+      return 10
+    fi
+    if timeout 3 ros2 topic echo "${topic}" --once \
+      --qos-reliability reliable --qos-durability transient_local >/dev/null 2>&1; then
+      log "Map message received: ${topic}"
+      return 0
+    fi
+    elapsed=$(( $(date +%s) - start_ts ))
+    if (( elapsed >= timeout_sec )); then
+      log "ERROR no ${topic} map message after ${timeout_sec}s; process pid=${pid} remains alive"
+      tail -n 40 "${logfile}" 2>/dev/null || true
+      return 12
+    fi
+    if (( elapsed / 5 > last_progress )); then
+      last_progress=$((elapsed / 5))
+      log "Waiting for ${topic} map message; elapsed=${elapsed}s deadline=${timeout_sec}s pid=${pid}"
+    fi
+    sleep 1
+  done
+}
+
 rplidar_failure_in_log() {
   grep -Eqi \
     'fatal|cannot open|failed to open|permission denied|device busy|SDK error|bind failed|serial.*error' \
@@ -751,7 +783,7 @@ start_slam() {
     ros2 launch slam_toolbox online_async_launch.py \
       slam_params_file:="${SLAM_PARAMS_FILE}" use_sim_time:=false
   SLAM_PID="${LAST_STARTED_PID}"
-  if wait_for_topic_message_alive /map "${SLAM_PID}" "${WAIT_TIMEOUT_SEC}" "${SLAM_LOG}"; then
+  if wait_for_map_message_alive /map "${SLAM_PID}" "${WAIT_TIMEOUT_SEC}" "${SLAM_LOG}"; then
     require_publisher_count /map 1
     set_component_state SLAM READY "canonical_scan_subscription"
     set_component_state MAP READY "messages_available"
