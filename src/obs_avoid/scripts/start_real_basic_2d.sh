@@ -37,6 +37,7 @@ LIDAR_ODOM_TOPIC="${LIDAR_ODOM_TOPIC:-/lidar/odom}"
 LIDAR_ODOM_DIAGNOSTICS_TOPIC="${LIDAR_ODOM_DIAGNOSTICS_TOPIC:-/lidar_odom/diagnostics}"
 PX4_ODOMETRY_OUT_TOPIC="${PX4_ODOMETRY_OUT_TOPIC:-/mavros/odometry/out}"
 LIDAR_PX4_DIAGNOSTICS_TOPIC="${LIDAR_PX4_DIAGNOSTICS_TOPIC:-/lidar_odom_px4_bridge/diagnostics}"
+PX4_BRIDGE_WAIT_SEC="${PX4_BRIDGE_WAIT_SEC:-60}"
 
 ODOM_TOPIC="${ODOM_TOPIC:-/mavros/local_position/odom}"
 ODOM_PARENT_FRAME="${ODOM_PARENT_FRAME:-odom}"
@@ -111,6 +112,21 @@ timestamp() {
 
 log() {
   printf '[%s] %s\n' "$(timestamp)" "$*"
+}
+
+log_ready_banner() {
+  local green reset
+  green=$'\033[1;32m'
+  reset=$'\033[0m'
+  printf '\n%s' "${green}"
+  printf '######################################################################\n'
+  printf '#                                                                    #\n'
+  printf '#                         ALL SYSTEM READY                           #\n'
+  printf '#                                                                    #\n'
+  printf '#          LiDAR / RF2O / SLAM pipeline startup is complete          #\n'
+  printf '#                                                                    #\n'
+  printf '######################################################################\n'
+  printf '%s\n' "${reset}"
 }
 
 set_component_state() {
@@ -257,6 +273,7 @@ wait_for_topic_message_alive() {
   local timeout_sec="$3"
   local logfile="$4"
   local reliability="${5:-best_effort}"
+  local timeout_level="${6:-ERROR}"
   local start_ts elapsed last_progress=-1
   start_ts="$(date +%s)"
   while true; do
@@ -272,7 +289,7 @@ wait_for_topic_message_alive() {
     fi
     elapsed=$(( $(date +%s) - start_ts ))
     if (( elapsed >= timeout_sec )); then
-      log "ERROR no ${topic} message after ${timeout_sec}s; process pid=${pid} remains alive"
+      log "${timeout_level} no ${topic} message after ${timeout_sec}s; process pid=${pid} remains alive"
       tail -n 40 "${logfile}" 2>/dev/null || true
       return 12
     fi
@@ -852,12 +869,23 @@ start_px4_bridge() {
       --params-file "${LIDAR_MONITOR_PARAMS_FILE}" \
       -p health_csv_path:="${PX4_BRIDGE_HEALTH_CSV}" -p use_sim_time:="${USE_SIM_TIME}"
   PX4_BRIDGE_PID="${LAST_STARTED_PID}"
-  if wait_for_topic_message_alive "${LIDAR_PX4_DIAGNOSTICS_TOPIC}" \
-    "${PX4_BRIDGE_PID}" 20 "${PX4_BRIDGE_LOG}" reliable; then
-    set_component_state PX4_BRIDGE DEGRADED "bridge_gate_active_pending_alignment"
+  if wait_for_topic_message_alive "${PX4_ODOMETRY_OUT_TOPIC}" \
+    "${PX4_BRIDGE_PID}" "${PX4_BRIDGE_WAIT_SEC}" "${PX4_BRIDGE_LOG}" reliable WARNING; then
+    set_component_state PX4_BRIDGE READY "publishing=${PX4_ODOMETRY_OUT_TOPIC}"
   else
+    local bridge_wait_status=$?
+    if [[ "${bridge_wait_status}" -eq 12 ]] && kill -0 "${PX4_BRIDGE_PID}" 2>/dev/null; then
+      if timeout 3 ros2 topic echo "${LIDAR_PX4_DIAGNOSTICS_TOPIC}" --once \
+        --qos-reliability reliable >/dev/null 2>&1; then
+        set_component_state PX4_BRIDGE DEGRADED "diagnostics_active_no_px4_output_before_deadline"
+      else
+        set_component_state PX4_BRIDGE DEGRADED "process_alive_no_px4_output_before_deadline"
+      fi
+      log "WARNING PX4 bridge did not publish ${PX4_ODOMETRY_OUT_TOPIC} within ${PX4_BRIDGE_WAIT_SEC}s; continuing with bridge process alive"
+      return 0
+    fi
     set_component_state PX4_BRIDGE FAILED "process_or_diagnostics_failure"
-    return 1
+    return "${bridge_wait_status}"
   fi
 }
 
@@ -1086,8 +1114,8 @@ main() {
       "$(git -C "${ROS_WS}" rev-parse HEAD)"
     printf 'use_sim_time=%s\nenable_scan_deskew=%s\ndeskew_fixed_frame=%s\ndeskew_stamp_policy=%s\n' \
       "${USE_SIM_TIME}" "${ENABLE_SCAN_DESKEW}" "${DESKEW_FIXED_FRAME}" "${DESKEW_STAMP_POLICY}"
-    printf 'start_lidar_px4_bridge=%s\npx4_output_topic=%s\n' \
-      "${START_LIDAR_PX4_BRIDGE}" "${PX4_ODOMETRY_OUT_TOPIC}"
+    printf 'start_lidar_px4_bridge=%s\npx4_output_topic=%s\npx4_bridge_wait_sec=%s\n' \
+      "${START_LIDAR_PX4_BRIDGE}" "${PX4_ODOMETRY_OUT_TOPIC}" "${PX4_BRIDGE_WAIT_SEC}"
   } >>"${SYSTEM_SNAPSHOT}"
   record_device rplidar "${RPLIDAR_SERIAL_PORT}"
 
@@ -1152,6 +1180,7 @@ main() {
   PROCESS_MONITOR_PID="$!"
   start_command_console
 
+  log_ready_banner
   log "Pipeline startup complete. No arm, mode, movement, or PX4 parameter command was sent."
   log "Runtime logs: ${LOG_DIR}"
   if [[ "${LIDAR_MODE}" != "px4_fusion" ]]; then
