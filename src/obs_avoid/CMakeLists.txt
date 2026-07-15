@@ -12,6 +12,7 @@ find_package(geometry_msgs REQUIRED)
 find_package(tf2_msgs REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
+find_package(tf2_geometry_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(diagnostic_msgs REQUIRED)
@@ -160,6 +161,18 @@ target_link_libraries(laser_scan_stream_audit PUBLIC
   ${diagnostic_msgs_TARGETS}
 )
 install(TARGETS laser_scan_stream_audit DESTINATION lib/${PROJECT_NAME})
+
+add_executable(laser_scan_deskewer src/laser_scan_deskewer.cpp)
+target_link_libraries(laser_scan_deskewer PUBLIC
+  rclcpp::rclcpp
+  ${sensor_msgs_TARGETS}
+  sensor_msgs::sensor_msgs_library
+  ${diagnostic_msgs_TARGETS}
+  tf2::tf2
+  tf2_ros::tf2_ros
+  ${tf2_geometry_msgs_TARGETS}
+)
+install(TARGETS laser_scan_deskewer DESTINATION lib/${PROJECT_NAME})
 
 add_executable(lidar_odom_px4_bridge src/lidar_odom_px4_bridge.cpp)
 target_link_libraries(lidar_odom_px4_bridge PUBLIC
