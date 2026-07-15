@@ -18,10 +18,11 @@ WAIT_TIMEOUT_SEC="${WAIT_TIMEOUT_SEC:-60}"
 RPLIDAR_START_RETRIES=2
 REUSE_EXISTING_RPLIDAR="${REUSE_EXISTING_RPLIDAR:-1}"
 RPLIDAR_SCAN_WAIT_SEC="${RPLIDAR_SCAN_WAIT_SEC:-60}"
-RPLIDAR_RETRY_DELAY_SEC="${RPLIDAR_RETRY_DELAY_SEC:-2}"
+RPLIDAR_RETRY_DELAY_SEC="${RPLIDAR_RETRY_DELAY_SEC:-3}"
 PROCESS_STOP_TIMEOUT_SEC="${PROCESS_STOP_TIMEOUT_SEC:-5}"
 RPLIDAR_SERIAL_PORT="${RPLIDAR_SERIAL_PORT:-/dev/ttyUSB0}"
 RPLIDAR_BAUDRATE="${RPLIDAR_BAUDRATE:-115200}"
+RPLIDAR_SCAN_MODE="${RPLIDAR_SCAN_MODE:-Standard}"
 RPLIDAR_FRAME_ID="${RPLIDAR_FRAME_ID:-laser_frame}"
 RPLIDAR_INVERTED="${RPLIDAR_INVERTED:-false}"
 RPLIDAR_ANGLE_COMPENSATE="${RPLIDAR_ANGLE_COMPENSATE:-true}"
@@ -70,6 +71,7 @@ SCAN_TIMEOUT_SEC="${SCAN_TIMEOUT_SEC:-0.30}"
 PLANNER_TIMEOUT_SEC="${PLANNER_TIMEOUT_SEC:-0.30}"
 
 RUN_STAMP="$(date +%Y%m%d_%H%M%S)"
+LAUNCH_OWNER_ID="real_slam_${RUN_STAMP}_$$_${RANDOM}"
 LOG_DIR="${ROS_WS}/runtime_logs/real_slam_${RUN_STAMP}"
 MASTER_LOG="${LOG_DIR}/master.log"
 SYSTEM_SNAPSHOT="${LOG_DIR}/system_snapshot.txt"
@@ -115,12 +117,16 @@ COMPONENTS=(
 )
 PIDS=()
 NAMES=()
+TOKENS=()
 LAST_STARTED_PID=""
 EXISTING_RPLIDAR_PID=""
 CONSOLE_PID=""
+CONSOLE_TOKEN=""
 PROCESS_MONITOR_PID=""
 HEALTH_MONITOR_PID=""
 TF_MONITOR_PID=""
+SNAPSHOT_PID=""
+RPLIDAR_PROBE_TOKEN=""
 SHUTDOWN_REASON="normal exit"
 LAUNCH_START_EPOCH="$(date +%s)"
 declare -A COMPONENT_STATE=()
@@ -249,8 +255,10 @@ record_device() {
 add_process() {
   local pid="$1"
   local name="$2"
+  local token="${3:-}"
   PIDS+=("${pid}")
   NAMES+=("${name}")
+  TOKENS+=("${token}")
   printf '%s\n' "${pid}" >"${LOG_DIR}/${name}.pid"
   log "Started ${name} pid=${pid}"
 }
@@ -258,34 +266,68 @@ add_process() {
 start_process() {
   local name="$1"
   local logfile="$2"
+  local token="${LAUNCH_OWNER_ID}:${name}:${#PIDS[@]}"
   shift 2
-  setsid "$@" >"${logfile}" 2>&1 &
+  setsid env REAL_SLAM_OWNER_TOKEN="${token}" "$@" >"${logfile}" 2>&1 &
   LAST_STARTED_PID="$!"
-  add_process "${LAST_STARTED_PID}" "${name}"
+  add_process "${LAST_STARTED_PID}" "${name}" "${token}"
+}
+
+owned_pids_for_token() {
+  local token="$1"
+  local proc pid environment
+  for proc in /proc/[0-9]*; do
+    pid="${proc##*/}"
+    if [[ -r "${proc}/environ" ]] &&
+      environment="$(dd if="${proc}/environ" status=none 2>/dev/null | tr '\0' '\n')" &&
+      grep -Fxq "REAL_SLAM_OWNER_TOKEN=${token}" <<<"${environment}"; then
+      printf '%s\n' "${pid}"
+    fi
+  done
+}
+
+stop_owned_token() {
+  local token="$1"
+  local label="$2"
+  local deadline
+  local -a owned=()
+  [[ -n "${token}" ]] || return 0
+  mapfile -t owned < <(owned_pids_for_token "${token}")
+  if (( ${#owned[@]} == 0 )); then
+    return 0
+  fi
+  log "Stopping launcher-owned process token only: ${label}; process_count=${#owned[@]}"
+  kill -TERM "${owned[@]}" 2>/dev/null || true
+  deadline=$(( $(date +%s) + PROCESS_STOP_TIMEOUT_SEC ))
+  while true; do
+    mapfile -t owned < <(owned_pids_for_token "${token}")
+    if (( ${#owned[@]} == 0 )); then
+      return 0
+    fi
+    if (( $(date +%s) >= deadline )); then
+      log "Launcher-owned ${label} did not stop after ${PROCESS_STOP_TIMEOUT_SEC}s; sending KILL"
+      kill -KILL "${owned[@]}" 2>/dev/null || true
+      return 0
+    fi
+    sleep 0.1
+  done
 }
 
 stop_process_group() {
   local pid="$1"
-  local target="${pid}"
-  local deadline
-  if kill -0 -- "-${pid}" 2>/dev/null; then
-    target="-${pid}"
-  elif ! kill -0 "${pid}" 2>/dev/null; then
+  local index
+  for index in "${!PIDS[@]}"; do
+    if [[ "${PIDS[$index]}" == "${pid}" ]]; then
+      stop_owned_token "${TOKENS[$index]}" "${NAMES[$index]}"
+      return 0
+    fi
+  done
+  if [[ -n "${CONSOLE_PID}" && "${CONSOLE_PID}" == "${pid}" ]]; then
+    stop_owned_token "${CONSOLE_TOKEN}" "command_console"
     return 0
   fi
-
-  kill -TERM -- "${target}" 2>/dev/null || true
-  deadline=$(( $(date +%s) + PROCESS_STOP_TIMEOUT_SEC ))
-  while kill -0 -- "${target}" 2>/dev/null; do
-    if (( $(date +%s) >= deadline )); then
-      log "Process group pid=${pid} did not stop after ${PROCESS_STOP_TIMEOUT_SEC}s; sending KILL"
-      kill -KILL -- "${target}" 2>/dev/null || true
-      break
-    fi
-    sleep 0.1
-  done
-  if [[ "${target}" == "-${pid}" ]] && kill -0 "${pid}" 2>/dev/null; then
-    kill -KILL "${pid}" 2>/dev/null || true
+  if kill -0 "${pid}" 2>/dev/null; then
+    log "WARNING refusing to stop unowned pid=${pid}; no launcher ownership token"
   fi
 }
 
@@ -323,34 +365,89 @@ wait_for_topic_message_alive() {
 
 rplidar_failure_in_log() {
   grep -Eqi \
-    'fatal|cannot open|failed to open|permission denied|device busy|SDK error|bind failed|serial.*error' \
+    'fatal|cannot open|failed to open|permission denied|device busy|SDK error|bind failed|serial.*error|cannot start scan|80008000|operation timeout' \
     "$1" 2>/dev/null
+}
+
+rplidar_start_scan_timeout_in_log() {
+  grep -Eqi 'cannot start scan|80008000|operation timeout' "$1" 2>/dev/null
 }
 
 wait_for_rplidar_scan() {
   local pid="$1"
   local timeout_sec="$2"
   local logfile="$3"
-  local start_ts elapsed last_progress=-1
+  local start_ts elapsed last_progress=-1 probe_pid probe_status
+  RPLIDAR_PROBE_TOKEN="${LAUNCH_OWNER_ID}:rplidar_scan_probe"
+  env REAL_SLAM_OWNER_TOKEN="${RPLIDAR_PROBE_TOKEN}" \
+    python3 - "${SCAN_TOPIC}" <<'PY' >/dev/null 2>&1 &
+import os
+import sys
+
+import rclpy
+from rclpy.node import Node
+from rclpy.qos import qos_profile_sensor_data
+from sensor_msgs.msg import LaserScan
+
+
+rclpy.init()
+node = Node(f"rplidar_startup_scan_probe_{os.getpid()}")
+received = False
+
+
+def callback(_msg):
+    global received
+    received = True
+    rclpy.shutdown()
+
+
+subscription = node.create_subscription(
+    LaserScan, sys.argv[1], callback, qos_profile_sensor_data)
+try:
+    rclpy.spin(node)
+finally:
+    node.destroy_node()
+    if rclpy.ok():
+        rclpy.shutdown()
+sys.exit(0 if received else 1)
+PY
+  probe_pid="$!"
   start_ts="$(date +%s)"
   while true; do
     if rplidar_failure_in_log "${logfile}"; then
-      log "ERROR RPLIDAR reported a serial/SDK failure"
+      kill "${probe_pid}" 2>/dev/null || true
+      wait "${probe_pid}" 2>/dev/null || true
+      if rplidar_start_scan_timeout_in_log "${logfile}"; then
+        log "ERROR RPLIDAR reported a start-scan SDK timeout (80008000)"
+      else
+        log "ERROR RPLIDAR reported a serial/SDK failure"
+      fi
       tail -n 40 "${logfile}" 2>/dev/null || true
       return 10
     fi
     if ! kill -0 "${pid}" 2>/dev/null; then
+      kill "${probe_pid}" 2>/dev/null || true
+      wait "${probe_pid}" 2>/dev/null || true
       log "ERROR RPLIDAR process pid=${pid} exited before publishing ${SCAN_TOPIC}"
       tail -n 40 "${logfile}" 2>/dev/null || true
       return 11
     fi
-    if timeout 2 ros2 topic echo "${SCAN_TOPIC}" --once \
-      --qos-reliability best_effort >/dev/null 2>&1; then
-      log "Message received: ${SCAN_TOPIC}"
-      return 0
+    if ! kill -0 "${probe_pid}" 2>/dev/null; then
+      set +e
+      wait "${probe_pid}"
+      probe_status=$?
+      set -e
+      if (( probe_status == 0 )); then
+        log "Message received by persistent sensor-data probe: ${SCAN_TOPIC}"
+        return 0
+      fi
+      log "ERROR persistent ${SCAN_TOPIC} probe exited with status=${probe_status}"
+      return 13
     fi
     elapsed=$(( $(date +%s) - start_ts ))
     if (( elapsed >= timeout_sec )); then
+      kill "${probe_pid}" 2>/dev/null || true
+      wait "${probe_pid}" 2>/dev/null || true
       log "ERROR no real ${SCAN_TOPIC} message after ${timeout_sec}s; RPLIDAR pid=${pid} remains alive"
       tail -n 40 "${logfile}" 2>/dev/null || true
       return 12
@@ -413,6 +510,7 @@ start_rplidar() {
         -p channel_type:=serial \
         -p serial_port:="${RPLIDAR_SERIAL_PORT}" \
         -p serial_baudrate:="${RPLIDAR_BAUDRATE}" \
+        -p scan_mode:="${RPLIDAR_SCAN_MODE}" \
         -p frame_id:="${RPLIDAR_FRAME_ID}" \
         -p inverted:="${RPLIDAR_INVERTED}" \
         -p angle_compensate:="${RPLIDAR_ANGLE_COMPENSATE}" \
@@ -429,10 +527,16 @@ start_rplidar() {
     fi
 
     if (( status == 12 )); then
-      set_component_state RPLIDAR FAILED "alive_but_no_scan_after=${RPLIDAR_SCAN_WAIT_SEC}s"
-      set_component_state RAW_SCAN FAILED "no_real_scan_message"
-      log "RPLIDAR remains alive and will not be restarted merely for an initialization timeout"
-      return 1
+      set_component_state RPLIDAR DEGRADED "owned_driver_alive_but_silent attempt=${attempt}"
+      set_component_state RAW_SCAN DEGRADED "no_real_scan_message"
+      stop_process_group "${pid}"
+      wait "${pid}" 2>/dev/null || true
+      if (( attempt < RPLIDAR_START_RETRIES )); then
+        log "Launcher-owned RPLIDAR is alive but silent; using the single permitted restart"
+        sleep "${RPLIDAR_RETRY_DELAY_SEC}"
+        continue
+      fi
+      break
     fi
     if (( status != 10 )); then
       set_component_state RPLIDAR FAILED "unexpected_process_exit"
@@ -448,6 +552,7 @@ start_rplidar() {
   done
   set_component_state RPLIDAR FAILED "driver_failure"
   set_component_state RAW_SCAN FAILED "driver_failure"
+  log "ERROR RPLIDAR failed after the single bounded restart; check scanner motor, USB cable, and 5 V power stability"
   return 1
 }
 
@@ -1041,7 +1146,8 @@ cleanup() {
   trap - EXIT INT TERM
   log "Shutdown reason: ${SHUTDOWN_REASON}; launcher_exit=${exit_code}"
   local helper
-  for helper in "${PROCESS_MONITOR_PID}" "${HEALTH_MONITOR_PID}" "${TF_MONITOR_PID}"; do
+  for helper in "${PROCESS_MONITOR_PID}" "${HEALTH_MONITOR_PID}" "${TF_MONITOR_PID}" \
+    "${SNAPSHOT_PID}"; do
     if [[ -n "${helper}" ]] && kill -0 "${helper}" 2>/dev/null; then
       kill "${helper}" 2>/dev/null
       wait "${helper}" 2>/dev/null
@@ -1051,13 +1157,10 @@ cleanup() {
     stop_process_group "${CONSOLE_PID}"
     wait "${CONSOLE_PID}" 2>/dev/null
   fi
-  local index pid component state
+  stop_owned_token "${RPLIDAR_PROBE_TOKEN}" "rplidar_scan_probe"
+  local index component state
   for ((index=${#PIDS[@]} - 1; index>=0; index--)); do
-    pid="${PIDS[$index]}"
-    if kill -0 -- "-${pid}" 2>/dev/null || kill -0 "${pid}" 2>/dev/null; then
-      log "Stopping launcher-owned process only: ${NAMES[$index]} pid=${pid}"
-      stop_process_group "${pid}"
-    fi
+    stop_owned_token "${TOKENS[$index]}" "${NAMES[$index]}"
   done
   for index in "${!PIDS[@]}"; do
     wait "${PIDS[$index]}" 2>/dev/null || true
@@ -1103,7 +1206,9 @@ start_command_console() {
   if [[ -n "${PRECLAND_MODE}" ]]; then
     console_cmd+=(-p precland_mode:="${PRECLAND_MODE}")
   fi
-  setsid "${console_cmd[@]}" </dev/tty > >(tee -a "${CONSOLE_LOG}") 2>&1 &
+  CONSOLE_TOKEN="${LAUNCH_OWNER_ID}:command_console"
+  setsid env REAL_SLAM_OWNER_TOKEN="${CONSOLE_TOKEN}" \
+    "${console_cmd[@]}" </dev/tty > >(tee -a "${CONSOLE_LOG}") 2>&1 &
   CONSOLE_PID="$!"
   log "Started command console pid=${CONSOLE_PID}; it sends no command until user input"
 }
@@ -1170,6 +1275,9 @@ main() {
     printf 'start_lidar_px4_bridge=%s\npx4_output_topic=%s\nslam_profile=%s\nselected_scan_topic=%s\nuse_deskewed_scan=%s\n' \
       "${START_LIDAR_PX4_BRIDGE}" "${PX4_ODOMETRY_OUT_TOPIC}" "${SLAM_PROFILE}" \
       "${SELECTED_SCAN_TOPIC}" "${USE_DESKEWED_SCAN}"
+    printf 'rplidar_port=%s\nrplidar_baudrate=%s\nrplidar_scan_mode=%s\nrplidar_scan_wait_sec=%s\n' \
+      "${RPLIDAR_SERIAL_PORT}" "${RPLIDAR_BAUDRATE}" "${RPLIDAR_SCAN_MODE}" \
+      "${RPLIDAR_SCAN_WAIT_SEC}"
   } >>"${SYSTEM_SNAPSHOT}"
   record_device rplidar "${RPLIDAR_SERIAL_PORT}"
 
@@ -1230,7 +1338,7 @@ main() {
   start_px4_bridge || true
 
   capture_runtime_snapshot &
-  add_process "$!" runtime_snapshot
+  SNAPSHOT_PID="$!"
   process_health_loop &
   HEALTH_MONITOR_PID="$!"
   tf_health_loop &
@@ -1259,4 +1367,6 @@ main() {
   done
 }
 
-main "$@"
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main "$@"
+fi
