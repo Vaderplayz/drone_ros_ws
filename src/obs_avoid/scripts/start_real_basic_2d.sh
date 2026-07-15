@@ -6,6 +6,7 @@ set -euo pipefail
 ROS_WS_DEFAULT="/home/pi5drone/drone_ros_ws"
 ROS_WS="${ROS_WS:-${ROS_WS_DEFAULT}}"
 ROS_SETUP="${ROS_SETUP:-${ROS_WS}/install/setup.bash}"
+USE_SIM_TIME="${USE_SIM_TIME:-false}"
 LIDAR_MODE="${LIDAR_MODE:-mapping_only}"
 START_LIDAR_PX4_BRIDGE="${START_LIDAR_PX4_BRIDGE:-0}"
 START_RF2O_OBSERVER="${START_RF2O_OBSERVER:-0}"
@@ -48,6 +49,10 @@ LIDAR_Z="${LIDAR_Z:-0.1}"
 LIDAR_ROLL="${LIDAR_ROLL:-0.0}"
 LIDAR_PITCH="${LIDAR_PITCH:-0.0}"
 LIDAR_YAW="${LIDAR_YAW:-0.0}"
+ENABLE_SCAN_DESKEW="${ENABLE_SCAN_DESKEW:-true}"
+DESKEW_FIXED_FRAME="${DESKEW_FIXED_FRAME:-${ODOM_PARENT_FRAME}}"
+DESKEW_STAMP_POLICY="${DESKEW_STAMP_POLICY:-end}"
+DESKEW_TIMEOUT_SEC="${DESKEW_TIMEOUT_SEC:-0.02}"
 
 SLAM_PARAMS_FILE="${SLAM_PARAMS_FILE:-${ROS_WS}/src/obs_avoid/config/slam2d_real_1lidar.yaml}"
 PLANNER_PARAMS_FILE="${PLANNER_PARAMS_FILE:-${ROS_WS}/src/obs_avoid/config/local_planner_mode_a_real_safe.yaml}"
@@ -399,13 +404,14 @@ start_rplidar() {
     set_component_state RAW_SCAN STARTING "deadline=${RPLIDAR_SCAN_WAIT_SEC}s"
     start_process "rplidar_attempt_${attempt}" "${RPLIDAR_LOG}" \
       ros2 run rplidar_ros rplidar_composition --ros-args \
-        -p channel_type:=serial \
-        -p serial_port:="${RPLIDAR_SERIAL_PORT}" \
-        -p serial_baudrate:="${RPLIDAR_BAUDRATE}" \
-        -p frame_id:="${RPLIDAR_FRAME_ID}" \
-        -p inverted:="${RPLIDAR_INVERTED}" \
-        -p angle_compensate:="${RPLIDAR_ANGLE_COMPENSATE}" \
-        -p topic_name:="${SCAN_TOPIC#/}"
+      -p channel_type:=serial \
+      -p serial_port:="${RPLIDAR_SERIAL_PORT}" \
+      -p serial_baudrate:="${RPLIDAR_BAUDRATE}" \
+      -p frame_id:="${RPLIDAR_FRAME_ID}" \
+      -p inverted:="${RPLIDAR_INVERTED}" \
+      -p angle_compensate:="${RPLIDAR_ANGLE_COMPENSATE}" \
+      -p topic_name:="${SCAN_TOPIC#/}" \
+      -p use_sim_time:="${USE_SIM_TIME}"
     pid="${LAST_STARTED_PID}"
 
     if wait_for_rplidar_scan "${pid}" "${RPLIDAR_SCAN_WAIT_SEC}" "${RPLIDAR_LOG}"; then
@@ -636,7 +642,7 @@ start_odom_and_tf() {
   set_component_state ODOM_FLATTEN STARTING
   start_process odom_flatten "${ODOM_FLATTEN_LOG}" \
     ros2 run odom_flatten px4_odom_flatten_node --ros-args \
-      -p use_sim_time:=false -p odom_topic:="${ODOM_TOPIC}" \
+      -p use_sim_time:="${USE_SIM_TIME}" -p odom_topic:="${ODOM_TOPIC}" \
       -p parent_frame:="${ODOM_PARENT_FRAME}" -p child_frame:="${ODOM_CHILD_FRAME}"
   ODOM_FLATTEN_PID="${LAST_STARTED_PID}"
 
@@ -646,7 +652,7 @@ start_odom_and_tf() {
       --x "${LIDAR_X}" --y "${LIDAR_Y}" --z "${LIDAR_Z}" \
       --roll "${LIDAR_ROLL}" --pitch "${LIDAR_PITCH}" --yaw "${LIDAR_YAW}" \
       --frame-id "${BASE_FRAME}" --child-frame-id "${LIDAR_FRAME}" \
-      --ros-args -p use_sim_time:=false
+      --ros-args -p use_sim_time:="${USE_SIM_TIME}"
   STATIC_TF_PID="${LAST_STARTED_PID}"
 
   if wait_for_transform "${ODOM_PARENT_FRAME}" "${ODOM_CHILD_FRAME}" \
@@ -705,6 +711,9 @@ start_canonicalizer() {
       -p maximum_revolution_duration_sec:=0.50 -p maximum_segment_gap_sec:=0.20 \
       -p maximum_input_messages_per_revolution:=20 -p publish_rate_limit_hz:=12.0 \
       -p diagnostics_rate_hz:=1.0 -p diagnostics_topic:="${RF2O_SCAN_DIAGNOSTICS_TOPIC}" \
+      -p enable_deskew:="${ENABLE_SCAN_DESKEW}" -p deskew_fixed_frame:="${DESKEW_FIXED_FRAME}" \
+      -p deskew_stamp_policy:="${DESKEW_STAMP_POLICY}" \
+      -p deskew_timeout_sec:="${DESKEW_TIMEOUT_SEC}" -p use_sim_time:="${USE_SIM_TIME}" \
       -p health_csv_path:="${CANONICAL_SCAN_HEALTH_CSV}"
   CANONICALIZER_PID="${LAST_STARTED_PID}"
   if ! validate_message_series scan "${RF2O_SCAN_TOPIC}" 5 "${RF2O_SCAN_BINS}" \
@@ -736,7 +745,7 @@ start_rf2o_stack() {
   start_process lidar_odom_monitor "${LIDAR_ODOM_MONITOR_LOG}" \
     ros2 run obs_avoid lidar_odom_monitor --ros-args \
       --params-file "${LIDAR_MONITOR_PARAMS_FILE}" \
-      -p health_csv_path:="${LIDAR_ODOM_HEALTH_CSV}"
+      -p health_csv_path:="${LIDAR_ODOM_HEALTH_CSV}" -p use_sim_time:="${USE_SIM_TIME}"
   RF2O_MONITOR_PID="${LAST_STARTED_PID}"
   if wait_for_topic_message_alive "${LIDAR_ODOM_DIAGNOSTICS_TOPIC}" \
     "${RF2O_MONITOR_PID}" 10 "${LIDAR_ODOM_MONITOR_LOG}"; then
@@ -750,7 +759,8 @@ start_rf2o_stack() {
   set_component_state RF2O STARTING "scan=${RF2O_SCAN_TOPIC}"
   start_process rf2o "${RF2O_LOG}" \
     ros2 run rf2o_laser_odometry rf2o_laser_odometry_node --ros-args \
-      -r __node:=rf2o_laser_odometry --params-file "${RF2O_PARAMS_FILE}"
+      -r __node:=rf2o_laser_odometry --params-file "${RF2O_PARAMS_FILE}" \
+      -p use_sim_time:="${USE_SIM_TIME}"
   RF2O_PID="${LAST_STARTED_PID}"
   if validate_message_series odom "${RF2O_RAW_ODOM_TOPIC}" 5 0 \
     "${RF2O_PID}" "${RF2O_ODOM_WAIT_SEC}"; then
@@ -781,7 +791,7 @@ start_slam() {
   set_component_state MAP STARTING "deadline=${WAIT_TIMEOUT_SEC}s"
   start_process slam_toolbox "${SLAM_LOG}" \
     ros2 launch slam_toolbox online_async_launch.py \
-      slam_params_file:="${SLAM_PARAMS_FILE}" use_sim_time:=false
+      slam_params_file:="${SLAM_PARAMS_FILE}" use_sim_time:="${USE_SIM_TIME}"
   SLAM_PID="${LAST_STARTED_PID}"
   if wait_for_map_message_alive /map "${SLAM_PID}" "${WAIT_TIMEOUT_SEC}" "${SLAM_LOG}"; then
     require_publisher_count /map 1
@@ -817,7 +827,7 @@ start_planner() {
   set_component_state PLANNER STARTING "after_map"
   start_process planner "${PLANNER_LOG}" \
     ros2 run obs_avoid local_planner_mode_a --ros-args \
-      --params-file "${PLANNER_PARAMS_FILE}" -p use_sim_time:=false \
+      --params-file "${PLANNER_PARAMS_FILE}" -p use_sim_time:="${USE_SIM_TIME}" \
       -r /scan_horizontal:="${RF2O_SCAN_TOPIC}"
   PLANNER_PID="${LAST_STARTED_PID}"
   sleep 2
@@ -839,7 +849,7 @@ start_px4_bridge() {
   start_process lidar_odom_px4_bridge "${PX4_BRIDGE_LOG}" \
     ros2 run obs_avoid lidar_odom_px4_bridge --ros-args \
       --params-file "${LIDAR_MONITOR_PARAMS_FILE}" \
-      -p health_csv_path:="${PX4_BRIDGE_HEALTH_CSV}"
+      -p health_csv_path:="${PX4_BRIDGE_HEALTH_CSV}" -p use_sim_time:="${USE_SIM_TIME}"
   PX4_BRIDGE_PID="${LAST_STARTED_PID}"
   if wait_for_topic_message_alive "${LIDAR_PX4_DIAGNOSTICS_TOPIC}" \
     "${PX4_BRIDGE_PID}" 10 "${PX4_BRIDGE_LOG}"; then
@@ -866,6 +876,8 @@ capture_runtime_snapshot() {
     printf '\n[%s] runtime snapshot\n' "$(timestamp)"
     printf 'lidar_mode=%s\nraw_scan_topic=%s\nrf2o_scan_topic=%s\ncanonical_scan_bins=%s\n' \
       "${LIDAR_MODE}" "${SCAN_TOPIC}" "${RF2O_SCAN_TOPIC}" "${RF2O_SCAN_BINS}"
+    printf 'use_sim_time=%s\nenable_scan_deskew=%s\ndeskew_fixed_frame=%s\ndeskew_stamp_policy=%s\n' \
+      "${USE_SIM_TIME}" "${ENABLE_SCAN_DESKEW}" "${DESKEW_FIXED_FRAME}" "${DESKEW_STAMP_POLICY}"
     printf '\n-- component states --\n'
     local component
     for component in "${COMPONENTS[@]}"; do
@@ -1008,6 +1020,7 @@ start_command_console() {
     -p odom_timeout_sec:="${ODOM_TIMEOUT_SEC}"
     -p scan_timeout_sec:="${SCAN_TIMEOUT_SEC}"
     -p planner_timeout_sec:="${PLANNER_TIMEOUT_SEC}"
+    -p use_sim_time:="${USE_SIM_TIME}"
   )
   if [[ -n "${PRECLAND_MODE}" ]]; then
     console_cmd+=(-p precland_mode:="${PRECLAND_MODE}")
@@ -1066,6 +1079,8 @@ main() {
     printf 'workspace=%s\nlidar_mode=%s\ngit_branch=%s\ngit_commit=%s\n' \
       "${ROS_WS}" "${LIDAR_MODE}" "$(git -C "${ROS_WS}" branch --show-current)" \
       "$(git -C "${ROS_WS}" rev-parse HEAD)"
+    printf 'use_sim_time=%s\nenable_scan_deskew=%s\ndeskew_fixed_frame=%s\ndeskew_stamp_policy=%s\n' \
+      "${USE_SIM_TIME}" "${ENABLE_SCAN_DESKEW}" "${DESKEW_FIXED_FRAME}" "${DESKEW_STAMP_POLICY}"
     printf 'start_lidar_px4_bridge=%s\npx4_output_topic=%s\n' \
       "${START_LIDAR_PX4_BRIDGE}" "${PX4_ODOMETRY_OUT_TOPIC}"
   } >>"${SYSTEM_SNAPSHOT}"

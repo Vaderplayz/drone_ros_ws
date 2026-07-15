@@ -16,6 +16,9 @@
 #include <diagnostic_msgs/msg/key_value.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/laser_scan.hpp>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
+#include <tf2_ros/buffer.h>
+#include <tf2_ros/transform_listener.h>
 
 namespace
 {
@@ -64,8 +67,14 @@ public:
     diagnostics_topic_ = declare_parameter<std::string>(
       "diagnostics_topic", "/scan_rf2o/diagnostics");
     health_csv_path_ = declare_parameter<std::string>("health_csv_path", "");
+    enable_deskew_ = declare_parameter<bool>("enable_deskew", false);
+    deskew_fixed_frame_ = declare_parameter<std::string>("deskew_fixed_frame", "odom");
+    deskew_stamp_policy_ = declare_parameter<std::string>("deskew_stamp_policy", "start");
+    deskew_timeout_sec_ = declare_parameter<double>("deskew_timeout_sec", 0.02);
 
     validate_parameters();
+    tf_buffer_ = std::make_unique<tf2_ros::Buffer>(get_clock());
+    tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
     output_angle_increment_ =
       (output_angle_max_ - output_angle_min_) / static_cast<double>(output_bins_);
     output_pub_ = create_publisher<sensor_msgs::msg::LaserScan>(
@@ -106,6 +115,8 @@ private:
     const bool valid_mode = requested_mode_ == "auto" ||
       requested_mode_ == "per_message_full_scan" ||
       requested_mode_ == "assemble_partial_segments";
+    const bool valid_deskew_policy = deskew_stamp_policy_ == "start" ||
+      deskew_stamp_policy_ == "end";
     if (!valid_mode || output_bins_ < 2 || classification_window_messages_ < 20 ||
       !std::isfinite(output_angle_min_) || !std::isfinite(output_angle_max_) ||
       output_angle_max_ <= output_angle_min_ || full_revolution_min_span_rad_ <= 0.0 ||
@@ -113,7 +124,7 @@ private:
       minimum_finite_return_ratio_ < 0.0 || minimum_finite_return_ratio_ > 1.0 ||
       maximum_revolution_duration_sec_ <= 0.0 || maximum_segment_gap_sec_ <= 0.0 ||
       maximum_input_messages_per_revolution_ < 1 || publish_rate_limit_hz_ <= 0.0 ||
-      diagnostics_rate_hz_ <= 0.0)
+      diagnostics_rate_hz_ <= 0.0 || deskew_timeout_sec_ < 0.0 || !valid_deskew_policy)
     {
       throw std::invalid_argument("Invalid laser scan canonicalizer parameters");
     }
@@ -259,6 +270,7 @@ private:
     std::vector<bool> & observed)
   {
     current_valid_input_count_ = 0;
+    last_deskew_applied_ = false;
     for (std::size_t index = 0; index < scan.ranges.size(); ++index) {
       const double angle = static_cast<double>(scan.angle_min) +
         static_cast<double>(index) * static_cast<double>(scan.angle_increment);
@@ -269,6 +281,84 @@ private:
         ++current_valid_input_count_;
         ranges[bin] = std::min(ranges[bin], range);
       }
+    }
+  }
+
+  void rebin_scan_deskewed(
+    const sensor_msgs::msg::LaserScan & scan, const rclcpp::Time & stamp,
+    std::vector<float> & ranges, std::vector<bool> & observed)
+  {
+    current_valid_input_count_ = 0;
+    last_deskew_applied_ = false;
+    if (!enable_deskew_) {
+      rebin_scan(scan, ranges, observed);
+      return;
+    }
+    if (scan.header.frame_id.empty() || deskew_fixed_frame_.empty()) {
+      ++deskew_fallbacks_;
+      last_deskew_status_ = "missing_frame";
+      rebin_scan(scan, ranges, observed);
+      return;
+    }
+
+    try {
+      const auto timeout = tf2::durationFromSec(deskew_timeout_sec_);
+      const auto ref_msg = tf_buffer_->lookupTransform(
+        deskew_fixed_frame_, scan.header.frame_id, stamp, timeout);
+      tf2::Transform fixed_from_ref;
+      tf2::fromMsg(ref_msg.transform, fixed_from_ref);
+      const tf2::Transform ref_from_fixed = fixed_from_ref.inverse();
+
+      for (std::size_t index = 0; index < scan.ranges.size(); ++index) {
+        const float range = scan.ranges[index];
+        if (!std::isfinite(range) || range < scan.range_min || range > scan.range_max) {
+          continue;
+        }
+
+        double beam_time_offset = static_cast<double>(index) *
+          static_cast<double>(scan.time_increment);
+        if (deskew_stamp_policy_ == "end") {
+          const double scan_time = scan.scan_time > 0.0F ?
+            static_cast<double>(scan.scan_time) :
+            static_cast<double>(scan.ranges.size() - 1) *
+            static_cast<double>(scan.time_increment);
+          beam_time_offset -= scan_time;
+        }
+        const rclcpp::Time beam_stamp = std::abs(beam_time_offset) > 0.0 ? stamp +
+          rclcpp::Duration::from_seconds(beam_time_offset) : stamp;
+        const auto beam_msg = tf_buffer_->lookupTransform(
+          deskew_fixed_frame_, scan.header.frame_id, beam_stamp, timeout);
+        tf2::Transform fixed_from_beam;
+        tf2::fromMsg(beam_msg.transform, fixed_from_beam);
+
+        const double angle = static_cast<double>(scan.angle_min) +
+          static_cast<double>(index) * static_cast<double>(scan.angle_increment);
+        const tf2::Vector3 point_beam(
+          static_cast<double>(range) * std::cos(angle),
+          static_cast<double>(range) * std::sin(angle),
+          0.0);
+        const tf2::Vector3 point_ref = ref_from_fixed * (fixed_from_beam * point_beam);
+        const double corrected_range = std::hypot(point_ref.x(), point_ref.y());
+        if (!std::isfinite(corrected_range) || corrected_range < scan.range_min ||
+          corrected_range > scan.range_max)
+        {
+          continue;
+        }
+        const std::size_t bin = angle_to_bin(std::atan2(point_ref.y(), point_ref.x()));
+        observed[bin] = true;
+        ++current_valid_input_count_;
+        ranges[bin] = std::min(ranges[bin], static_cast<float>(corrected_range));
+      }
+      last_deskew_applied_ = true;
+      ++deskewed_scans_;
+      last_deskew_status_ = "applied";
+    } catch (const tf2::TransformException & ex) {
+      ++deskew_fallbacks_;
+      last_deskew_status_ = ex.what();
+      RCLCPP_WARN_THROTTLE(
+        get_logger(), *get_clock(), 5000,
+        "Deskew fallback to raw scan: %s", ex.what());
+      rebin_scan(scan, ranges, observed);
     }
   }
 
@@ -340,7 +430,7 @@ private:
     std::vector<float> ranges(
       static_cast<std::size_t>(output_bins_), std::numeric_limits<float>::infinity());
     std::vector<bool> observed(static_cast<std::size_t>(output_bins_), false);
-    rebin_scan(scan, ranges, observed);
+    rebin_scan_deskewed(scan, stamp, ranges, observed);
     update_coverage(ranges, observed);
     last_segment_count_ = 1;
     last_revolution_duration_sec_ = std::max(0.0, static_cast<double>(scan.scan_time));
@@ -450,7 +540,7 @@ private:
       begin_assembly(scan, stamp);
     }
 
-    rebin_scan(scan, assembly_ranges_, assembly_observed_);
+    rebin_scan_deskewed(scan, stamp, assembly_ranges_, assembly_observed_);
     ++assembly_segment_count_;
     assembly_last_stamp_ = stamp;
     assembly_range_min_ = std::min(assembly_range_min_, scan.range_min);
@@ -626,6 +716,12 @@ private:
     status.values.push_back(key_value("input_rate_hz", std::to_string(input_rate_hz_)));
     status.values.push_back(key_value("output_rate_hz", std::to_string(output_rate_hz_)));
     status.values.push_back(key_value("timestamp_monotonic", bool_string(timestamp_monotonic_)));
+    status.values.push_back(key_value("deskew_enabled", bool_string(enable_deskew_)));
+    status.values.push_back(key_value("deskew_applied", bool_string(last_deskew_applied_)));
+    status.values.push_back(key_value("deskew_stamp_policy", deskew_stamp_policy_));
+    status.values.push_back(key_value("deskewed_scans", std::to_string(deskewed_scans_)));
+    status.values.push_back(key_value("deskew_fallbacks", std::to_string(deskew_fallbacks_)));
+    status.values.push_back(key_value("deskew_status", last_deskew_status_));
     status.values.push_back(key_value("publisher_count", std::to_string(publisher_count_)));
     status.values.push_back(key_value("last_rejection_reason", last_rejection_reason_));
     array.status.push_back(status);
@@ -640,6 +736,8 @@ private:
   std::string selected_mode_;
   std::string diagnostics_topic_;
   std::string health_csv_path_;
+  std::string deskew_fixed_frame_;
+  std::string deskew_stamp_policy_;
   int output_bins_{720};
   int classification_window_messages_{20};
   int maximum_input_messages_per_revolution_{20};
@@ -653,11 +751,15 @@ private:
   double maximum_segment_gap_sec_{0.20};
   double publish_rate_limit_hz_{12.0};
   double diagnostics_rate_hz_{1.0};
+  double deskew_timeout_sec_{0.02};
+  bool enable_deskew_{false};
 
   rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr input_sub_;
   rclcpp::Publisher<sensor_msgs::msg::LaserScan>::SharedPtr output_pub_;
   rclcpp::Publisher<diagnostic_msgs::msg::DiagnosticArray>::SharedPtr diagnostics_pub_;
   rclcpp::TimerBase::SharedPtr diagnostics_timer_;
+  std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
+  std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
   std::ofstream health_csv_;
 
   rclcpp::Time last_input_stamp_{0, 0, RCL_ROS_TIME};
@@ -684,6 +786,8 @@ private:
   std::size_t current_valid_input_count_{0};
   std::size_t publisher_count_{0};
   std::size_t last_segment_count_{0};
+  std::size_t deskewed_scans_{0};
+  std::size_t deskew_fallbacks_{0};
   double declared_input_span_rad_{0.0};
   double indexed_input_span_rad_{0.0};
   double angular_coverage_ratio_{0.0};
@@ -696,7 +800,9 @@ private:
   std::string last_input_frame_;
   std::string last_rejection_reason_{"none"};
   std::string last_success_state_{"none"};
+  std::string last_deskew_status_{"disabled"};
   std::string state_;
+  bool last_deskew_applied_{false};
 
   bool assembly_active_{false};
   std::vector<float> assembly_ranges_;

@@ -12,6 +12,7 @@ find_package(geometry_msgs REQUIRED)
 find_package(tf2_msgs REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
+find_package(tf2_geometry_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(diagnostic_msgs REQUIRED)
@@ -149,6 +150,10 @@ target_link_libraries(laser_scan_canonicalizer PUBLIC
   ${sensor_msgs_TARGETS}
   sensor_msgs::sensor_msgs_library
   ${diagnostic_msgs_TARGETS}
+  ${geometry_msgs_TARGETS}
+  tf2::tf2
+  ${tf2_ros_TARGETS}
+  ${tf2_geometry_msgs_TARGETS}
 )
 install(TARGETS laser_scan_canonicalizer DESTINATION lib/${PROJECT_NAME})
 
