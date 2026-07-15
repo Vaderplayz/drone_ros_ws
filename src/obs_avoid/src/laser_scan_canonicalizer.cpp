@@ -284,7 +284,7 @@ private:
     }
   }
 
-  void rebin_scan_deskewed(
+  bool rebin_scan_deskewed(
     const sensor_msgs::msg::LaserScan & scan, const rclcpp::Time & stamp,
     std::vector<float> & ranges, std::vector<bool> & observed)
   {
@@ -292,17 +292,17 @@ private:
     last_deskew_applied_ = false;
     if (!enable_deskew_) {
       rebin_scan(scan, ranges, observed);
-      return;
+      return true;
     }
     if (scan.header.frame_id.empty() || deskew_fixed_frame_.empty()) {
       ++deskew_fallbacks_;
       last_deskew_status_ = "missing_frame";
-      rebin_scan(scan, ranges, observed);
-      return;
+      return false;
     }
 
     try {
       const auto timeout = tf2::durationFromSec(deskew_timeout_sec_);
+      const auto immediate = tf2::durationFromSec(0.0);
       const auto ref_msg = tf_buffer_->lookupTransform(
         deskew_fixed_frame_, scan.header.frame_id, stamp, timeout);
       tf2::Transform fixed_from_ref;
@@ -327,7 +327,7 @@ private:
         const rclcpp::Time beam_stamp = std::abs(beam_time_offset) > 0.0 ? stamp +
           rclcpp::Duration::from_seconds(beam_time_offset) : stamp;
         const auto beam_msg = tf_buffer_->lookupTransform(
-          deskew_fixed_frame_, scan.header.frame_id, beam_stamp, timeout);
+          deskew_fixed_frame_, scan.header.frame_id, beam_stamp, immediate);
         tf2::Transform fixed_from_beam;
         tf2::fromMsg(beam_msg.transform, fixed_from_beam);
 
@@ -352,13 +352,14 @@ private:
       last_deskew_applied_ = true;
       ++deskewed_scans_;
       last_deskew_status_ = "applied";
+      return true;
     } catch (const tf2::TransformException & ex) {
       ++deskew_fallbacks_;
       last_deskew_status_ = ex.what();
       RCLCPP_WARN_THROTTLE(
         get_logger(), *get_clock(), 5000,
-        "Deskew fallback to raw scan: %s", ex.what());
-      rebin_scan(scan, ranges, observed);
+        "Dropping scan because deskew TF is unavailable: %s", ex.what());
+      return false;
     }
   }
 
@@ -430,7 +431,11 @@ private:
     std::vector<float> ranges(
       static_cast<std::size_t>(output_bins_), std::numeric_limits<float>::infinity());
     std::vector<bool> observed(static_cast<std::size_t>(output_bins_), false);
-    rebin_scan_deskewed(scan, stamp, ranges, observed);
+    if (!rebin_scan_deskewed(scan, stamp, ranges, observed)) {
+      ++discarded_revolutions_;
+      reject("DESKEW_UNAVAILABLE", "Dropping full scan because deskew TF is unavailable");
+      return;
+    }
     update_coverage(ranges, observed);
     last_segment_count_ = 1;
     last_revolution_duration_sec_ = std::max(0.0, static_cast<double>(scan.scan_time));
@@ -540,7 +545,12 @@ private:
       begin_assembly(scan, stamp);
     }
 
-    rebin_scan_deskewed(scan, stamp, assembly_ranges_, assembly_observed_);
+    if (!rebin_scan_deskewed(scan, stamp, assembly_ranges_, assembly_observed_)) {
+      ++discarded_revolutions_;
+      reject("DESKEW_UNAVAILABLE", "Dropping partial scan because deskew TF is unavailable");
+      reset_assembly();
+      return;
+    }
     ++assembly_segment_count_;
     assembly_last_stamp_ = stamp;
     assembly_range_min_ = std::min(assembly_range_min_, scan.range_min);

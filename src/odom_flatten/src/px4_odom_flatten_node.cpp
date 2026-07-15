@@ -5,7 +5,7 @@
 //
 // Features:
 // - Forces TF frame IDs (doesn't trust msg header frames)
-// - Uses local ROS receipt time for TF so Pi LiDAR and odometry share a clock domain
+// - Uses the original odometry message timestamp for TF
 // - Backward-time prevention with automatic recovery on time reset
 // - Does NOT declare use_sim_time (safe to pass via CLI)
 

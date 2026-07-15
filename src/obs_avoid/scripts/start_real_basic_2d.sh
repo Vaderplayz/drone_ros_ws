@@ -7,11 +7,11 @@ ROS_WS_DEFAULT="/home/pi5drone/drone_ros_ws"
 ROS_WS="${ROS_WS:-${ROS_WS_DEFAULT}}"
 ROS_SETUP="${ROS_SETUP:-${ROS_WS}/install/setup.bash}"
 USE_SIM_TIME="${USE_SIM_TIME:-false}"
-LIDAR_MODE="${LIDAR_MODE:-mapping_only}"
-START_LIDAR_PX4_BRIDGE="${START_LIDAR_PX4_BRIDGE:-0}"
+LIDAR_MODE="${LIDAR_MODE:-px4_fusion}"
+START_LIDAR_PX4_BRIDGE="${START_LIDAR_PX4_BRIDGE:-1}"
 START_RF2O_OBSERVER="${START_RF2O_OBSERVER:-0}"
 START_SLAM_IN_RF2O_VALIDATION="${START_SLAM_IN_RF2O_VALIDATION:-1}"
-RECORD_LIDAR_DIAGNOSTIC_BAG="${RECORD_LIDAR_DIAGNOSTIC_BAG:-${RECORD_BAG:-0}}"
+RECORD_LIDAR_DIAGNOSTIC_BAG="${RECORD_LIDAR_DIAGNOSTIC_BAG:-${RECORD_BAG:-1}}"
 
 WAIT_TIMEOUT_SEC="${WAIT_TIMEOUT_SEC:-60}"
 RPLIDAR_START_RETRIES=2
@@ -52,7 +52,7 @@ LIDAR_YAW="${LIDAR_YAW:-0.0}"
 ENABLE_SCAN_DESKEW="${ENABLE_SCAN_DESKEW:-true}"
 DESKEW_FIXED_FRAME="${DESKEW_FIXED_FRAME:-${ODOM_PARENT_FRAME}}"
 DESKEW_STAMP_POLICY="${DESKEW_STAMP_POLICY:-end}"
-DESKEW_TIMEOUT_SEC="${DESKEW_TIMEOUT_SEC:-0.02}"
+DESKEW_TIMEOUT_SEC="${DESKEW_TIMEOUT_SEC:-0.35}"
 
 SLAM_PARAMS_FILE="${SLAM_PARAMS_FILE:-${ROS_WS}/src/obs_avoid/config/slam2d_real_1lidar.yaml}"
 PLANNER_PARAMS_FILE="${PLANNER_PARAMS_FILE:-${ROS_WS}/src/obs_avoid/config/local_planner_mode_a_real_safe.yaml}"
@@ -256,6 +256,7 @@ wait_for_topic_message_alive() {
   local pid="$2"
   local timeout_sec="$3"
   local logfile="$4"
+  local reliability="${5:-best_effort}"
   local start_ts elapsed last_progress=-1
   start_ts="$(date +%s)"
   while true; do
@@ -265,7 +266,7 @@ wait_for_topic_message_alive() {
       return 10
     fi
     if timeout 2 ros2 topic echo "${topic}" --once \
-      --qos-reliability best_effort >/dev/null 2>&1; then
+      --qos-reliability "${reliability}" >/dev/null 2>&1; then
       log "Message received: ${topic}"
       return 0
     fi
@@ -748,7 +749,7 @@ start_rf2o_stack() {
       -p health_csv_path:="${LIDAR_ODOM_HEALTH_CSV}" -p use_sim_time:="${USE_SIM_TIME}"
   RF2O_MONITOR_PID="${LAST_STARTED_PID}"
   if wait_for_topic_message_alive "${LIDAR_ODOM_DIAGNOSTICS_TOPIC}" \
-    "${RF2O_MONITOR_PID}" 10 "${LIDAR_ODOM_MONITOR_LOG}"; then
+    "${RF2O_MONITOR_PID}" 20 "${LIDAR_ODOM_MONITOR_LOG}" reliable; then
     set_component_state RF2O_MONITOR DEGRADED "diagnostics_active_waiting_for_rf2o"
   else
     set_component_state RF2O_MONITOR FAILED "process_or_diagnostics_failure"
@@ -852,7 +853,7 @@ start_px4_bridge() {
       -p health_csv_path:="${PX4_BRIDGE_HEALTH_CSV}" -p use_sim_time:="${USE_SIM_TIME}"
   PX4_BRIDGE_PID="${LAST_STARTED_PID}"
   if wait_for_topic_message_alive "${LIDAR_PX4_DIAGNOSTICS_TOPIC}" \
-    "${PX4_BRIDGE_PID}" 10 "${PX4_BRIDGE_LOG}"; then
+    "${PX4_BRIDGE_PID}" 20 "${PX4_BRIDGE_LOG}" reliable; then
     set_component_state PX4_BRIDGE DEGRADED "bridge_gate_active_pending_alignment"
   else
     set_component_state PX4_BRIDGE FAILED "process_or_diagnostics_failure"
@@ -1056,6 +1057,10 @@ main() {
     mapping_only|rf2o_validation|px4_fusion) ;;
     *) log "ERROR unsupported LIDAR_MODE=${LIDAR_MODE}"; exit 1 ;;
   esac
+  if [[ "${LIDAR_MODE}" == "px4_fusion" && "${START_LIDAR_PX4_BRIDGE}" != "1" ]]; then
+    log "WARNING LIDAR_MODE=px4_fusion forces START_LIDAR_PX4_BRIDGE=1"
+    START_LIDAR_PX4_BRIDGE="1"
+  fi
   if [[ "${LIDAR_MODE}" != "px4_fusion" && "${START_LIDAR_PX4_BRIDGE}" != "0" ]]; then
     log "ERROR START_LIDAR_PX4_BRIDGE must remain 0 outside px4_fusion mode"
     exit 1
@@ -1131,7 +1136,11 @@ main() {
     start_slam || true
     start_planner || true
   fi
-  start_px4_bridge || true
+  if [[ "${LIDAR_MODE}" == "px4_fusion" ]]; then
+    start_px4_bridge
+  else
+    start_px4_bridge || true
+  fi
 
   capture_runtime_snapshot &
   add_process "$!" runtime_snapshot
