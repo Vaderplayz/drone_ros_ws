@@ -435,7 +435,13 @@ private:
     output.pose.covariance[21] = unused_axis_variance_;
     output.pose.covariance[28] = unused_axis_variance_;
     output.pose.covariance[35] = yaw_stddev_rad_ * yaw_stddev_rad_;
-    output.twist.covariance.fill(unused_axis_variance_);
+    output.twist.covariance.fill(0.0);
+    output.twist.covariance[0] = unused_axis_variance_;
+    output.twist.covariance[7] = unused_axis_variance_;
+    output.twist.covariance[14] = unused_axis_variance_;
+    output.twist.covariance[21] = unused_axis_variance_;
+    output.twist.covariance[28] = unused_axis_variance_;
+    output.twist.covariance[35] = unused_axis_variance_;
 
     output_pub_->publish(output);
     last_output_stamp_ = source_stamp;

@@ -7,8 +7,10 @@ fusion component. The companion computer does not average RF2O with PX4 odometry
 flow.
 
 ```text
-/scan -> RF2O -> /lidar/odom_raw -> monitor -> /lidar/odom
-      -> lidar_odom_px4_bridge -> /mavros/odometry/out -> MAVLink ODOMETRY -> EKF2
+/scan -> canonicalizer -> /scan_rf2o -> RF2O -> /lidar/odom_raw
+                                               -> monitor -> /lidar/odom
+                                               -> bridge -> /mavros/odometry/out
+                                               -> MAVLink ODOMETRY -> EKF2
 ```
 
 The bridge performs one fixed planar frame alignment while disarmed:
@@ -41,7 +43,7 @@ Default covariance:
 | X, Y | 0.30 m standard deviation (0.09 m^2) |
 | Yaw | 0.20 rad standard deviation (0.04 rad^2) |
 | Z, roll, pitch | 1,000,000 variance |
-| Every twist covariance entry | 1,000,000 |
+| Twist covariance diagonal | 1,000,000 variance; off-diagonal entries remain zero |
 
 These defaults are deliberately conservative and require real-data calibration.
 
@@ -136,27 +138,32 @@ cd /home/pi5drone/drone_ros_ws
 source /opt/ros/jazzy/setup.bash
 
 rosdep install --from-paths src --ignore-src -r -y
-colcon build --symlink-install \
+export CMAKE_BUILD_PARALLEL_LEVEL=1
+export MAKEFLAGS="-j1"
+colcon build --executor sequential --symlink-install \
   --packages-select rf2o_laser_odometry odom_flatten obs_avoid \
-  --cmake-args -DBUILD_TESTING=OFF
+  --cmake-args -DBUILD_TESTING=OFF -DCMAKE_BUILD_TYPE=Release
 
 source install/setup.bash
 ./src/obs_avoid/scripts/check_px4_lidar_ekf.sh
-./src/obs_avoid/scripts/start_real_basic_2d.sh
+./src/obs_avoid/scripts/start_rf2o_px4_fusion.sh
 ```
 
-The launcher reuses the already-running MAVROS and AprilTag pipeline. It does not open the
+This is a separate RF2O/PX4 launcher. It does not call or source the mapping launcher and has
+no map, navigation, or flight-command startup path. It reuses the already-running MAVROS and
+AprilTag pipeline. It does not open the
 flight-controller or camera devices, start another MAVROS process, set PX4 parameters, reboot,
 arm, select OFFBOARD, or command movement. It refuses to start bridge alignment if the vehicle
-is armed.
+is armed. It starts only the LiDAR driver, planar TF support, scan audit, canonicalizer, RF2O,
+RF2O health monitor, and PX4 odometry bridge.
 
-Set `RECORD_BAG=1` only when the optional RF2O/PX4 diagnostic bag is needed:
+Set `RECORD_DIAGNOSTIC_BAG=1` only when the optional RF2O/PX4 diagnostic bag is needed:
 
 ```bash
-RECORD_BAG=1 ./src/obs_avoid/scripts/start_real_basic_2d.sh
+RECORD_DIAGNOSTIC_BAG=1 ./src/obs_avoid/scripts/start_rf2o_px4_fusion.sh
 ```
 
-Each run creates `runtime_logs/real_slam_<timestamp>/` containing:
+Each run creates `runtime_logs/rf2o_px4_<timestamp>/` containing:
 
 ```text
 rf2o.log

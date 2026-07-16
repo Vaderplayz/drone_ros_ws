@@ -31,7 +31,8 @@ RF2O_SCAN_DIAGNOSTICS_TOPIC="${RF2O_SCAN_DIAGNOSTICS_TOPIC:-/scan_rf2o/diagnosti
 RF2O_SCAN_BINS="${RF2O_SCAN_BINS:-720}"
 SCAN_AUDIT_WAIT_SEC="${SCAN_AUDIT_WAIT_SEC:-30}"
 CANONICAL_SCAN_WAIT_SEC="${CANONICAL_SCAN_WAIT_SEC:-45}"
-RF2O_ODOM_WAIT_SEC="${RF2O_ODOM_WAIT_SEC:-30}"
+RF2O_MONITOR_DIAG_WAIT_SEC="${RF2O_MONITOR_DIAG_WAIT_SEC:-10}"
+RF2O_ODOM_WAIT_SEC="${RF2O_ODOM_WAIT_SEC:-60}"
 RF2O_RAW_ODOM_TOPIC="${RF2O_RAW_ODOM_TOPIC:-/lidar/odom_raw}"
 LIDAR_ODOM_TOPIC="${LIDAR_ODOM_TOPIC:-/lidar/odom}"
 LIDAR_ODOM_DIAGNOSTICS_TOPIC="${LIDAR_ODOM_DIAGNOSTICS_TOPIC:-/lidar_odom/diagnostics}"
@@ -95,6 +96,7 @@ COMPONENTS=(
 )
 PIDS=()
 NAMES=()
+STARTUP_NOT_READY=()
 LAST_STARTED_PID=""
 EXISTING_RPLIDAR_PID=""
 CONSOLE_PID=""
@@ -114,19 +116,53 @@ log() {
   printf '[%s] %s\n' "$(timestamp)" "$*"
 }
 
-log_ready_banner() {
-  local green reset
+startup_ready_components() {
+  local component
+  local -a required=(
+    MAVROS RPLIDAR RAW_SCAN ODOM_FLATTEN STATIC_TF SCAN_AUDIT
+    CANONICALIZER CANONICAL_SCAN SLAM MAP PLANNER
+  )
+  if [[ "${LIDAR_MODE}" == "px4_fusion" ]]; then
+    required+=(RF2O RF2O_MONITOR PX4_BRIDGE)
+  elif [[ "${START_RF2O_OBSERVER}" == "1" ]]; then
+    required+=(RF2O RF2O_MONITOR)
+  fi
+  STARTUP_NOT_READY=()
+  for component in "${required[@]}"; do
+    if [[ "${COMPONENT_STATE[${component}]:-NOT_STARTED}" != "READY" ]]; then
+      STARTUP_NOT_READY+=("${component}=${COMPONENT_STATE[${component}]:-NOT_STARTED}")
+    fi
+  done
+  ((${#STARTUP_NOT_READY[@]} == 0))
+}
+
+log_startup_banner() {
+  local green yellow reset
   green=$'\033[1;32m'
+  yellow=$'\033[1;33m'
   reset=$'\033[0m'
-  printf '\n%s' "${green}"
-  printf '######################################################################\n'
-  printf '#                                                                    #\n'
-  printf '#                         ALL SYSTEM READY                           #\n'
-  printf '#                                                                    #\n'
-  printf '#          LiDAR / RF2O / SLAM pipeline startup is complete          #\n'
-  printf '#                                                                    #\n'
-  printf '######################################################################\n'
-  printf '%s\n' "${reset}"
+  if startup_ready_components; then
+    printf '\n%s' "${green}"
+    printf '######################################################################\n'
+    printf '#                                                                    #\n'
+    printf '#                         ALL SYSTEM READY                           #\n'
+    printf '#                                                                    #\n'
+    printf '#          LiDAR / RF2O / SLAM pipeline startup is complete          #\n'
+    printf '#                                                                    #\n'
+    printf '######################################################################\n'
+    printf '%s\n' "${reset}"
+  else
+    printf '\n%s' "${yellow}"
+    printf '######################################################################\n'
+    printf '#                                                                    #\n'
+    printf '#                      SYSTEM STARTED - DEGRADED                     #\n'
+    printf '#                                                                    #\n'
+    printf '#                  Check the not-ready components below              #\n'
+    printf '#                                                                    #\n'
+    printf '######################################################################\n'
+    printf '%s\n' "${reset}"
+    log "Not-ready startup components: ${STARTUP_NOT_READY[*]}"
+  fi
 }
 
 set_component_state() {
@@ -766,11 +802,17 @@ start_rf2o_stack() {
       -p health_csv_path:="${LIDAR_ODOM_HEALTH_CSV}" -p use_sim_time:="${USE_SIM_TIME}"
   RF2O_MONITOR_PID="${LAST_STARTED_PID}"
   if wait_for_topic_message_alive "${LIDAR_ODOM_DIAGNOSTICS_TOPIC}" \
-    "${RF2O_MONITOR_PID}" 20 "${LIDAR_ODOM_MONITOR_LOG}" reliable; then
+    "${RF2O_MONITOR_PID}" "${RF2O_MONITOR_DIAG_WAIT_SEC}" "${LIDAR_ODOM_MONITOR_LOG}" reliable WARNING; then
     set_component_state RF2O_MONITOR DEGRADED "diagnostics_active_waiting_for_rf2o"
   else
-    set_component_state RF2O_MONITOR FAILED "process_or_diagnostics_failure"
-    return 1
+    local monitor_wait_status=$?
+    if [[ "${monitor_wait_status}" -eq 12 ]] && kill -0 "${RF2O_MONITOR_PID}" 2>/dev/null; then
+      set_component_state RF2O_MONITOR DEGRADED "diagnostics_pending_starting_rf2o"
+      log "WARNING RF2O monitor diagnostics are not ready yet; starting RF2O anyway"
+    else
+      set_component_state RF2O_MONITOR FAILED "process_or_diagnostics_failure"
+      return "${monitor_wait_status}"
+    fi
   fi
 
   require_publisher_count "${RF2O_RAW_ODOM_TOPIC}" 0
@@ -1180,7 +1222,7 @@ main() {
   PROCESS_MONITOR_PID="$!"
   start_command_console
 
-  log_ready_banner
+  log_startup_banner
   log "Pipeline startup complete. No arm, mode, movement, or PX4 parameter command was sent."
   log "Runtime logs: ${LOG_DIR}"
   if [[ "${LIDAR_MODE}" != "px4_fusion" ]]; then
