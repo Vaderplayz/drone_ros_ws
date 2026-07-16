@@ -157,6 +157,9 @@ arm, select OFFBOARD, or command movement. It refuses to start bridge alignment 
 is armed. It starts only the LiDAR driver, planar TF support, scan audit, canonicalizer, RF2O,
 RF2O health monitor, and PX4 odometry bridge.
 
+The independent launcher uses the original LiDAR and PX4 odometry timestamps. Scan deskew is
+disabled by default so the basic RF2O-to-PX4 path does not depend on per-ray TF processing.
+
 Set `RECORD_DIAGNOSTIC_BAG=1` only when the optional RF2O/PX4 diagnostic bag is needed:
 
 ```bash
