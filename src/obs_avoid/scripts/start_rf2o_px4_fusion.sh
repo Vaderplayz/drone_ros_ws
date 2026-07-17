@@ -46,6 +46,8 @@ DESKEW_FIXED_FRAME="${DESKEW_FIXED_FRAME:-${ODOM_PARENT_FRAME}}"
 DESKEW_STAMP_POLICY="${DESKEW_STAMP_POLICY:-end}"
 DESKEW_TIMEOUT_SEC="${DESKEW_TIMEOUT_SEC:-0.35}"
 RECORD_DIAGNOSTIC_BAG="${RECORD_DIAGNOSTIC_BAG:-0}"
+CLEAN_STALE_PIPELINE="${CLEAN_STALE_PIPELINE:-1}"
+PROCESS_STOP_TIMEOUT_SEC="${PROCESS_STOP_TIMEOUT_SEC:-5}"
 
 RF2O_PARAMS_FILE="${RF2O_PARAMS_FILE:-${ROS_WS}/src/obs_avoid/config/rf2o_real_a1m8.yaml}"
 ODOM_PARAMS_FILE="${ODOM_PARAMS_FILE:-${ROS_WS}/src/obs_avoid/config/lidar_odom_px4_bridge.yaml}"
@@ -68,10 +70,17 @@ PX4_BRIDGE_HEALTH_CSV="${LOG_DIR}/lidar_odom_px4_bridge_health.csv"
 ROSBAG_LOG="${LOG_DIR}/rosbag.log"
 SNAPSHOT_FILE="${LOG_DIR}/system_snapshot.txt"
 
+PIPELINE_STATE_ROOT="${XDG_RUNTIME_DIR:-/tmp}/rf2o_px4_fusion_$(id -u)"
+PIPELINE_LOCK_FILE="${PIPELINE_STATE_ROOT}/launcher.lock"
+PIPELINE_OWNER_FILE="${PIPELINE_STATE_ROOT}/launcher.pid"
+OWNED_GROUPS_FILE="${PIPELINE_STATE_ROOT}/owned_process_groups.tsv"
+BOOT_ID="$(< /proc/sys/kernel/random/boot_id)"
+
 PIDS=()
 NAMES=()
 LAST_STARTED_PID=""
 EXTERNAL_RPLIDAR=0
+LOCK_ACQUIRED=0
 SHUTDOWN_REASON="normal exit"
 
 if [[ -t 1 ]]; then
@@ -128,41 +137,77 @@ add_process() {
   PIDS+=("${pid}")
   NAMES+=("${name}")
   printf '%s\n' "${pid}" >"${LOG_DIR}/${name}.pid"
+  printf '%s\t%s\t%s\n' "${pid}" "${name}" "${BOOT_ID}" >>"${OWNED_GROUPS_FILE}"
   log_started "${name} pid=${pid}"
 }
 
 start_process() {
   local name="$1" logfile="$2"
   shift 2
-  setsid "$@" >"${logfile}" 2>&1 &
+  setsid "$@" 9>&- >"${logfile}" 2>&1 &
   LAST_STARTED_PID="$!"
   add_process "${LAST_STARTED_PID}" "${name}"
 }
 
-stop_process_group() {
-  local pid="$1"
+signal_process_group() {
+  local pid="$1" signal="$2"
   if kill -0 -- "-${pid}" 2>/dev/null; then
-    kill -TERM -- "-${pid}" 2>/dev/null || true
+    kill "-${signal}" -- "-${pid}" 2>/dev/null || true
   elif kill -0 "${pid}" 2>/dev/null; then
-    kill -TERM "${pid}" 2>/dev/null || true
+    kill "-${signal}" "${pid}" 2>/dev/null || true
   fi
 }
 
+process_group_alive() {
+  kill -0 -- "-$1" 2>/dev/null || kill -0 "$1" 2>/dev/null
+}
+
+stop_owned_groups() {
+  local index pid deadline any_alive
+
+  for ((index=${#PIDS[@]} - 1; index>=0; index--)); do
+    pid="${PIDS[$index]}"
+    if process_group_alive "${pid}"; then
+      log "Stopping launcher-owned process group: ${NAMES[$index]} pgid=${pid}"
+      signal_process_group "${pid}" TERM
+    fi
+  done
+
+  deadline=$(( $(date +%s) + PROCESS_STOP_TIMEOUT_SEC ))
+  while (( $(date +%s) < deadline )); do
+    any_alive=0
+    for pid in "${PIDS[@]}"; do
+      if process_group_alive "${pid}"; then
+        any_alive=1
+        break
+      fi
+    done
+    (( any_alive == 0 )) && break
+    sleep 0.2
+  done
+
+  for ((index=${#PIDS[@]} - 1; index>=0; index--)); do
+    pid="${PIDS[$index]}"
+    if process_group_alive "${pid}"; then
+      log_warning "forcing stopped process group: ${NAMES[$index]} pgid=${pid}"
+      signal_process_group "${pid}" KILL
+    fi
+  done
+}
+
 cleanup() {
-  local exit_code=$? index pid
+  local exit_code=$? pid
   set +e
   trap - EXIT INT TERM
   log "Shutdown reason: ${SHUTDOWN_REASON}; launcher_exit=${exit_code}"
-  for ((index=${#PIDS[@]} - 1; index>=0; index--)); do
-    pid="${PIDS[$index]}"
-    if kill -0 -- "-${pid}" 2>/dev/null || kill -0 "${pid}" 2>/dev/null; then
-      log "Stopping launcher-owned process only: ${NAMES[$index]} pid=${pid}"
-      stop_process_group "${pid}"
-    fi
-  done
+  stop_owned_groups
   for pid in "${PIDS[@]}"; do
     wait "${pid}" 2>/dev/null || true
   done
+  if [[ "${LOCK_ACQUIRED}" == "1" ]]; then
+    : >"${OWNED_GROUPS_FILE}"
+    : >"${PIPELINE_OWNER_FILE}"
+  fi
   if [[ "${EXTERNAL_RPLIDAR}" == "1" ]]; then
     log "The externally managed RPLIDAR process was not stopped"
   fi
@@ -173,6 +218,180 @@ cleanup() {
 on_signal() {
   SHUTDOWN_REASON="received signal $1"
   exit 130
+}
+
+recover_recorded_groups() {
+  local pid name recorded_boot deadline any_alive
+  local recovered_pids=()
+  local recovered_names=()
+
+  [[ -s "${OWNED_GROUPS_FILE}" ]] || return 0
+
+  while IFS=$'\t' read -r pid name recorded_boot; do
+    [[ "${pid}" =~ ^[0-9]+$ ]] || continue
+    [[ "${recorded_boot}" == "${BOOT_ID}" ]] || continue
+    if process_group_alive "${pid}"; then
+      recovered_pids+=("${pid}")
+      recovered_names+=("${name:-unknown}")
+    fi
+  done <"${OWNED_GROUPS_FILE}"
+
+  if (( ${#recovered_pids[@]} == 0 )); then
+    return 0
+  fi
+
+  log_warning "recovering ${#recovered_pids[@]} launcher-owned process group(s) from an interrupted run"
+  for pid in "${recovered_pids[@]}"; do
+    signal_process_group "${pid}" TERM
+  done
+
+  deadline=$(( $(date +%s) + PROCESS_STOP_TIMEOUT_SEC ))
+  while (( $(date +%s) < deadline )); do
+    any_alive=0
+    for pid in "${recovered_pids[@]}"; do
+      if process_group_alive "${pid}"; then
+        any_alive=1
+        break
+      fi
+    done
+    (( any_alive == 0 )) && break
+    sleep 0.2
+  done
+
+  for pid in "${recovered_pids[@]}"; do
+    if process_group_alive "${pid}"; then
+      signal_process_group "${pid}" KILL
+    fi
+  done
+  log_started "previous launcher-owned process groups cleared"
+}
+
+find_legacy_pipeline_processes() {
+  local pid executable arguments name
+  LEGACY_PIDS=()
+  LEGACY_NAMES=()
+  LEGACY_COMMANDS=()
+
+  while read -r pid; do
+    [[ "${pid}" =~ ^[0-9]+$ ]] || continue
+    executable="$(readlink -f "/proc/${pid}/exe" 2>/dev/null || true)"
+    [[ -n "${executable}" ]] || continue
+    arguments="$(tr '\0' ' ' <"/proc/${pid}/cmdline" 2>/dev/null || true)"
+    name=""
+
+    case "${executable}" in
+      */install/obs_avoid/lib/obs_avoid/laser_scan_stream_audit)
+        name="laser_scan_stream_audit" ;;
+      */install/obs_avoid/lib/obs_avoid/laser_scan_canonicalizer)
+        name="laser_scan_canonicalizer" ;;
+      */install/obs_avoid/lib/obs_avoid/lidar_odom_monitor)
+        name="lidar_odom_monitor" ;;
+      */install/obs_avoid/lib/obs_avoid/lidar_odom_px4_bridge)
+        name="lidar_odom_px4_bridge" ;;
+      */install/rf2o_laser_odometry/lib/rf2o_laser_odometry/rf2o_laser_odometry_node)
+        name="rf2o_laser_odometry_node" ;;
+      */install/odom_flatten/lib/odom_flatten/px4_odom_flatten_node)
+        name="px4_odom_flatten_node" ;;
+      */lib/tf2_ros/static_transform_publisher)
+        if [[ "${arguments}" == *"--frame-id ${BASE_FRAME} "* &&
+          "${arguments}" == *"--child-frame-id ${LIDAR_FRAME} "* ]]; then
+          name="static_lidar_tf"
+        fi ;;
+      */lib/rosbag2_transport/record)
+        if [[ "${arguments}" == *"${ROS_WS}/runtime_logs/rf2o_px4_"* ]]; then
+          name="diagnostic_bag"
+        fi ;;
+    esac
+
+    if [[ -z "${name}" && "${executable}" == */python3* ]]; then
+      case "${arguments}" in
+        *'/ros2 run obs_avoid laser_scan_stream_audit '*)
+          name="laser_scan_stream_audit" ;;
+        *'/ros2 run obs_avoid laser_scan_canonicalizer '*)
+          name="laser_scan_canonicalizer" ;;
+        *'/ros2 run obs_avoid lidar_odom_monitor '*)
+          name="lidar_odom_monitor" ;;
+        *'/ros2 run obs_avoid lidar_odom_px4_bridge '*)
+          name="lidar_odom_px4_bridge" ;;
+        *'/ros2 run rf2o_laser_odometry rf2o_laser_odometry_node '*)
+          name="rf2o_laser_odometry_node" ;;
+        *'/ros2 run odom_flatten px4_odom_flatten_node '*)
+          name="px4_odom_flatten_node" ;;
+        *'/ros2 bag record '*'runtime_logs/rf2o_px4_'*)
+          name="diagnostic_bag" ;;
+      esac
+    fi
+
+    if [[ -n "${name}" ]]; then
+      LEGACY_PIDS+=("${pid}")
+      LEGACY_NAMES+=("${name}")
+      LEGACY_COMMANDS+=("${arguments}")
+    fi
+  done < <(ps -e -o pid=)
+}
+
+cleanup_legacy_pipeline_processes() {
+  local index pid deadline any_alive
+
+  find_legacy_pipeline_processes
+  (( ${#LEGACY_PIDS[@]} == 0 )) && return 0
+
+  for index in "${!LEGACY_PIDS[@]}"; do
+    log_warning "stale RF2O process from an older run: ${LEGACY_NAMES[$index]} pid=${LEGACY_PIDS[$index]}"
+    printf '%s\n' "${LEGACY_COMMANDS[$index]}"
+  done
+
+  if [[ "${CLEAN_STALE_PIPELINE}" != "1" ]]; then
+    log_error "stale RF2O processes exist and CLEAN_STALE_PIPELINE=${CLEAN_STALE_PIPELINE}"
+    return 1
+  fi
+
+  for pid in "${LEGACY_PIDS[@]}"; do
+    kill -TERM "${pid}" 2>/dev/null || true
+  done
+
+  deadline=$(( $(date +%s) + PROCESS_STOP_TIMEOUT_SEC ))
+  while (( $(date +%s) < deadline )); do
+    any_alive=0
+    for pid in "${LEGACY_PIDS[@]}"; do
+      if kill -0 "${pid}" 2>/dev/null; then
+        any_alive=1
+        break
+      fi
+    done
+    (( any_alive == 0 )) && break
+    sleep 0.2
+  done
+
+  for pid in "${LEGACY_PIDS[@]}"; do
+    kill -KILL "${pid}" 2>/dev/null || true
+  done
+  sleep 0.2
+
+  find_legacy_pipeline_processes
+  if (( ${#LEGACY_PIDS[@]} != 0 )); then
+    log_error "could not stop all stale RF2O processes"
+    for index in "${!LEGACY_PIDS[@]}"; do
+      printf '%s %s\n' "${LEGACY_PIDS[$index]}" "${LEGACY_COMMANDS[$index]}"
+    done
+    return 1
+  fi
+  log_started "all stale RF2O processes from older runs cleared"
+}
+
+acquire_launcher_lock() {
+  mkdir -p "${PIPELINE_STATE_ROOT}"
+  exec 9>"${PIPELINE_LOCK_FILE}"
+  if ! flock -n 9; then
+    log_error "another RF2O/PX4 launcher owns ${PIPELINE_LOCK_FILE}"
+    [[ -s "${PIPELINE_OWNER_FILE}" ]] && log_error "launcher pid=$(<"${PIPELINE_OWNER_FILE}")"
+    return 1
+  fi
+  LOCK_ACQUIRED=1
+  printf '%s\n' "$$" >"${PIPELINE_OWNER_FILE}"
+  recover_recorded_groups
+  cleanup_legacy_pipeline_processes
+  : >"${OWNED_GROUPS_FILE}"
 }
 
 wait_for_message() {
@@ -377,20 +596,15 @@ require_existing_mavros_disarmed() {
 }
 
 require_no_existing_pipeline() {
-  local pattern output
-  local patterns=(
-    '[l]aser_scan_stream_audit' '[l]aser_scan_canonicalizer'
-    '[r]f2o_laser_odometry_node' '[l]idar_odom_monitor'
-    '[p]x4_odom_flatten_node' '[l]idar_odom_px4_bridge'
-  )
-  for pattern in "${patterns[@]}"; do
-    output="$(pgrep -af "${pattern}" 2>/dev/null || true)"
-    if [[ -n "${output}" ]]; then
-      log_error "existing process detected for ${pattern}:"
-      printf '%s\n' "${output}"
-      return 1
-    fi
-  done
+  local index
+  find_legacy_pipeline_processes
+  if (( ${#LEGACY_PIDS[@]} != 0 )); then
+    log_error "RF2O pipeline process remains after startup recovery"
+    for index in "${!LEGACY_PIDS[@]}"; do
+      printf '%s %s\n' "${LEGACY_PIDS[$index]}" "${LEGACY_COMMANDS[$index]}"
+    done
+    return 1
+  fi
   require_publisher_count "${CANONICAL_SCAN_TOPIC}" 0
   require_publisher_count "${RF2O_RAW_ODOM_TOPIC}" 0
   require_publisher_count "${LIDAR_ODOM_TOPIC}" 0
@@ -586,7 +800,7 @@ main() {
   source "${ROS_SETUP}"
   set -u
 
-  for command in ros2 timeout pgrep setsid python3 awk; do
+  for command in ros2 timeout pgrep setsid flock python3 awk ps readlink tr; do
     if ! command -v "${command}" >/dev/null 2>&1; then
       log_error "missing command: ${command}"
       exit 1
@@ -597,6 +811,7 @@ main() {
   log "Workspace=${ROS_WS}; LiDAR=${RPLIDAR_SERIAL_PORT}; use_sim_time=${USE_SIM_TIME}"
   log "This launcher will not manage MAVROS, the flight controller, camera, or AprilTag nodes"
 
+  acquire_launcher_lock
   require_existing_mavros_disarmed
   require_no_existing_pipeline
   start_diagnostic_bag
@@ -624,4 +839,6 @@ main() {
   done
 }
 
-main "$@"
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main "$@"
+fi
