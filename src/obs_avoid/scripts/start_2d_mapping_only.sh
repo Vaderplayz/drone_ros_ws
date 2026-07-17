@@ -10,7 +10,9 @@ ROS_SETUP="${ROS_SETUP:-${ROS_WS}/install/setup.bash}"
 USE_SIM_TIME="${USE_SIM_TIME:-false}"
 
 SLAM_PARAMS_FILE="${SLAM_PARAMS_FILE:-${ROS_WS}/src/obs_avoid/config/slam2d_real_1lidar.yaml}"
-SCAN_TOPIC="${SCAN_TOPIC:-/scan_rf2o}"
+SOURCE_SCAN_TOPIC="${SOURCE_SCAN_TOPIC:-/scan_rf2o}"
+SCAN_TOPIC="${SCAN_TOPIC:-/scan_slam}"
+SCAN_DIAGNOSTICS_TOPIC="${SCAN_DIAGNOSTICS_TOPIC:-/scan_slam/diagnostics}"
 ODOM_TOPIC="${ODOM_TOPIC:-/mavros/local_position/odom}"
 MAP_TOPIC="${MAP_TOPIC:-/map}"
 MAP_FRAME="${MAP_FRAME:-map}"
@@ -22,10 +24,14 @@ MAP_WAIT_SEC="${MAP_WAIT_SEC:-120}"
 PROCESS_STOP_TIMEOUT_SEC="${PROCESS_STOP_TIMEOUT_SEC:-5}"
 MAX_INPUT_AGE_SEC="${MAX_INPUT_AGE_SEC:-10}"
 MAX_INPUT_STAMP_DELTA_SEC="${MAX_INPUT_STAMP_DELTA_SEC:-10}"
+DESKEW_STAMP_POLICY="${DESKEW_STAMP_POLICY:-end}"
+DESKEW_TIMEOUT_SEC="${DESKEW_TIMEOUT_SEC:-0.35}"
 
 RUN_STAMP="$(date +%Y%m%d_%H%M%S)"
 LOG_DIR="${ROS_WS}/runtime_logs/mapping_2d_${RUN_STAMP}"
 MASTER_LOG="${LOG_DIR}/master.log"
+DESKEW_LOG="${LOG_DIR}/scan_deskew.log"
+DESKEW_HEALTH_CSV="${LOG_DIR}/scan_deskew_health.csv"
 SLAM_LOG="${LOG_DIR}/slam_toolbox.log"
 SNAPSHOT_FILE="${LOG_DIR}/system_snapshot.txt"
 MAP_SAVE_DIR="${MAP_SAVE_DIR:-${ROS_WS}/maps}"
@@ -36,7 +42,11 @@ OWNER_FILE="${STATE_ROOT}/launcher.pid"
 PROCESS_FILE="${STATE_ROOT}/slam_process.tsv"
 BOOT_ID="$(< /proc/sys/kernel/random/boot_id)"
 
+PIDS=()
+NAMES=()
+DESKEW_PID=""
 SLAM_PID=""
+LAST_STARTED_PID=""
 LOCK_ACQUIRED=0
 SHUTDOWN_REASON="normal exit"
 CONTROL_TOPICS=(
@@ -101,13 +111,28 @@ validate_launcher_settings() {
       return 1
     fi
   done
-  for topic in "${SCAN_TOPIC}" "${ODOM_TOPIC}" "${MAP_TOPIC}"; do
+  for topic in "${SOURCE_SCAN_TOPIC}" "${SCAN_TOPIC}" "${SCAN_DIAGNOSTICS_TOPIC}" \
+    "${ODOM_TOPIC}" "${MAP_TOPIC}"; do
     if [[ ! "${topic}" =~ ^/[A-Za-z0-9_/]+$ || "${topic}" == *//* ||
       "${topic}" == */ ]]; then
       log_error "invalid absolute ROS topic name '${topic}'"
       return 1
     fi
   done
+  if [[ "${SOURCE_SCAN_TOPIC}" == "${SCAN_TOPIC}" ]]; then
+    log_error "SOURCE_SCAN_TOPIC and SCAN_TOPIC must differ so deskew cannot feed itself"
+    return 1
+  fi
+  case "${DESKEW_STAMP_POLICY}" in
+    start|end) ;;
+    *)
+      log_error "DESKEW_STAMP_POLICY must be start or end, got '${DESKEW_STAMP_POLICY}'"
+      return 1 ;;
+  esac
+  if [[ ! "${DESKEW_TIMEOUT_SEC}" =~ ^([0-9]+([.][0-9]*)?|[.][0-9]+)$ ]]; then
+    log_error "DESKEW_TIMEOUT_SEC must be a non-negative number, got '${DESKEW_TIMEOUT_SEC}'"
+    return 1
+  fi
   for frame in "${MAP_FRAME}" "${ODOM_FRAME}" "${BASE_FRAME}" "${LIDAR_FRAME}"; do
     if [[ ! "${frame}" =~ ^[A-Za-z][A-Za-z0-9_/]*$ || "${frame}" == *//* ||
       "${frame}" == */ ]]; then
@@ -118,6 +143,11 @@ validate_launcher_settings() {
 
   if ! ros2 pkg prefix slam_toolbox >/dev/null 2>&1; then
     log_error "slam_toolbox package is unavailable"
+    return 1
+  fi
+  if ! ros2 pkg executables obs_avoid 2>/dev/null | \
+    grep -q '^obs_avoid laser_scan_canonicalizer$'; then
+    log_error "obs_avoid laser_scan_canonicalizer executable is unavailable"
     return 1
   fi
   if ! ros2 pkg executables slam_toolbox 2>/dev/null | \
@@ -152,23 +182,47 @@ signal_process_group() {
   fi
 }
 
-stop_slam() {
-  local deadline
-  [[ -n "${SLAM_PID}" ]] || return 0
-  process_group_alive "${SLAM_PID}" || return 0
+start_process() {
+  local name="$1" logfile="$2"
+  shift 2
+  setsid "$@" 9>&- >"${logfile}" 2>&1 &
+  LAST_STARTED_PID="$!"
+  PIDS+=("${LAST_STARTED_PID}")
+  NAMES+=("${name}")
+  printf '%s\t%s\t%s\n' "${LAST_STARTED_PID}" "${name}" "${BOOT_ID}" >>"${PROCESS_FILE}"
+  log_started "${name} pgid=${LAST_STARTED_PID}"
+}
 
-  log "Stopping mapping-owned slam_toolbox process group pgid=${SLAM_PID}"
-  signal_process_group "${SLAM_PID}" TERM
+stop_owned_groups() {
+  local deadline any_alive index pid
+  for ((index=${#PIDS[@]} - 1; index>=0; index--)); do
+    pid="${PIDS[$index]}"
+    if process_group_alive "${pid}"; then
+      log "Stopping mapping-owned process group: ${NAMES[$index]} pgid=${pid}"
+      signal_process_group "${pid}" TERM
+    fi
+  done
+
   deadline=$(( $(date +%s) + PROCESS_STOP_TIMEOUT_SEC ))
   while (( $(date +%s) < deadline )); do
-    process_group_alive "${SLAM_PID}" || break
+    any_alive=0
+    for pid in "${PIDS[@]}"; do
+      if process_group_alive "${pid}"; then
+        any_alive=1
+        break
+      fi
+    done
+    (( any_alive == 0 )) && break
     sleep 0.2
   done
-  if process_group_alive "${SLAM_PID}"; then
-    log_warning "forcing stopped slam_toolbox process group pgid=${SLAM_PID}"
-    signal_process_group "${SLAM_PID}" KILL
-  fi
-  wait "${SLAM_PID}" 2>/dev/null || true
+
+  for ((index=${#PIDS[@]} - 1; index>=0; index--)); do
+    pid="${PIDS[$index]}"
+    if process_group_alive "${pid}"; then
+      log_warning "forcing stopped process group: ${NAMES[$index]} pgid=${pid}"
+      signal_process_group "${pid}" KILL
+    fi
+  done
 }
 
 cleanup() {
@@ -176,7 +230,10 @@ cleanup() {
   set +e
   trap - EXIT INT TERM
   log "Shutdown reason: ${SHUTDOWN_REASON}; launcher_exit=${exit_code}"
-  stop_slam
+  stop_owned_groups
+  for pid in "${PIDS[@]}"; do
+    wait "${pid}" 2>/dev/null || true
+  done
   if [[ "${LOCK_ACQUIRED}" == "1" ]]; then
     : >"${PROCESS_FILE}"
     : >"${OWNER_FILE}"
@@ -191,24 +248,45 @@ on_signal() {
 }
 
 recover_previous_mapping() {
-  local recorded_pid recorded_boot deadline
+  local recorded_pid recorded_name recorded_boot deadline any_alive pid
+  local recovered_pids=()
   [[ -s "${PROCESS_FILE}" ]] || return 0
-  IFS=$'\t' read -r recorded_pid recorded_boot <"${PROCESS_FILE}" || true
-  [[ "${recorded_pid:-}" =~ ^[0-9]+$ ]] || return 0
-  [[ "${recorded_boot:-}" == "${BOOT_ID}" ]] || return 0
-  process_group_alive "${recorded_pid}" || return 0
 
-  log_warning "recovering slam_toolbox process group from an interrupted mapping run"
-  signal_process_group "${recorded_pid}" TERM
+  while IFS=$'\t' read -r recorded_pid recorded_name recorded_boot; do
+    [[ "${recorded_pid:-}" =~ ^[0-9]+$ ]] || continue
+    if [[ -z "${recorded_boot:-}" ]]; then
+      recorded_boot="${recorded_name:-}"
+      recorded_name="legacy_mapping_process"
+    fi
+    [[ "${recorded_boot}" == "${BOOT_ID}" ]] || continue
+    if process_group_alive "${recorded_pid}"; then
+      recovered_pids+=("${recorded_pid}")
+    fi
+  done <"${PROCESS_FILE}"
+
+  (( ${#recovered_pids[@]} > 0 )) || return 0
+  log_warning "recovering ${#recovered_pids[@]} mapping-owned process group(s) from an interrupted run"
+  for pid in "${recovered_pids[@]}"; do
+    signal_process_group "${pid}" TERM
+  done
   deadline=$(( $(date +%s) + PROCESS_STOP_TIMEOUT_SEC ))
   while (( $(date +%s) < deadline )); do
-    process_group_alive "${recorded_pid}" || break
+    any_alive=0
+    for pid in "${recovered_pids[@]}"; do
+      if process_group_alive "${pid}"; then
+        any_alive=1
+        break
+      fi
+    done
+    (( any_alive == 0 )) && break
     sleep 0.2
   done
-  if process_group_alive "${recorded_pid}"; then
-    signal_process_group "${recorded_pid}" KILL
-  fi
-  log_started "previous mapping-owned process group cleared"
+  for pid in "${recovered_pids[@]}"; do
+    if process_group_alive "${pid}"; then
+      signal_process_group "${pid}" KILL
+    fi
+  done
+  log_started "previous mapping-owned process groups cleared"
 }
 
 acquire_mapping_lock() {
@@ -226,10 +304,17 @@ acquire_mapping_lock() {
 }
 
 wait_for_message() {
-  local topic="$1" timeout_sec="$2" reliability="$3"
+  local topic="$1" timeout_sec="$2" reliability="$3" pid="${4:-}" logfile="${5:-}"
   local start elapsed last_progress=-1
   start="$(date +%s)"
   while true; do
+    if [[ -n "${pid}" ]] && ! kill -0 "${pid}" 2>/dev/null; then
+      log_error "process pid=${pid} exited before publishing ${topic}"
+      if [[ -n "${logfile}" ]]; then
+        tail -n 40 "${logfile}" 2>/dev/null || true
+      fi
+      return 1
+    fi
     if timeout 3 ros2 topic echo "${topic}" --once \
       --qos-reliability "${reliability}" >/dev/null 2>&1; then
       log_started "live input ${topic}"
@@ -238,11 +323,43 @@ wait_for_message() {
     elapsed=$(( $(date +%s) - start ))
     if (( elapsed >= timeout_sec )); then
       log_error "no message on required input ${topic} after ${timeout_sec}s"
+      if [[ -n "${logfile}" ]]; then
+        tail -n 40 "${logfile}" 2>/dev/null || true
+      fi
       return 1
     fi
     if (( elapsed / 5 > last_progress )); then
       last_progress=$((elapsed / 5))
       log "Waiting for ${topic}; elapsed=${elapsed}s deadline=${timeout_sec}s"
+    fi
+    sleep 1
+  done
+}
+
+wait_for_diagnostic_true() {
+  local topic="$1" key="$2" pid="$3" timeout_sec="$4" logfile="$5"
+  local start elapsed sample last_progress=-1
+  start="$(date +%s)"
+  while true; do
+    if ! kill -0 "${pid}" 2>/dev/null; then
+      log_error "process pid=${pid} exited while waiting for ${topic} ${key}=true"
+      tail -n 40 "${logfile}" 2>/dev/null || true
+      return 1
+    fi
+    sample="$(timeout 3 ros2 topic echo "${topic}" --once 2>/dev/null || true)"
+    if grep -A1 -F "key: ${key}" <<<"${sample}" | grep -Eq "value: ['\"]?true['\"]?"; then
+      log_started "diagnostic ${topic} ${key}=true"
+      return 0
+    fi
+    elapsed=$(( $(date +%s) - start ))
+    if (( elapsed >= timeout_sec )); then
+      log_error "diagnostic deadline exceeded: ${topic} ${key}=true"
+      tail -n 40 "${logfile}" 2>/dev/null || true
+      return 1
+    fi
+    if (( elapsed / 5 > last_progress )); then
+      last_progress=$((elapsed / 5))
+      log "Waiting for ${topic} ${key}=true; elapsed=${elapsed}s deadline=${timeout_sec}s"
     fi
     sleep 1
   done
@@ -303,6 +420,15 @@ require_clean_mapping_namespace() {
     log_error "an unowned /slam_toolbox node is already running"
     return 1
   fi
+  if grep -qx '/mapping_scan_deskew' <<<"${nodes}"; then
+    log_error "an unowned /mapping_scan_deskew node is already running"
+    return 1
+  fi
+  if [[ "$(publisher_count "${SCAN_TOPIC}")" != "0" ]]; then
+    log_error "${SCAN_TOPIC} already has a publisher; refusing a second deskew source"
+    ros2 topic info "${SCAN_TOPIC}" -v 2>/dev/null || true
+    return 1
+  fi
   if [[ "$(publisher_count "${MAP_TOPIC}")" != "0" ]]; then
     log_error "${MAP_TOPIC} already has a publisher; refusing a second map source"
     ros2 topic info "${MAP_TOPIC}" -v 2>/dev/null || true
@@ -326,9 +452,9 @@ topic_stamp_seconds() {
 }
 
 verify_live_timestamp_domain() {
-  local scan_stamp odom_stamp delta wall_time scan_age odom_age
-  scan_stamp="$(topic_stamp_seconds "${SCAN_TOPIC}" best_effort)" || {
-    log_error "could not read a timestamp from ${SCAN_TOPIC}"
+  local scan_topic="$1" scan_stamp odom_stamp delta wall_time scan_age odom_age
+  scan_stamp="$(topic_stamp_seconds "${scan_topic}" best_effort)" || {
+    log_error "could not read a timestamp from ${scan_topic}"
     return 1
   }
   odom_stamp="$(topic_stamp_seconds "${ODOM_TOPIC}" best_effort)" || {
@@ -339,7 +465,7 @@ verify_live_timestamp_domain() {
   delta=$((scan_stamp - odom_stamp))
   (( delta < 0 )) && delta=$((-delta))
   if (( delta > MAX_INPUT_STAMP_DELTA_SEC )); then
-    log_error "input clock mismatch: ${SCAN_TOPIC}=${scan_stamp}, ${ODOM_TOPIC}=${odom_stamp}, delta=${delta}s"
+    log_error "input clock mismatch: ${scan_topic}=${scan_stamp}, ${ODOM_TOPIC}=${odom_stamp}, delta=${delta}s"
     return 1
   fi
 
@@ -378,20 +504,51 @@ validate_slam_node() {
   log_started "slam_toolbox scan subscription verified"
 }
 
+start_deskew() {
+  start_process mapping_scan_deskew "${DESKEW_LOG}" \
+    ros2 run obs_avoid laser_scan_canonicalizer --ros-args \
+      -r __node:=mapping_scan_deskew \
+      -p input_topic:="${SOURCE_SCAN_TOPIC}" -p output_topic:="${SCAN_TOPIC}" \
+      -p diagnostics_topic:="${SCAN_DIAGNOSTICS_TOPIC}" -p output_frame:="${LIDAR_FRAME}" \
+      -p processing_mode:=per_message_full_scan -p output_bins:=720 \
+      -p output_angle_min:=-3.141592653589793 -p output_angle_max:=3.141592653589793 \
+      -p classification_window_messages:=20 -p full_revolution_min_span_rad:=5.8 \
+      -p minimum_angular_coverage_ratio:=0.70 -p minimum_finite_return_ratio:=0.05 \
+      -p maximum_revolution_duration_sec:=0.50 -p maximum_segment_gap_sec:=0.30 \
+      -p maximum_input_messages_per_revolution:=1 -p publish_rate_limit_hz:=12.0 \
+      -p diagnostics_rate_hz:=1.0 -p enable_deskew:=true \
+      -p deskew_fixed_frame:="${ODOM_FRAME}" -p deskew_stamp_policy:="${DESKEW_STAMP_POLICY}" \
+      -p deskew_timeout_sec:="${DESKEW_TIMEOUT_SEC}" -p use_sim_time:="${USE_SIM_TIME}" \
+      -p health_csv_path:="${DESKEW_HEALTH_CSV}"
+  DESKEW_PID="${LAST_STARTED_PID}"
+  wait_for_message "${SCAN_TOPIC}" "${INPUT_WAIT_SEC}" best_effort "${DESKEW_PID}" "${DESKEW_LOG}"
+  wait_for_diagnostic_true "${SCAN_DIAGNOSTICS_TOPIC}" deskew_applied \
+    "${DESKEW_PID}" "${INPUT_WAIT_SEC}" "${DESKEW_LOG}"
+  if [[ "$(publisher_count "${SCAN_TOPIC}")" != "1" ]]; then
+    log_error "${SCAN_TOPIC} must have exactly one mapping-owned deskew publisher"
+    ros2 topic info "${SCAN_TOPIC}" -v 2>/dev/null || true
+    return 1
+  fi
+  log_started "mapping scan deskew active on ${SCAN_TOPIC}"
+}
+
 start_slam() {
-  setsid ros2 launch slam_toolbox online_async_launch.py \
-    slam_params_file:="${SLAM_PARAMS_FILE}" use_sim_time:="${USE_SIM_TIME}" \
-    9>&- >"${SLAM_LOG}" 2>&1 &
-  SLAM_PID="$!"
-  printf '%s\t%s\n' "${SLAM_PID}" "${BOOT_ID}" >"${PROCESS_FILE}"
-  log_started "mapping-only slam_toolbox pgid=${SLAM_PID}"
+  start_process slam_toolbox "${SLAM_LOG}" \
+    ros2 launch slam_toolbox online_async_launch.py \
+      slam_params_file:="${SLAM_PARAMS_FILE}" use_sim_time:="${USE_SIM_TIME}"
+  SLAM_PID="${LAST_STARTED_PID}"
 }
 
 wait_for_map() {
   local start elapsed last_progress=-1
   start="$(date +%s)"
   while true; do
-    if ! kill -0 "${SLAM_PID}" 2>/dev/null; then
+    if ! process_group_alive "${DESKEW_PID}"; then
+      log_error "mapping scan deskew exited before ${MAP_TOPIC} became ready"
+      tail -n 40 "${DESKEW_LOG}" 2>/dev/null || true
+      return 1
+    fi
+    if ! process_group_alive "${SLAM_PID}"; then
       log_error "slam_toolbox exited before publishing ${MAP_TOPIC}"
       tail -n 60 "${SLAM_LOG}" 2>/dev/null || true
       return 1
@@ -419,9 +576,16 @@ write_snapshot() {
   {
     printf 'timestamp=%s\nworkspace=%s\nuse_sim_time=%s\n' \
       "$(timestamp)" "${ROS_WS}" "${USE_SIM_TIME}"
-    printf 'scan_topic=%s\nmap_topic=%s\nframes=%s->%s->%s->%s\n' \
-      "${SCAN_TOPIC}" "${MAP_TOPIC}" "${MAP_FRAME}" "${ODOM_FRAME}" \
-      "${BASE_FRAME}" "${LIDAR_FRAME}"
+    printf 'source_scan_topic=%s\ndeskewed_scan_topic=%s\ndeskew_stamp_policy=%s\n' \
+      "${SOURCE_SCAN_TOPIC}" "${SCAN_TOPIC}" "${DESKEW_STAMP_POLICY}"
+    printf 'map_topic=%s\nframes=%s->%s->%s->%s\n' \
+      "${MAP_TOPIC}" "${MAP_FRAME}" "${ODOM_FRAME}" "${BASE_FRAME}" "${LIDAR_FRAME}"
+    printf '\n-- deskew node --\n'
+    timeout 5 ros2 node info /mapping_scan_deskew || true
+    printf '\n-- source scan topic --\n'
+    timeout 5 ros2 topic info "${SOURCE_SCAN_TOPIC}" -v || true
+    printf '\n-- deskew diagnostics --\n'
+    timeout 5 ros2 topic echo "${SCAN_DIAGNOSTICS_TOPIC}" --once || true
     printf '\n-- slam node --\n'
     timeout 5 ros2 node info /slam_toolbox || true
     printf '\n-- map topic --\n'
@@ -437,7 +601,7 @@ ready_banner() {
   printf '#                                                                    #\n'
   printf '#                         2D MAP READY                               #\n'
   printf '#                                                                    #\n'
-  printf '#              OBSERVER ONLY - NO FLIGHT CONTROL                     #\n'
+  printf '#          DESKEW ACTIVE - OBSERVER ONLY - NO FLIGHT CONTROL         #\n'
   printf '#                                                                    #\n'
   printf '######################################################################\n'
   printf '%s\n' "${RESET}"
@@ -477,27 +641,29 @@ main() {
   validate_launcher_settings
 
   log "Independent observer-only 2D mapping startup"
-  log "This launcher will only start slam_toolbox"
+  log "This launcher will only start mapping scan deskew and slam_toolbox"
   log "It will not manage RF2O/PX4 fusion, MAVROS, LiDAR, camera, AprilTag, planner, or flight control"
 
   acquire_mapping_lock
   require_clean_mapping_namespace
   capture_control_baseline
 
-  if [[ "$(publisher_count "${SCAN_TOPIC}")" != "1" ]]; then
-    log_error "${SCAN_TOPIC} must have exactly one publisher from the fusion pipeline"
-    ros2 topic info "${SCAN_TOPIC}" -v 2>/dev/null || true
+  if [[ "$(publisher_count "${SOURCE_SCAN_TOPIC}")" != "1" ]]; then
+    log_error "${SOURCE_SCAN_TOPIC} must have exactly one publisher from the fusion pipeline"
+    ros2 topic info "${SOURCE_SCAN_TOPIC}" -v 2>/dev/null || true
     exit 1
   fi
   if [[ "${USE_SIM_TIME}" == "true" ]]; then
     wait_for_message /clock "${INPUT_WAIT_SEC}" best_effort
   fi
-  wait_for_message "${SCAN_TOPIC}" "${INPUT_WAIT_SEC}" best_effort
+  wait_for_message "${SOURCE_SCAN_TOPIC}" "${INPUT_WAIT_SEC}" best_effort
   wait_for_message "${ODOM_TOPIC}" "${INPUT_WAIT_SEC}" best_effort
-  verify_live_timestamp_domain
+  verify_live_timestamp_domain "${SOURCE_SCAN_TOPIC}"
   wait_for_transform "${ODOM_FRAME}" "${BASE_FRAME}" "${INPUT_WAIT_SEC}"
   wait_for_transform "${BASE_FRAME}" "${LIDAR_FRAME}" "${INPUT_WAIT_SEC}"
 
+  start_deskew
+  verify_live_timestamp_domain "${SCAN_TOPIC}"
   start_slam
   wait_for_map
   wait_for_transform "${MAP_FRAME}" "${ODOM_FRAME}" "${INPUT_WAIT_SEC}"
@@ -511,10 +677,16 @@ main() {
   log "Save map: ros2 run nav2_map_server map_saver_cli -f ${MAP_SAVE_DIR}/indoor_map"
   log "Runtime logs: ${LOG_DIR}"
 
-  while kill -0 "${SLAM_PID}" 2>/dev/null; do
+  while process_group_alive "${SLAM_PID}" && process_group_alive "${DESKEW_PID}"; do
     sleep 2
   done
-  SHUTDOWN_REASON="slam_toolbox exited unexpectedly"
+  if ! process_group_alive "${DESKEW_PID}"; then
+    SHUTDOWN_REASON="mapping scan deskew exited unexpectedly"
+    tail -n 40 "${DESKEW_LOG}" 2>/dev/null || true
+  else
+    SHUTDOWN_REASON="slam_toolbox exited unexpectedly"
+    tail -n 40 "${SLAM_LOG}" 2>/dev/null || true
+  fi
   log_error "${SHUTDOWN_REASON}"
   return 1
 }

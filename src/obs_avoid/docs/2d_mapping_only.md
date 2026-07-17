@@ -11,7 +11,13 @@ The RF2O/PX4 fusion launcher must already provide:
 - `odom -> base_footprint`;
 - `base_footprint -> laser_frame`.
 
-The mapping-only launcher starts and owns only `slam_toolbox`. It publishes:
+The mapping-only launcher starts and owns a scan deskew node and `slam_toolbox`. The deskew
+node uses the existing timestamped TF history and publishes:
+
+- `/scan_slam`, a motion-corrected mapping scan;
+- `/scan_slam/diagnostics`;
+
+`slam_toolbox` publishes:
 
 - `/map`;
 - `map -> odom`;
@@ -45,7 +51,7 @@ while mapping. The mapping launcher does not move it.
 Use `map` as the fixed frame and add:
 
 - Map: `/map` (`nav_msgs/msg/OccupancyGrid`)
-- LaserScan: `/scan_rf2o` (`sensor_msgs/msg/LaserScan`)
+- LaserScan: `/scan_slam` (`sensor_msgs/msg/LaserScan`)
 - Odometry: `/mavros/local_position/odom` (`nav_msgs/msg/Odometry`)
 - TF: `/tf` and `/tf_static`
 
@@ -63,5 +69,5 @@ This writes `indoor_map.yaml` and `indoor_map.pgm`.
 
 ## Stop
 
-Press `Ctrl+C` in the mapping terminal. Only the mapping-owned `slam_toolbox`
-process group is stopped. The RF2O/PX4 fusion pipeline continues running.
+Press `Ctrl+C` in the mapping terminal. Only the mapping-owned deskew and `slam_toolbox`
+process groups are stopped. The RF2O/PX4 fusion pipeline continues running.
