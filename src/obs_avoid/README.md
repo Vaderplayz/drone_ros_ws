@@ -296,7 +296,22 @@ Prerequisites for real drone:
 - LiDAR driver(s) already publishing `/scan_horizontal` (and `/scan_vertical` if mapping is enabled)
 - PX4 set for OFFBOARD velocity control flow (or use `mission_obs_avoid` for AUTO.MISSION interception)
 
-### Workflow C: Mapping mode launcher (SLAM + mapper only)
+### Workflow C: Real observer-only 2D mapping
+
+Run the RF2O/PX4 fusion launcher first, then start the independent mapping
+observer in a second terminal:
+
+```bash
+cd /home/pi5drone/drone_ros_ws
+./src/obs_avoid/scripts/start_2d_mapping_only.sh
+```
+
+This starts only `slam_toolbox`. It does not start a planner, obstacle
+avoidance, MAVROS, or any flight-control publisher. See
+`docs/2d_mapping_only.md` for the required inputs, RViz topics, and map-save
+command.
+
+### Workflow C2: Legacy SLAM + vertical mapper launcher
 
 ```bash
 cd ~/ros2_ws/src/obs_avoid
