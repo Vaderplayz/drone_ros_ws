@@ -87,6 +87,42 @@ EKF2_HGT_REF
 Optical-flow aiding and range aiding must remain enabled, and the range sensor must remain
 the height reference. External vertical position and external velocity must remain disabled.
 
+## MAVLink Forwarding Warning
+
+Disable forwarding on the low-bandwidth QGC/radio MAVLink link before starting the RF2O to
+PX4 bridge:
+
+```text
+MAV_0_FORWARD = 0
+```
+
+In the observed real vehicle configuration, MAVLink instance #0 is the QGC radio link:
+
+```text
+/dev/ttyS0 @57600
+MAV_0_RATE = 1200 B/s
+Forwarding: On
+```
+
+The bridge sends MAVLink `ODOMETRY` into PX4 through the Pi USB/onboard link. In this PX4
+version, forwarding is controlled by the destination link. If the QGC link has forwarding
+enabled, broadcast-style companion messages can be forwarded onto the 1200 B/s radio link,
+dropping the TX rate multiplier and making QGroundControl/console unusable.
+
+Recommended setup:
+
+```text
+MAV_0_FORWARD = 0   # QGC/radio link must not receive forwarded companion odometry
+```
+
+Some firmware parameter sets expose only `MAV_0_*` and `MAV_1_*` even when `mavlink status`
+prints an instance #2 for USB CDC. That is okay; `MAV_2_FORWARD` is not required for this
+problem. The required fix is the destination QGC/radio link: `MAV_0_FORWARD=0`.
+
+After changing the forwarding parameter, save parameters and reboot the flight controller
+while disarmed. Confirm with `mavlink status` that instance #0 reports `Forwarding: Off`
+before starting the RF2O bridge.
+
 ## Magnetometer Policy
 
 Validation configuration:

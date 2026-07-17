@@ -19,6 +19,8 @@ PARAMETERS=(
   EKF2_OF_CTRL
   EKF2_RNG_CTRL
   EKF2_HGT_REF
+  MAV_0_FORWARD
+  MAV_0_RATE
 )
 
 timestamp() {
@@ -132,6 +134,9 @@ printf '  EKF2_EV_POS_X/Y/Z should be 0 because the bridge publishes the compens
 printf '  EKF2_EV_DELAY starts at 0 ms and requires later innovation-based tuning.\n'
 printf '  Optical-flow and range aiding must remain enabled; range must remain the height reference.\n'
 printf '  EKF2_MAG_TYPE is reported only and is never changed by this script.\n'
+printf '  MAV_0_FORWARD should be 0 on the QGC/radio link before enabling RF2O odometry.\n'
+printf '  Otherwise MAVLink ODOMETRY can be forwarded onto the low-bandwidth QGC link.\n'
+printf '  Some builds expose only MAV_0_* and MAV_1_*; MAV_2_FORWARD is not required.\n'
 printf '  PX4 must be rebooted after manually changing EKF2 parameters.\n'
 
 if (( failures > 0 )); then
