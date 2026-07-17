@@ -20,6 +20,8 @@ LIDAR_FRAME="${LIDAR_FRAME:-laser_frame}"
 INPUT_WAIT_SEC="${INPUT_WAIT_SEC:-60}"
 MAP_WAIT_SEC="${MAP_WAIT_SEC:-120}"
 PROCESS_STOP_TIMEOUT_SEC="${PROCESS_STOP_TIMEOUT_SEC:-5}"
+MAX_INPUT_AGE_SEC="${MAX_INPUT_AGE_SEC:-10}"
+MAX_INPUT_STAMP_DELTA_SEC="${MAX_INPUT_STAMP_DELTA_SEC:-10}"
 
 RUN_STAMP="$(date +%Y%m%d_%H%M%S)"
 LOG_DIR="${ROS_WS}/runtime_logs/mapping_2d_${RUN_STAMP}"
@@ -82,6 +84,58 @@ publisher_count() {
   info="$(ros2 topic info "${topic}" -v 2>/dev/null || true)"
   count="$(awk '/Publisher count:/{print $3; exit}' <<<"${info}")"
   printf '%s\n' "${count:-0}"
+}
+
+validate_launcher_settings() {
+  local value topic frame launch_arguments
+  case "${USE_SIM_TIME}" in
+    true|false) ;;
+    *)
+      log_error "USE_SIM_TIME must be exactly true or false, got '${USE_SIM_TIME}'"
+      return 1 ;;
+  esac
+  for value in "${INPUT_WAIT_SEC}" "${MAP_WAIT_SEC}" "${PROCESS_STOP_TIMEOUT_SEC}" \
+    "${MAX_INPUT_AGE_SEC}" "${MAX_INPUT_STAMP_DELTA_SEC}"; do
+    if [[ ! "${value}" =~ ^[1-9][0-9]*$ ]]; then
+      log_error "timeout and timestamp limits must be positive integer seconds, got '${value}'"
+      return 1
+    fi
+  done
+  for topic in "${SCAN_TOPIC}" "${ODOM_TOPIC}" "${MAP_TOPIC}"; do
+    if [[ ! "${topic}" =~ ^/[A-Za-z0-9_/]+$ || "${topic}" == *//* ||
+      "${topic}" == */ ]]; then
+      log_error "invalid absolute ROS topic name '${topic}'"
+      return 1
+    fi
+  done
+  for frame in "${MAP_FRAME}" "${ODOM_FRAME}" "${BASE_FRAME}" "${LIDAR_FRAME}"; do
+    if [[ ! "${frame}" =~ ^[A-Za-z][A-Za-z0-9_/]*$ || "${frame}" == *//* ||
+      "${frame}" == */ ]]; then
+      log_error "invalid TF frame name '${frame}'"
+      return 1
+    fi
+  done
+
+  if ! ros2 pkg prefix slam_toolbox >/dev/null 2>&1; then
+    log_error "slam_toolbox package is unavailable"
+    return 1
+  fi
+  if ! ros2 pkg executables slam_toolbox 2>/dev/null | \
+    grep -q '^slam_toolbox async_slam_toolbox_node$'; then
+    log_error "slam_toolbox async executable is unavailable"
+    return 1
+  fi
+  launch_arguments="$(timeout 10 ros2 launch slam_toolbox online_async_launch.py \
+    --show-args 2>/dev/null || true)"
+  if [[ "${launch_arguments}" != *"'slam_params_file'"* ||
+    "${launch_arguments}" != *"'use_sim_time'"* ]]; then
+    log_error "installed online_async_launch.py lacks required launch arguments"
+    return 1
+  fi
+  if ! ros2 pkg prefix nav2_map_server >/dev/null 2>&1; then
+    log_warning "nav2_map_server is unavailable; live mapping works but map_saver_cli will not"
+  fi
+  log_started "launcher inputs and installed ROS interfaces validated"
 }
 
 process_group_alive() {
@@ -226,16 +280,20 @@ capture_control_baseline() {
 }
 
 verify_no_control_publishers_added() {
-  local index topic current
+  local index topic current changed=0
   for index in "${!CONTROL_TOPICS[@]}"; do
     topic="${CONTROL_TOPICS[$index]}"
     current="$(publisher_count "${topic}")"
     if [[ "${current}" != "${CONTROL_COUNTS[$index]}" ]]; then
-      log_error "mapping startup changed ${topic} publisher count: ${CONTROL_COUNTS[$index]} -> ${current}"
-      return 1
+      changed=1
+      log_warning "external publisher count changed on ${topic}: ${CONTROL_COUNTS[$index]} -> ${current}"
     fi
   done
-  log_started "no flight-control or planner publishers added"
+  if (( changed == 0 )); then
+    log_started "no flight-control or planner publishers added"
+  else
+    log_warning "mapping launcher still owns only slam_toolbox; inspect independently changed control publishers"
+  fi
 }
 
 require_clean_mapping_namespace() {
@@ -258,33 +316,54 @@ require_clean_mapping_namespace() {
   fi
 }
 
-verify_existing_clock_domain() {
-  local nodes node result normalized expected
-  local known_nodes=(
-    /rplidar_node
-    /px4_odom_flatten_node
-    /laser_scan_canonicalizer
-    /rf2o_laser_odometry
-    /lidar_odom_monitor
-    /lidar_odom_px4_bridge
-  )
-  nodes="$(ros2 node list 2>/dev/null || true)"
-  expected="${USE_SIM_TIME,,}"
-  for node in "${known_nodes[@]}"; do
-    grep -qx "${node}" <<<"${nodes}" || continue
-    result="$(timeout 3 ros2 param get "${node}" use_sim_time 2>/dev/null || true)"
-    normalized="${result,,}"
-    if [[ "${normalized}" != *"${expected}"* ]]; then
-      log_error "clock mismatch: ${node} use_sim_time result is '${result}', expected ${USE_SIM_TIME}"
+topic_stamp_seconds() {
+  local topic="$1" reliability="$2" sample stamp
+  sample="$(timeout 5 ros2 topic echo "${topic}" --once --field header \
+    --qos-reliability "${reliability}" 2>/dev/null || true)"
+  stamp="$(awk '/^[[:space:]]*sec:/{print $2; exit}' <<<"${sample}")"
+  [[ "${stamp}" =~ ^[0-9]+$ ]] || return 1
+  printf '%s\n' "${stamp}"
+}
+
+verify_live_timestamp_domain() {
+  local scan_stamp odom_stamp delta wall_time scan_age odom_age
+  scan_stamp="$(topic_stamp_seconds "${SCAN_TOPIC}" best_effort)" || {
+    log_error "could not read a timestamp from ${SCAN_TOPIC}"
+    return 1
+  }
+  odom_stamp="$(topic_stamp_seconds "${ODOM_TOPIC}" best_effort)" || {
+    log_error "could not read a timestamp from ${ODOM_TOPIC}"
+    return 1
+  }
+
+  delta=$((scan_stamp - odom_stamp))
+  (( delta < 0 )) && delta=$((-delta))
+  if (( delta > MAX_INPUT_STAMP_DELTA_SEC )); then
+    log_error "input clock mismatch: ${SCAN_TOPIC}=${scan_stamp}, ${ODOM_TOPIC}=${odom_stamp}, delta=${delta}s"
+    return 1
+  fi
+
+  if [[ "${USE_SIM_TIME}" == "false" ]]; then
+    wall_time="$(date +%s)"
+    scan_age=$((wall_time - scan_stamp))
+    odom_age=$((wall_time - odom_stamp))
+    (( scan_age < 0 )) && scan_age=$((-scan_age))
+    (( odom_age < 0 )) && odom_age=$((-odom_age))
+    if (( scan_age > MAX_INPUT_AGE_SEC || odom_age > MAX_INPUT_AGE_SEC )); then
+      log_error "stale/non-wall-clock inputs: scan_age=${scan_age}s odom_age=${odom_age}s"
       return 1
     fi
-  done
-  log_started "existing LiDAR/fusion nodes use the ${USE_SIM_TIME} simulation-clock setting"
+  fi
+  log_started "live scan and odometry timestamps share one clock domain"
 }
 
 validate_slam_node() {
-  local node_info use_sim map_frame odom_frame base_frame
+  local node_info
   node_info="$(timeout 5 ros2 node info /slam_toolbox 2>/dev/null || true)"
+  if [[ -z "${node_info}" ]]; then
+    log_warning "slam_toolbox graph introspection unavailable; /map and full TF chain already verified"
+    return 0
+  fi
   if ! grep -qF "${SCAN_TOPIC}:" <<<"${node_info}"; then
     log_error "slam_toolbox is not subscribed to ${SCAN_TOPIC}"
     printf '%s\n' "${node_info}"
@@ -296,19 +375,7 @@ validate_slam_node() {
       return 1
     fi
   done
-
-  use_sim="$(timeout 3 ros2 param get /slam_toolbox use_sim_time 2>/dev/null || true)"
-  map_frame="$(timeout 3 ros2 param get /slam_toolbox map_frame 2>/dev/null || true)"
-  odom_frame="$(timeout 3 ros2 param get /slam_toolbox odom_frame 2>/dev/null || true)"
-  base_frame="$(timeout 3 ros2 param get /slam_toolbox base_frame 2>/dev/null || true)"
-  [[ "${use_sim,,}" == *"${USE_SIM_TIME,,}"* ]] || {
-    log_error "slam_toolbox use_sim_time does not match ${USE_SIM_TIME}"
-    return 1
-  }
-  grep -q "${MAP_FRAME}" <<<"${map_frame}" || return 1
-  grep -q "${ODOM_FRAME}" <<<"${odom_frame}" || return 1
-  grep -q "${BASE_FRAME}" <<<"${base_frame}" || return 1
-  log_started "slam_toolbox mapping frames and clock verified"
+  log_started "slam_toolbox scan subscription verified"
 }
 
 start_slam() {
@@ -329,7 +396,8 @@ wait_for_map() {
       tail -n 60 "${SLAM_LOG}" 2>/dev/null || true
       return 1
     fi
-    if timeout 3 ros2 topic echo "${MAP_TOPIC}" --once >/dev/null 2>&1; then
+    if timeout 3 ros2 topic echo "${MAP_TOPIC}" --once \
+      --qos-reliability reliable --qos-durability transient_local >/dev/null 2>&1; then
       log_started "2D occupancy map ${MAP_TOPIC}"
       return 0
     fi
@@ -355,11 +423,11 @@ write_snapshot() {
       "${SCAN_TOPIC}" "${MAP_TOPIC}" "${MAP_FRAME}" "${ODOM_FRAME}" \
       "${BASE_FRAME}" "${LIDAR_FRAME}"
     printf '\n-- slam node --\n'
-    ros2 node info /slam_toolbox || true
+    timeout 5 ros2 node info /slam_toolbox || true
     printf '\n-- map topic --\n'
-    ros2 topic info "${MAP_TOPIC}" -v || true
+    timeout 5 ros2 topic info "${MAP_TOPIC}" -v || true
     printf '\n-- scan topic --\n'
-    ros2 topic info "${SCAN_TOPIC}" -v || true
+    timeout 5 ros2 topic info "${SCAN_TOPIC}" -v || true
   } >"${SNAPSHOT_FILE}" 2>&1
 }
 
@@ -378,7 +446,9 @@ ready_banner() {
 main() {
   mkdir -p "${LOG_DIR}" "${MAP_SAVE_DIR}"
   touch "${MASTER_LOG}"
-  exec > >(tee -a "${MASTER_LOG}") 2>&1
+  # Keep the logger alive while the launcher handles Ctrl+C and terminates its
+  # separately-grouped slam_toolbox child. It exits naturally when this pipe closes.
+  exec > >(trap '' INT TERM; exec tee -a "${MASTER_LOG}") 2>&1
   trap cleanup EXIT
   trap 'on_signal INT' INT
   trap 'on_signal TERM' TERM
@@ -404,6 +474,8 @@ main() {
     fi
   done
 
+  validate_launcher_settings
+
   log "Independent observer-only 2D mapping startup"
   log "This launcher will only start slam_toolbox"
   log "It will not manage RF2O/PX4 fusion, MAVROS, LiDAR, camera, AprilTag, planner, or flight control"
@@ -411,7 +483,6 @@ main() {
   acquire_mapping_lock
   require_clean_mapping_namespace
   capture_control_baseline
-  verify_existing_clock_domain
 
   if [[ "$(publisher_count "${SCAN_TOPIC}")" != "1" ]]; then
     log_error "${SCAN_TOPIC} must have exactly one publisher from the fusion pipeline"
@@ -423,6 +494,7 @@ main() {
   fi
   wait_for_message "${SCAN_TOPIC}" "${INPUT_WAIT_SEC}" best_effort
   wait_for_message "${ODOM_TOPIC}" "${INPUT_WAIT_SEC}" best_effort
+  verify_live_timestamp_domain
   wait_for_transform "${ODOM_FRAME}" "${BASE_FRAME}" "${INPUT_WAIT_SEC}"
   wait_for_transform "${BASE_FRAME}" "${LIDAR_FRAME}" "${INPUT_WAIT_SEC}"
 

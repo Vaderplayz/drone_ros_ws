@@ -776,7 +776,8 @@ ready_banner() {
 main() {
   mkdir -p "${LOG_DIR}"
   touch "${MASTER_LOG}"
-  exec > >(tee -a "${MASTER_LOG}") 2>&1
+  # Keep the logger alive until launcher-owned process groups are fully stopped.
+  exec > >(trap '' INT TERM; exec tee -a "${MASTER_LOG}") 2>&1
   trap cleanup EXIT
   trap 'on_signal INT' INT
   trap 'on_signal TERM' TERM
