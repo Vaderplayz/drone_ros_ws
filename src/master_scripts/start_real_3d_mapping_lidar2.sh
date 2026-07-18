@@ -15,10 +15,11 @@ LIDAR2_SERIAL_PORT="${LIDAR2_SERIAL_PORT:-/dev/ttyUSB1}"
 LIDAR2_BAUDRATE="${LIDAR2_BAUDRATE:-460800}"
 LIDAR2_FRAME_ID="${LIDAR2_FRAME_ID:-lidar_vert_link}"
 LIDAR2_SCAN_TOPIC="${LIDAR2_SCAN_TOPIC:-/scan_vertical}"
-LIDAR2_NODE_NAME="${LIDAR2_NODE_NAME:-rplidar2_vertical}"
+LIDAR2_NODE_NAME="${LIDAR2_NODE_NAME:-sllidar2_vertical}"
 LIDAR2_SCAN_WAIT_SEC="${LIDAR2_SCAN_WAIT_SEC:-60}"
 LIDAR2_INVERTED="${LIDAR2_INVERTED:-false}"
 LIDAR2_ANGLE_COMPENSATE="${LIDAR2_ANGLE_COMPENSATE:-true}"
+LIDAR2_SCAN_MODE="${LIDAR2_SCAN_MODE:-Standard}"
 
 ODOM_FRAME="${ODOM_FRAME:-odom}"
 BASE_FRAME="${BASE_FRAME:-base_footprint}"
@@ -55,7 +56,7 @@ PROCESS_STOP_TIMEOUT_SEC="${PROCESS_STOP_TIMEOUT_SEC:-5}"
 RUN_STAMP="$(date +%Y%m%d_%H%M%S)"
 LOG_DIR="${ROS_WS}/runtime_logs/lidar2_3d_${RUN_STAMP}"
 MASTER_LOG="${LOG_DIR}/master.log"
-LIDAR2_LOG="${LOG_DIR}/rplidar2.log"
+LIDAR2_LOG="${LOG_DIR}/sllidar2.log"
 STATIC_TF_LOG="${LOG_DIR}/lidar2_static_tf.log"
 MAPPER_LOG="${LOG_DIR}/vertical_lidar_mapper.log"
 ROSBAG_LOG="${LOG_DIR}/vertical_mapping_bag.log"
@@ -390,8 +391,8 @@ wait_for_2d_map_if_required() {
   wait_for_transform "${MAP_FRAME}" "${ODOM_FRAME}" "${WAIT_TIMEOUT_SEC}"
 }
 
-rplidar_process_using_lidar2_port() {
-  pgrep -af '[r]plidar_composition|[r]plidar_node' 2>/dev/null | \
+lidar_process_using_lidar2_port() {
+  pgrep -af '[s]llidar_node|[r]plidar_composition|[r]plidar_node' 2>/dev/null | \
     grep -F "serial_port:=${LIDAR2_SERIAL_PORT}" || true
 }
 
@@ -409,9 +410,9 @@ start_lidar2_driver() {
     ros2 topic info "${LIDAR2_SCAN_TOPIC}" -v 2>/dev/null || true
     return 1
   fi
-  process_on_port="$(rplidar_process_using_lidar2_port)"
+  process_on_port="$(lidar_process_using_lidar2_port)"
   if [[ -n "${process_on_port}" ]]; then
-    log_error "an RPLIDAR process already uses ${LIDAR2_SERIAL_PORT}, but ${LIDAR2_SCAN_TOPIC} has no publisher"
+    log_error "a lidar process already uses ${LIDAR2_SERIAL_PORT}, but ${LIDAR2_SCAN_TOPIC} has no publisher"
     printf '%s\n' "${process_on_port}"
     return 1
   fi
@@ -421,16 +422,17 @@ start_lidar2_driver() {
     return 1
   fi
 
-  start_process rplidar2 "${LIDAR2_LOG}" \
-    ros2 run rplidar_ros rplidar_composition --ros-args \
+  start_process sllidar2 "${LIDAR2_LOG}" \
+    ros2 run sllidar_ros2 sllidar_node --ros-args \
       -r __node:="${LIDAR2_NODE_NAME}" \
+      -r scan:="${LIDAR2_SCAN_TOPIC}" \
       -p channel_type:=serial \
       -p serial_port:="${LIDAR2_SERIAL_PORT}" \
       -p serial_baudrate:="${LIDAR2_BAUDRATE}" \
       -p frame_id:="${LIDAR2_FRAME_ID}" \
       -p inverted:="${LIDAR2_INVERTED}" \
       -p angle_compensate:="${LIDAR2_ANGLE_COMPENSATE}" \
-      -p topic_name:="${LIDAR2_SCAN_TOPIC#/}" \
+      -p scan_mode:="${LIDAR2_SCAN_MODE}" \
       -p use_sim_time:="${USE_SIM_TIME}"
   pid="${LAST_STARTED_PID}"
   wait_for_message "${LIDAR2_SCAN_TOPIC}" "${LIDAR2_SCAN_WAIT_SEC}" best_effort "${pid}" "${LIDAR2_LOG}"
@@ -575,8 +577,8 @@ main() {
       exit 1
     fi
   done
-  if ! ros2 pkg prefix rplidar_ros >/dev/null 2>&1; then
-    log_error "rplidar_ros package is unavailable in this overlay"
+  if ! ros2 pkg prefix sllidar_ros2 >/dev/null 2>&1; then
+    log_error "sllidar_ros2 is unavailable; install/build Slamtec's C1-compatible ROS 2 driver"
     exit 1
   fi
   if ! ros2 pkg prefix vertical_lidar_mapper >/dev/null 2>&1; then

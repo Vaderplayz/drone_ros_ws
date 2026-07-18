@@ -10,8 +10,20 @@ control. It does not arm, change PX4 mode, or publish setpoints.
 - lidar2 baudrate: `460800`
 - lidar2 scan topic: `/scan_vertical`
 - lidar2 frame: `lidar_vert_link`
+- lidar2 scan mode: `Standard`
+- lidar2 driver: `sllidar_ros2` with the newer C1-compatible Slamtec SDK
 - mapper outputs: `/vertical_cloud`, `/vertical_map`, `/mapping/global_cloud`,
   `/mapping/status`
+
+The legacy `rplidar_ros` copy in this workspace uses SDK `1.12.0` and remains
+available for lidar1. Lidar2 deliberately uses `sllidar_ros2`; the launcher
+will stop with a clear error if that package has not been built in the overlay.
+
+Check the driver before startup:
+
+```bash
+ros2 pkg prefix sllidar_ros2
+```
 
 The default static TF assumes ROS body axes `x-forward`, `y-left`, `z-up`, and
 the C1M1 local `+X` forward direction points to the drone's left. This makes the

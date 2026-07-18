@@ -21,6 +21,7 @@ Top-level contents:
 - `lidar_cpp`
 - `my_package`
 - `rplidar_ros` (upstream package copy)
+- `sllidar_ros2` (required C1-compatible driver for real lidar2)
 - `slam_toolbox` (upstream package copy)
 - `pc_env_viewer` (standalone Qt/PCL app)
 - `pc_env_viewer_no_ros` (standalone variant)
@@ -321,7 +322,7 @@ cd /home/pi5drone/drone_ros_ws
 ./src/master_scripts/start_real_3d_mapping_lidar2.sh
 ```
 
-This starts only the C1M1 lidar2 driver on `/dev/ttyUSB1`, the
+This starts only the C1M1 lidar2 using `sllidar_ros2` on `/dev/ttyUSB1`, the
 `base_footprint -> lidar_vert_link` static TF, and `vertical_lidar_mapper`.
 It publishes `/scan_vertical`, `/vertical_cloud`, `/vertical_map`, and
 `/mapping/global_cloud`. See `docs/3d_mapping_lidar2.md` for frame defaults,
