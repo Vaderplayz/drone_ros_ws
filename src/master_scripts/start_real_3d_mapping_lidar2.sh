@@ -44,6 +44,7 @@ LIDAR2_YAW="${LIDAR2_YAW:-1.57079632679}"
 
 MAPPER_PARAMS_FILE="${MAPPER_PARAMS_FILE:-${ROS_WS}/src/vertical_lidar_mapper/config/real_c1m1_left.yaml}"
 VERTICAL_CLOUD_TOPIC="${VERTICAL_CLOUD_TOPIC:-/vertical_cloud}"
+DESKEWED_CLOUD_TOPIC="${DESKEWED_CLOUD_TOPIC:-/vertical_points_deskewed}"
 VERTICAL_MAP_TOPIC="${VERTICAL_MAP_TOPIC:-/vertical_map}"
 GLOBAL_CLOUD_TOPIC="${GLOBAL_CLOUD_TOPIC:-/mapping/global_cloud}"
 MAPPING_STATUS_TOPIC="${MAPPING_STATUS_TOPIC:-/mapping/status}"
@@ -289,7 +290,7 @@ validate_settings() {
     0|1) ;;
     *) log_error "REQUIRE_2D_MAP must be 0 or 1, got '${REQUIRE_2D_MAP}'"; return 1 ;;
   esac
-  for topic in "${LIDAR2_SCAN_TOPIC}" "${VERTICAL_CLOUD_TOPIC}" "${VERTICAL_MAP_TOPIC}" \
+  for topic in "${LIDAR2_SCAN_TOPIC}" "${DESKEWED_CLOUD_TOPIC}" "${VERTICAL_CLOUD_TOPIC}" "${VERTICAL_MAP_TOPIC}" \
     "${GLOBAL_CLOUD_TOPIC}" "${MAPPING_STATUS_TOPIC}" "${PX4_ODOM_TOPIC}"; do
     if [[ ! "${topic}" =~ ^/[A-Za-z0-9_/]+$ || "${topic}" == *//* || "${topic}" == */ ]]; then
       log_error "invalid absolute ROS topic name '${topic}'"
@@ -322,7 +323,9 @@ wait_for_message() {
   while true; do
     if [[ -n "${pid}" ]] && ! kill -0 "${pid}" 2>/dev/null; then
       log_error "process pid=${pid} exited before publishing ${topic}"
-      [[ -n "${logfile}" ]] && tail -n 60 "${logfile}" 2>/dev/null || true
+      if [[ -n "${logfile}" ]]; then
+        tail -n 60 "${logfile}" 2>/dev/null || true
+      fi
       return 10
     fi
     if timeout 3 ros2 topic echo "${topic}" --once \
@@ -333,7 +336,9 @@ wait_for_message() {
     elapsed=$(( $(date +%s) - start ))
     if (( elapsed >= timeout_sec )); then
       log_error "no message on ${topic} after ${timeout_sec}s"
-      [[ -n "${logfile}" ]] && tail -n 60 "${logfile}" 2>/dev/null || true
+      if [[ -n "${logfile}" ]]; then
+        tail -n 60 "${logfile}" 2>/dev/null || true
+      fi
       return 12
     fi
     if (( elapsed / 5 > last_progress )); then
@@ -357,7 +362,9 @@ wait_for_transform() {
   while true; do
     if [[ -n "${pid}" ]] && ! kill -0 "${pid}" 2>/dev/null; then
       log_error "process pid=${pid} exited while waiting for TF ${parent} -> ${child}"
-      [[ -n "${logfile}" ]] && tail -n 60 "${logfile}" 2>/dev/null || true
+      if [[ -n "${logfile}" ]]; then
+        tail -n 60 "${logfile}" 2>/dev/null || true
+      fi
       return 10
     fi
     output="$(timeout 3 ros2 run tf2_ros tf2_echo "${parent}" "${child}" 2>&1 || true)"
@@ -368,7 +375,9 @@ wait_for_transform() {
     elapsed=$(( $(date +%s) - start ))
     if (( elapsed >= timeout_sec )); then
       log_error "missing TF ${parent} -> ${child} after ${timeout_sec}s"
-      [[ -n "${logfile}" ]] && tail -n 60 "${logfile}" 2>/dev/null || true
+      if [[ -n "${logfile}" ]]; then
+        tail -n 60 "${logfile}" 2>/dev/null || true
+      fi
       return 12
     fi
     if (( elapsed / 5 > last_progress )); then
@@ -471,7 +480,7 @@ require_mapper_namespace_free() {
     log_error "/vertical_lidar_mapper is already running"
     return 1
   fi
-  for topic in "${VERTICAL_CLOUD_TOPIC}" "${VERTICAL_MAP_TOPIC}" "${GLOBAL_CLOUD_TOPIC}" \
+  for topic in "${DESKEWED_CLOUD_TOPIC}" "${VERTICAL_CLOUD_TOPIC}" "${VERTICAL_MAP_TOPIC}" "${GLOBAL_CLOUD_TOPIC}" \
     "${MAPPING_STATUS_TOPIC}"; do
     count="$(publisher_count "${topic}")"
     if [[ "${count}" != "0" ]]; then
@@ -495,6 +504,7 @@ start_mapper() {
       -p base_frame:="${BASE_FRAME}" \
       -p lidar_frame_override:="${LIDAR2_FRAME_ID}" \
       -p motion_odom_topic:="${PX4_ODOM_TOPIC}" \
+      -p motion_odom_frame:="${ODOM_FRAME}" \
       -p pcd_export_dir:="${EXPORT_DIR}" \
       -p map_rebase_map_frame:="${MAP_FRAME}" \
       -p map_rebase_odom_frame:="${ODOM_FRAME}" \
@@ -511,7 +521,7 @@ start_vertical_bag() {
   fi
   start_process vertical_mapping_bag "${ROSBAG_LOG}" \
     ros2 bag record -o "${LOG_DIR}/vertical_mapping_bag" \
-      "${LIDAR2_SCAN_TOPIC}" "${VERTICAL_CLOUD_TOPIC}" "${VERTICAL_MAP_TOPIC}" \
+      "${LIDAR2_SCAN_TOPIC}" "${DESKEWED_CLOUD_TOPIC}" "${VERTICAL_CLOUD_TOPIC}" "${VERTICAL_MAP_TOPIC}" \
       "${GLOBAL_CLOUD_TOPIC}" "${MAPPING_STATUS_TOPIC}" "${PX4_ODOM_TOPIC}" \
       /map /tf /tf_static
 }
@@ -526,7 +536,7 @@ write_snapshot() {
     printf 'lidar2_static_tf_xyz_rpy=%s,%s,%s,%s,%s,%s\n' \
       "${LIDAR2_X}" "${LIDAR2_Y}" "${LIDAR2_Z}" "${LIDAR2_ROLL}" "${LIDAR2_PITCH}" "${LIDAR2_YAW}"
     printf 'mapper_params=%s\nexport_dir=%s\n' "${MAPPER_PARAMS_FILE}" "${EXPORT_DIR}"
-    for topic in "${LIDAR2_SCAN_TOPIC}" "${VERTICAL_CLOUD_TOPIC}" "${VERTICAL_MAP_TOPIC}" \
+    for topic in "${LIDAR2_SCAN_TOPIC}" "${DESKEWED_CLOUD_TOPIC}" "${VERTICAL_CLOUD_TOPIC}" "${VERTICAL_MAP_TOPIC}" \
       "${GLOBAL_CLOUD_TOPIC}" "${MAPPING_STATUS_TOPIC}"; do
       printf '\n-- %s --\n' "${topic}"
       ros2 topic info "${topic}" -v || true

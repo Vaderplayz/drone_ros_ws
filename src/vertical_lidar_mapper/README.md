@@ -7,8 +7,14 @@ ROS 2 (Humble/Rolling) package for building a rolling 3D point cloud map from a 
 ## Features
 
 - Subscribes to `sensor_msgs/LaserScan` with `SensorDataQoS`
-- Projects scans to `PointCloud2` via `laser_geometry::LaserProjection`
-- Transforms each scan into a fixed frame (`target_frame`, default `odom`) at scan timestamp
+- Projects rigid fallback scans via `laser_geometry::LaserProjection`
+- Deskews each vertical beam from buffered full 6-DoF MAVROS odometry using
+  linear translation interpolation and quaternion SLERP
+- Uses the scan timestamp and each beam's `time_increment`; it never falls back
+  to latest TF for scan integration
+- Publishes deskewed scan-reference points on `/vertical_points_deskewed`
+- Combines SLAM-corrected `x/y/yaw` (`map -> odom`) with PX4
+  `z/roll/pitch` (`/mavros/local_position/odom`)
 - Publishes latest transformed scan on `/vertical_cloud`
 - Accumulates scans over a rolling time window and publishes voxelized map on `/vertical_map`
 - Publishes bounded global cloud map on `/mapping/global_cloud`
@@ -18,12 +24,17 @@ ROS 2 (Humble/Rolling) package for building a rolling 3D point cloud map from a 
   - 2D occupancy map (`.pgm` + `.yaml`)
   - drone trajectory (`.csv`)
 - Auto-saves map assets on node exit when `autosave_on_exit:=true` (default)
-- Provides keyframe rebuild service on `/vertical_lidar_mapper/rebuild_global`
-- Handles missing TF (drops scan + throttled warnings)
-- Uses TF message filter to drop scans that are not transformable before heavy processing
+- Stores deskewed local-frame keyframes and their timestamped odom poses
+- Provides keyframe rebuild service on `/vertical_lidar_mapper/rebuild_global`;
+  rebuild transforms raw local points again instead of repeatedly transforming
+  an old map-frame cloud
+- Handles missing TF or pose brackets with clean scan rejection, counters, and
+  throttled warnings
+- Uses direct, diagnosed scan-time lookups for full-pose deskew; the legacy
+  rigid-scan mode retains its TF message filter
 - Motion-gates global integration when yaw-rate is too high (`drop_scan_on_excess_motion`)
 - Compares SLAM-relative motion vs odom-relative motion and drops inconsistent global integration (`enable_relative_pose_gate`)
-- Rebases accumulated points on `map->odom` corrections to reduce loop-closure double walls (`enable_map_rebase`)
+- Rebuilds accumulated points on `map->odom` corrections to reduce loop-closure double walls (`enable_map_rebase`)
 - Supports `integration_mode`:
   - `keyframe` (default) for cleaner global maps
   - `continuous` for legacy behavior
@@ -89,9 +100,9 @@ ros2 launch vertical_lidar_mapper vertical_lidar_mapper.launch.py \
 ## Time-sync checks
 
 ```bash
-ros2 topic echo -n 1 /clock
-ros2 topic echo -n 1 /scan_vertical | grep stamp
-ros2 topic echo -n 1 /mavros/local_position/odom | grep stamp
+ros2 topic echo --once /clock
+ros2 topic echo --once /scan_vertical | grep stamp
+ros2 topic echo --once /mavros/local_position/odom | grep stamp
 ```
 
 ## TF checks
@@ -106,6 +117,8 @@ ros2 run tf2_ros tf2_echo base_link lidar_vert_link
 
 - Fixed Frame: `odom` (or `map` if you set `target_frame:=map`)
 - Add `PointCloud2` display for `/vertical_cloud`
+- Add `PointCloud2` display for `/vertical_points_deskewed` to inspect the
+  current corrected scan in `lidar_vert_link`
 - Add `PointCloud2` display for `/vertical_map`
 
 If messages drop:

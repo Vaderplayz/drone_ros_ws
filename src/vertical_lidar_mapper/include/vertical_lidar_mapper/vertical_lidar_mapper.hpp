@@ -4,6 +4,7 @@
 #define VERTICAL_LIDAR_MAPPER__VERTICAL_LIDAR_MAPPER_HPP_
 
 #include <deque>
+#include <cstdint>
 #include <filesystem>
 #include <memory>
 #include <mutex>
@@ -64,12 +65,24 @@ private:
 
   struct Keyframe
   {
+    std::uint64_t id{0};
     rclcpp::Time stamp;
-    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud;
+    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_local;
+    tf2::Transform pose_odom_source;
     tf2::Transform pose_target_source;
+    std::string source_frame;
+    bool deskewed{false};
+    std::size_t input_points{0};
+  };
+
+  struct PoseSample
+  {
+    rclcpp::Time stamp;
+    tf2::Transform pose_odom_base;
   };
 
   void loadParameters();
+  void motionOdomCallback(const nav_msgs::msg::Odometry::SharedPtr msg);
   void scanCallback(const sensor_msgs::msg::LaserScan::ConstSharedPtr scan_msg);
 
   std::string resolveSourceFrame(const sensor_msgs::msg::LaserScan & scan_msg) const;
@@ -78,6 +91,28 @@ private:
   void pruneOldScans(const rclcpp::Time & newest_stamp);
   void enforceRawPointCap();
   void recordTfLookupSampleMs(double duration_ms);
+  std::vector<PoseSample> snapshotPoseBuffer() const;
+  bool interpolateFullPose(
+    const std::vector<PoseSample> & samples,
+    const rclcpp::Time & stamp,
+    tf2::Transform & pose_odom_base,
+    double & bracket_gap_sec) const;
+  bool lookupTargetFromOdom(
+    const rclcpp::Time & stamp,
+    bool latest,
+    tf2::Transform & pose_target_odom,
+    std::string & error_message) const;
+  bool buildDeskewedLocalCloud(
+    const sensor_msgs::msg::LaserScan & scan,
+    const rclcpp::Time & reference_stamp,
+    const std::string & source_frame,
+    pcl::PointCloud<pcl::PointXYZ>::Ptr & cloud_local,
+    tf2::Transform & pose_odom_source,
+    std::size_t & valid_input_points,
+    std::string & error_message);
+  pcl::PointCloud<pcl::PointXYZ>::Ptr transformCloud(
+    const pcl::PointCloud<pcl::PointXYZ>::Ptr & input_cloud,
+    const tf2::Transform & transform) const;
   bool shouldDropGlobalIntegration(double & yaw_rate, double & odom_age_sec) const;
   bool shouldDropByRelativePoseConsistency(
     const rclcpp::Time & scan_stamp,
@@ -93,9 +128,14 @@ private:
   void integrateGlobalCloud(const pcl::PointCloud<pcl::PointXYZ>::Ptr & scan_cloud);
   void enforceGlobalCloudLimits();
   bool maybeIntegrateAsKeyframe(
-    const pcl::PointCloud<pcl::PointXYZ>::Ptr & scan_cloud,
-    const geometry_msgs::msg::TransformStamped & tf_target,
-    const rclcpp::Time & scan_stamp);
+    const pcl::PointCloud<pcl::PointXYZ>::Ptr & cloud_local,
+    const pcl::PointCloud<pcl::PointXYZ>::Ptr & cloud_target,
+    const tf2::Transform & pose_odom_source,
+    const tf2::Transform & pose_target_source,
+    const rclcpp::Time & scan_stamp,
+    const std::string & source_frame,
+    bool deskewed,
+    std::size_t input_points);
   bool rebuildGlobalCloudFromKeyframes(std::string & error_message);
   void recordTrajectoryPoint(
     const rclcpp::Time & stamp,
@@ -145,10 +185,12 @@ private:
 
   std::shared_ptr<message_filters::Subscriber<sensor_msgs::msg::LaserScan>> scan_filter_sub_;
   std::shared_ptr<tf2_ros::MessageFilter<sensor_msgs::msg::LaserScan>> scan_filter_;
+  rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr scan_sub_;
   rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr motion_odom_sub_;
   rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr slam_map_sub_;
 
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr cloud_pub_;
+  rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr deskewed_cloud_pub_;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr map_pub_;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr global_map_pub_;
   rclcpp::Publisher<diagnostic_msgs::msg::DiagnosticArray>::SharedPtr status_pub_;
@@ -167,6 +209,8 @@ private:
   std::size_t global_points_total_{0};
   std::deque<double> tf_lookup_samples_ms_;
   std::optional<nav_msgs::msg::Odometry> motion_odom_;
+  mutable std::mutex pose_buffer_mutex_;
+  std::deque<PoseSample> pose_buffer_;
   mutable std::mutex slam_map_mutex_;
   std::optional<nav_msgs::msg::OccupancyGrid> latest_slam_map_;
   std::optional<rclcpp::Time> last_scan_stamp_;
@@ -185,6 +229,7 @@ private:
   std::string lidar_frame_override_;
   std::string map_topic_;
   std::string cloud_topic_;
+  std::string deskewed_cloud_topic_;
   std::string global_map_topic_;
   std::string status_topic_;
   std::string motion_odom_topic_;
@@ -193,6 +238,8 @@ private:
   std::string map2d_export_prefix_;
   std::string trajectory_export_prefix_;
   std::string integration_mode_{"keyframe"};
+  std::string motion_odom_frame_{"odom"};
+  std::string scan_stamp_reference_{"start"};
 
   double voxel_leaf_{0.15};
   int max_points_{500000};
@@ -200,6 +247,11 @@ private:
   double min_range_{0.2};
   double max_range_{12.0};
   double tf_timeout_{0.05};
+  bool enable_full_pose_deskew_{false};
+  bool require_full_pose_deskew_{true};
+  double pose_buffer_duration_sec_{5.0};
+  double pose_interpolation_max_gap_sec_{0.20};
+  double deskew_min_valid_ratio_{0.90};
   bool debug_{false};
   bool exclude_floor_points_{false};
   double floor_z_max_{0.15};
@@ -283,6 +335,24 @@ private:
   double last_relative_pose_map_step_yaw_rad_{0.0};
   std::size_t map_rebase_cooldown_drop_count_{0};
   std::size_t rebuild_freeze_drop_count_{0};
+  std::uint64_t next_keyframe_id_{1};
+  std::size_t accepted_scan_count_{0};
+  std::size_t deskewed_scan_count_{0};
+  std::size_t deskew_failure_count_{0};
+  std::size_t pose_interpolation_failure_count_{0};
+  std::size_t deskewed_points_total_{0};
+  std::size_t last_deskewed_point_count_{0};
+  std::size_t last_valid_input_point_count_{0};
+  std::size_t last_local_voxel_point_count_{0};
+  double last_scan_age_sec_{0.0};
+  double last_pose_bracket_gap_sec_{0.0};
+  double last_pose_buffer_oldest_age_sec_{0.0};
+  double last_pose_buffer_newest_age_sec_{0.0};
+  std::string last_scan_drop_reason_{"none"};
+  std::optional<rclcpp::Time> last_status_stamp_;
+  std::size_t last_status_scans_seen_{0};
+  std::size_t last_status_scans_accepted_{0};
+  std::size_t last_status_keyframes_{0};
 };
 
 }  // namespace vertical_lidar_mapper
