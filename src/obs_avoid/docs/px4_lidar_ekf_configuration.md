@@ -182,7 +182,7 @@ colcon build --executor sequential --symlink-install \
 
 source install/setup.bash
 ./src/obs_avoid/scripts/check_px4_lidar_ekf.sh
-./src/obs_avoid/scripts/start_rf2o_px4_fusion.sh
+./src/master_scripts/start_rf2o_px4_fusion.sh
 ```
 
 This is a separate RF2O/PX4 launcher. It does not call or source the mapping launcher and has
@@ -199,7 +199,7 @@ disabled by default so the basic RF2O-to-PX4 path does not depend on per-ray TF 
 Set `RECORD_DIAGNOSTIC_BAG=1` only when the optional RF2O/PX4 diagnostic bag is needed:
 
 ```bash
-RECORD_DIAGNOSTIC_BAG=1 ./src/obs_avoid/scripts/start_rf2o_px4_fusion.sh
+RECORD_DIAGNOSTIC_BAG=1 ./src/master_scripts/start_rf2o_px4_fusion.sh
 ```
 
 Each run creates `runtime_logs/rf2o_px4_<timestamp>/` containing:

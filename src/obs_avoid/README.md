@@ -303,13 +303,29 @@ observer in a second terminal:
 
 ```bash
 cd /home/pi5drone/drone_ros_ws
-./src/obs_avoid/scripts/start_2d_mapping_only.sh
+./src/master_scripts/start_2d_mapping_only.sh
 ```
 
 This starts only `slam_toolbox`. It does not start a planner, obstacle
 avoidance, MAVROS, or any flight-control publisher. See
 `docs/2d_mapping_only.md` for the required inputs, RViz topics, and map-save
 command.
+
+### Workflow C1: Real lidar2 vertical 3D mapping
+
+Run the RF2O/PX4 fusion launcher first. If you want the 3D cloud in the 2D
+SLAM `map` frame, also start Workflow C, then run:
+
+```bash
+cd /home/pi5drone/drone_ros_ws
+./src/master_scripts/start_real_3d_mapping_lidar2.sh
+```
+
+This starts only the C1M1 lidar2 driver on `/dev/ttyUSB1`, the
+`base_footprint -> lidar_vert_link` static TF, and `vertical_lidar_mapper`.
+It publishes `/scan_vertical`, `/vertical_cloud`, `/vertical_map`, and
+`/mapping/global_cloud`. See `docs/3d_mapping_lidar2.md` for frame defaults,
+odom-only mode, RViz topics, and export commands.
 
 ### Workflow C2: Legacy SLAM + vertical mapper launcher
 

@@ -33,18 +33,31 @@ Start the independent fusion pipeline in one terminal:
 
 ```bash
 cd /home/pi5drone/drone_ros_ws
-./src/obs_avoid/scripts/start_rf2o_px4_fusion.sh
+./src/master_scripts/start_rf2o_px4_fusion.sh
 ```
 
 After it reports `ALL SYSTEM READY`, start mapping in another terminal:
 
 ```bash
 cd /home/pi5drone/drone_ros_ws
-./src/obs_avoid/scripts/start_2d_mapping_only.sh
+./src/master_scripts/start_2d_mapping_only.sh
 ```
 
 Wait for the green `2D MAP READY` banner. The vehicle may then be moved manually
 while mapping. The mapping launcher does not move it.
+
+## Mapping Tune
+
+The real A1M8 profile in `config/slam2d_real_1lidar.yaml` uses:
+
+- an 8.0 m mapping range to reject weak long-range returns;
+- 0.05 m and 0.05 rad keyframe thresholds for cleaner corners;
+- a 0.6 m local correlation search around the odometry prior;
+- a 3.0 m loop-closure search radius;
+- at least three beam passes and a 0.15 hit ratio before marking a cell occupied.
+
+These settings affect only observer-side map construction. They do not alter RF2O,
+PX4 fusion, MAVROS, or vehicle control.
 
 ## RViz
 
@@ -57,7 +70,20 @@ Use `map` as the fixed frame and add:
 
 ## Save
 
-Save the occupancy map from another terminal:
+On `Ctrl+C`, the launcher automatically saves the current `/map` occupancy
+grid before stopping `slam_toolbox`. It writes the technical ROS map output
+and a normal image:
+
+```text
+/home/pi5drone/drone_ros_ws/maps/indoor_map_<run_stamp>.yaml
+/home/pi5drone/drone_ros_ws/maps/indoor_map_<run_stamp>.pgm
+/home/pi5drone/drone_ros_ws/maps/indoor_map_<run_stamp>.png
+```
+
+The `.yaml` + `.pgm` pair is the standard ROS map-server format. The `.png` is
+converted from the same PGM occupancy image for easier viewing.
+
+To save manually while the node is still running:
 
 ```bash
 mkdir -p /home/pi5drone/drone_ros_ws/maps
@@ -65,9 +91,14 @@ ros2 run nav2_map_server map_saver_cli \
   -f /home/pi5drone/drone_ros_ws/maps/indoor_map
 ```
 
-This writes `indoor_map.yaml` and `indoor_map.pgm`.
+Disable shutdown autosave with:
+
+```bash
+AUTO_SAVE_2D_MAP_ON_EXIT=0 ./src/master_scripts/start_2d_mapping_only.sh
+```
 
 ## Stop
 
 Press `Ctrl+C` in the mapping terminal. Only the mapping-owned deskew and `slam_toolbox`
-process groups are stopped. The RF2O/PX4 fusion pipeline continues running.
+process groups are stopped after autosave. The RF2O/PX4 fusion pipeline
+continues running.

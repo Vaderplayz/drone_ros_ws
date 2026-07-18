@@ -1,0 +1,113 @@
+# Timestamp: 2026-02-25 22:35:00 +07+0700
+# Most Recent Update: Marked this file as legacy profile; V1.1 clean profiles moved to v11_*.yaml.
+vertical_lidar_mapper:
+  ros__parameters:
+    use_sim_time: true
+
+    # Input / output topics
+    scan_topic: "/scan_vertical"
+    cloud_topic: "/vertical_cloud"
+    map_topic: "/vertical_map"
+    global_map_topic: "/mapping/global_cloud"
+    status_topic: "/mapping/status"
+
+    # Frames
+    target_frame: "map"
+    base_frame: "base_link"
+    lidar_frame_override: ""
+
+    # Map behavior
+    integration_mode: "continuous"
+    keyframe_min_translation_m: 0.10
+    keyframe_min_yaw_rad: 0.06
+    keyframe_max_interval_sec: 0.8
+    max_keyframes: 5000
+    voxel_leaf: 0.15
+    max_points: 500000
+    keep_seconds: 30.0
+    global_voxel_leaf_size: 0.15
+    max_global_points: 1500000
+    global_publish_hz: 2.0
+
+    # Range filtering for LaserScan values
+    min_range: 0.2
+    max_range: 12.0
+    exclude_floor_points: true
+    floor_z_max: 0.15
+
+    # TF wait timeout (seconds)
+    tf_timeout: 0.20
+    tf_filter_queue_size: 100
+    tf_lookup_window_size: 200
+
+    # Motion distortion gate for global integration.
+    drop_scan_on_excess_motion: true
+    max_integration_yaw_rate: 0.6
+    motion_odom_topic: "/mavros/local_position/odom"
+    rebuild_on_map_correction: false
+    rebuild_correction_translation_threshold_m: 0.03
+    rebuild_correction_yaw_threshold_rad: 0.01
+    rebuild_freeze_scans_after_correction: 6
+    # SLAM-vs-odom relative pose consistency gate.
+    # Uses delta(map->base_link) vs delta(odom->base_link) per scan.
+    enable_relative_pose_gate: true
+    relative_pose_map_frame: "map"
+    relative_pose_odom_frame: "odom"
+    relative_pose_translation_error_threshold: 0.10
+    relative_pose_yaw_error_threshold: 0.08
+    relative_pose_min_motion_xy: 0.02
+    relative_pose_max_map_step_xy: 0.70
+    relative_pose_max_map_yaw_step: 0.35
+    # De-tilt scan integration by removing roll/pitch from TF (keeps yaw only).
+    tilt_compensation: true
+    # Rebase accumulated map points when map->odom jumps (loop-closure correction).
+    enable_map_rebase: true
+    map_rebase_map_frame: "map"
+    map_rebase_odom_frame: "odom"
+    map_rebase_translation_threshold: 0.03
+    map_rebase_yaw_threshold: 0.01
+    map_rebase_cooldown_scans: 6
+    # On-demand PCD export settings (service: /vertical_lidar_mapper/save_pcd).
+    pcd_export_dir: "/home/lehaitrung/vertical_mapper_exports"
+    pcd_export_prefix: "vertical_global_map"
+    pcd_export_binary: true
+    autosave_on_exit: true
+    # Optional extra exports triggered by save_pcd:
+    # - 2D occupancy map as PGM + YAML
+    # - trajectory as CSV
+    export_map2d_on_save: true
+    export_slam_map2d_on_save: true
+    export_trajectory_on_save: true
+    map2d_export_prefix: "vertical_map2d"
+    slam_map_topic: "/map"
+    slam_map2d_export_prefix: "slam2d_map"
+    trajectory_export_prefix: "vertical_trajectory"
+    map2d_resolution: 0.10
+    map2d_padding_m: 1.0
+    trajectory_min_step: 0.05
+
+    debug: false
+
+odom_to_tf_bridge:
+  ros__parameters:
+    use_sim_time: true
+    odom_topic: "/mavros/local_position/odom"
+    odom_frame: "odom"
+    base_frame: "base_link"
+    use_msg_frame_ids: false
+
+scan_frame_override:
+  ros__parameters:
+    use_sim_time: true
+    input_topic: "/scan_vertical_raw"
+    output_topic: "/scan_vertical"
+    override_frame_id: "lidar_vert_link"
+    force_override: true
+
+scan_frame_override_horizontal:
+  ros__parameters:
+    use_sim_time: true
+    input_topic: "/world/walls/model/x500_lidar_2d_tilted_0/model/lidar_horiz/link/link/sensor/lidar_2d_v2/scan"
+    output_topic: "/scan_horizontal"
+    override_frame_id: "lidar_horiz_link"
+    force_override: true

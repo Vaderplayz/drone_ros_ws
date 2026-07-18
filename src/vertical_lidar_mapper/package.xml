@@ -1,0 +1,37 @@
+<?xml version="1.0"?>
+<!-- Timestamp: 2026-02-21 11:18:02 +07+0700 -->
+<!-- Most Recent Update: Metadata timestamp now uses local time -->
+<package format="3">
+  <name>vertical_lidar_mapper</name>
+  <version>0.1.0</version>
+  <description>3D point cloud mapping from a vertical 2D LiDAR and odometry TF without SLAM.</description>
+
+  <maintainer email="you@example.com">Your Name</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <depend>rclcpp</depend>
+  <depend>std_srvs</depend>
+  <depend>diagnostic_msgs</depend>
+  <depend>message_filters</depend>
+  <depend>sensor_msgs</depend>
+  <depend>nav_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>tf2</depend>
+  <depend>tf2_ros</depend>
+  <depend>tf2_sensor_msgs</depend>
+  <depend>laser_geometry</depend>
+  <depend>pcl_conversions</depend>
+  <depend>pcl_msgs</depend>
+
+  <build_depend>libpcl-dev</build_depend>
+  <exec_depend>libpcl-dev</exec_depend>
+
+  <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_lint_common</test_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

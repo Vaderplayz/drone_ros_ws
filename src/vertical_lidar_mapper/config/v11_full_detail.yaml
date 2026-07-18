@@ -1,0 +1,85 @@
+# Timestamp: 2026-02-28 12:35:00 +07+0700
+# Profile: Full-detail capture. Keep all scans; dedupe only on loop-closure rebuild.
+vertical_lidar_mapper:
+  ros__parameters:
+    use_sim_time: true
+
+    scan_topic: "/scan_vertical"
+    cloud_topic: "/vertical_cloud"
+    map_topic: "/vertical_map"
+    global_map_topic: "/mapping/global_cloud"
+    status_topic: "/mapping/status"
+
+    target_frame: "map"
+    base_frame: "base_link"
+    lidar_frame_override: ""
+
+    # Keep local map detailed.
+    voxel_leaf: 0.04
+    max_points: 1800000
+    keep_seconds: 80.0
+
+    # Capture every scan into keyframes.
+    integration_mode: "keyframe"
+    keyframe_min_translation_m: 0.0
+    keyframe_min_yaw_rad: 0.0
+    keyframe_max_interval_sec: 0.01
+    max_keyframes: 200000
+
+    # Do not thin during normal integration.
+    loop_closure_dedup_only: true
+    global_voxel_leaf_size: 0.02
+    max_global_points: 0
+    global_publish_hz: 2.0
+
+    min_range: 0.2
+    max_range: 12.0
+    exclude_floor_points: false
+    floor_z_max: 0.15
+
+    tf_timeout: 0.20
+    tf_filter_queue_size: 150
+    tf_lookup_window_size: 200
+    tilt_compensation: true
+
+    # Keep scans; do not drop on motion/gating.
+    drop_scan_on_excess_motion: false
+    max_integration_yaw_rate: 3.0
+    motion_odom_topic: "/mavros/local_position/odom"
+    enable_relative_pose_gate: false
+    relative_pose_map_frame: "map"
+    relative_pose_odom_frame: "odom"
+    relative_pose_translation_error_threshold: 1.00
+    relative_pose_yaw_error_threshold: 1.00
+    relative_pose_min_motion_xy: 0.0
+    relative_pose_max_map_step_xy: 10.0
+    relative_pose_max_map_yaw_step: 3.14
+
+    # Rebuild on loop closure to remove duplicates only then.
+    enable_map_rebase: true
+    map_rebase_map_frame: "map"
+    map_rebase_odom_frame: "odom"
+    map_rebase_translation_threshold: 0.03
+    map_rebase_yaw_threshold: 0.01
+    map_rebase_cooldown_scans: 0
+    rebuild_on_map_correction: true
+    rebuild_correction_translation_threshold_m: 0.03
+    rebuild_correction_yaw_threshold_rad: 0.01
+    rebuild_freeze_scans_after_correction: 0
+
+    pcd_export_dir: "/home/lehaitrung/vertical_mapper_exports"
+    pcd_export_prefix: "vertical_global_map"
+    pcd_export_binary: true
+    autosave_on_exit: true
+    export_map2d_on_save: true
+    export_slam_map2d_on_save: true
+    export_trajectory_on_save: true
+    map2d_export_prefix: "vertical_map2d"
+    slam_map_topic: "/map"
+    slam_map2d_export_prefix: "slam2d_map"
+    trajectory_export_prefix: "vertical_trajectory"
+    map2d_resolution: 0.10
+    map2d_padding_m: 1.0
+    trajectory_min_step: 0.001
+
+    debug: false

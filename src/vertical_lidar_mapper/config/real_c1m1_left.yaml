@@ -1,0 +1,85 @@
+# Real-drone lidar2 profile for a vertical RPLIDAR C1M1.
+#
+# Expected TF:
+#   map -> odom -> base_footprint -> lidar_vert_link
+#
+# The startup script overrides use_sim_time, scan_topic, target_frame,
+# base_frame, motion_odom_topic, and pcd_export_dir from its environment.
+vertical_lidar_mapper:
+  ros__parameters:
+    use_sim_time: false
+
+    scan_topic: "/scan_vertical"
+    cloud_topic: "/vertical_cloud"
+    map_topic: "/vertical_map"
+    global_map_topic: "/mapping/global_cloud"
+    status_topic: "/mapping/status"
+
+    target_frame: "map"
+    base_frame: "base_footprint"
+    lidar_frame_override: "lidar_vert_link"
+
+    voxel_leaf: 0.08
+    max_points: 800000
+    keep_seconds: 45.0
+
+    integration_mode: "keyframe"
+    keyframe_min_translation_m: 0.06
+    keyframe_min_yaw_rad: 0.04
+    keyframe_max_interval_sec: 0.50
+    max_keyframes: 12000
+
+    global_voxel_leaf_size: 0.08
+    max_global_points: 2000000
+    global_publish_hz: 2.0
+
+    min_range: 0.15
+    max_range: 12.0
+    exclude_floor_points: true
+    floor_z_max: 0.10
+
+    tf_timeout: 0.25
+    tf_filter_queue_size: 150
+    tf_lookup_window_size: 250
+    tilt_compensation: true
+
+    drop_scan_on_excess_motion: true
+    max_integration_yaw_rate: 1.00
+    motion_odom_topic: "/mavros/local_position/odom"
+
+    enable_relative_pose_gate: true
+    relative_pose_map_frame: "map"
+    relative_pose_odom_frame: "odom"
+    relative_pose_translation_error_threshold: 0.20
+    relative_pose_yaw_error_threshold: 0.15
+    relative_pose_min_motion_xy: 0.02
+    relative_pose_max_map_step_xy: 0.70
+    relative_pose_max_map_yaw_step: 0.35
+
+    enable_map_rebase: true
+    map_rebase_map_frame: "map"
+    map_rebase_odom_frame: "odom"
+    map_rebase_translation_threshold: 0.04
+    map_rebase_yaw_threshold: 0.02
+    map_rebase_cooldown_scans: 10
+    rebuild_on_map_correction: true
+    rebuild_correction_translation_threshold_m: 0.04
+    rebuild_correction_yaw_threshold_rad: 0.02
+    rebuild_freeze_scans_after_correction: 10
+
+    pcd_export_dir: "/home/pi5drone/drone_ros_ws/maps/vertical_3d"
+    pcd_export_prefix: "lidar2_vertical_global_map"
+    pcd_export_binary: true
+    autosave_on_exit: true
+    export_map2d_on_save: true
+    export_slam_map2d_on_save: true
+    export_trajectory_on_save: true
+    map2d_export_prefix: "lidar2_vertical_map2d"
+    slam_map_topic: "/map"
+    slam_map2d_export_prefix: "slam2d_map"
+    trajectory_export_prefix: "lidar2_vertical_trajectory"
+    map2d_resolution: 0.10
+    map2d_padding_m: 1.0
+    trajectory_min_step: 0.03
+
+    debug: false
