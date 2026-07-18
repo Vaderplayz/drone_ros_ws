@@ -107,6 +107,18 @@ Use `map` as the fixed frame for the default flow. Add:
 - LaserScan: `/scan_vertical`
 - TF: `/tf` and `/tf_static`
 
+The real C1 profile favors a detailed but bounded cloud: `voxel_leaf=0.04`,
+`global_voxel_leaf_size=0.03`, keyframes at `0.02 m` or `0.012 rad` motion (or
+after `0.12 s`), and a five-million-point global cap. Floor exclusion is off so
+the vertical sweep retains the floor and other points below `z=0.10 m`.
+
+The vertical mapper does not use parameters named `voxel_leaf_size`,
+`voxel_size`, `min_z`, `max_z`, `downsample`, `scan_stride`, or
+`throttle_scans`. `scan_stride` belongs to the obstacle planners and
+`throttle_scans` belongs to 2D `slam_toolbox`; neither thins the 3D mapper.
+Restart the mapper after changing its YAML because these values are loaded at
+node construction.
+
 ## Checks
 
 ```bash
