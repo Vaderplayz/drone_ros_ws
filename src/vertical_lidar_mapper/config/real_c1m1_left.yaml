@@ -88,12 +88,35 @@ vertical_lidar_mapper:
     export_map2d_on_save: true
     export_slam_map2d_on_save: true
     export_trajectory_on_save: true
+    export_structural_mesh_on_save: true
     map2d_export_prefix: "lidar2_vertical_map2d"
     slam_map_topic: "/map"
     slam_map2d_export_prefix: "slam2d_map"
     trajectory_export_prefix: "lidar2_vertical_trajectory"
+    structural_mesh_export_prefix: "lidar2_structural_environment"
     map2d_resolution: 0.10
     map2d_padding_m: 1.0
     trajectory_min_step: 0.03
+
+    # Compact visual model generated only during save. Free-space rectangles
+    # form the floor; occupied/free boundaries form height-aware wall runs.
+    structural_mesh_occupied_threshold: 65
+    structural_mesh_free_threshold: 19
+    structural_mesh_auto_height: true
+    structural_mesh_include_ceiling: false
+    structural_mesh_use_obstacle_heights: false
+    structural_mesh_default_floor_z: 0.0
+    structural_mesh_default_ceiling_z: 2.5
+    structural_mesh_floor_quantile: 0.02
+    structural_mesh_ceiling_quantile: 0.98
+    structural_mesh_min_room_height: 1.8
+    structural_mesh_max_room_height: 4.0
+    structural_mesh_min_obstacle_height: 0.25
+    structural_mesh_obstacle_height_padding: 0.05
+    structural_mesh_height_quantization: 0.10
+    structural_mesh_height_search_radius_cells: 1
+    structural_mesh_max_grid_cells: 2000000
+    structural_mesh_max_height_samples: 200000
+    structural_mesh_max_quads: 250000
 
     debug: false

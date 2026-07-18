@@ -1,6 +1,7 @@
 // Timestamp: 2026-02-25 09:45:00 +07+0700
 // Most Recent Update: Added configurable floor-point exclusion before map integration.
 #include "vertical_lidar_mapper/vertical_lidar_mapper.hpp"
+#include "vertical_lidar_mapper/structural_mesh_exporter.hpp"
 
 #include <algorithm>
 #include <array>
@@ -261,6 +262,14 @@ VerticalLidarMapper::VerticalLidarMapper(const rclcpp::NodeOptions & options)
     slam_map2d_export_prefix_.c_str());
   RCLCPP_INFO(
     this->get_logger(),
+    "Structural GLB export on save: %s (prefix='%s' auto_height=%s ceiling=%s grid_cap=%d).",
+    export_structural_mesh_on_save_ ? "enabled" : "disabled",
+    structural_mesh_export_prefix_.c_str(),
+    structural_mesh_auto_height_ ? "true" : "false",
+    structural_mesh_include_ceiling_ ? "true" : "false",
+    structural_mesh_max_grid_cells_);
+  RCLCPP_INFO(
+    this->get_logger(),
     "Loop-closure dedup-only mode: %s",
     loop_closure_dedup_only_ ? "enabled" : "disabled");
   RCLCPP_INFO(
@@ -360,6 +369,46 @@ void VerticalLidarMapper::loadParameters()
   export_map2d_on_save_ = this->declare_parameter<bool>("export_map2d_on_save", true);
   export_slam_map2d_on_save_ = this->declare_parameter<bool>("export_slam_map2d_on_save", true);
   export_trajectory_on_save_ = this->declare_parameter<bool>("export_trajectory_on_save", true);
+  export_structural_mesh_on_save_ =
+    this->declare_parameter<bool>("export_structural_mesh_on_save", false);
+  structural_mesh_export_prefix_ = this->declare_parameter<std::string>(
+    "structural_mesh_export_prefix", "structural_environment");
+  structural_mesh_occupied_threshold_ =
+    this->declare_parameter<int>("structural_mesh_occupied_threshold", 65);
+  structural_mesh_free_threshold_ =
+    this->declare_parameter<int>("structural_mesh_free_threshold", 19);
+  structural_mesh_auto_height_ =
+    this->declare_parameter<bool>("structural_mesh_auto_height", true);
+  structural_mesh_include_ceiling_ =
+    this->declare_parameter<bool>("structural_mesh_include_ceiling", false);
+  structural_mesh_use_obstacle_heights_ =
+    this->declare_parameter<bool>("structural_mesh_use_obstacle_heights", false);
+  structural_mesh_default_floor_z_ =
+    this->declare_parameter<double>("structural_mesh_default_floor_z", 0.0);
+  structural_mesh_default_ceiling_z_ =
+    this->declare_parameter<double>("structural_mesh_default_ceiling_z", 2.5);
+  structural_mesh_floor_quantile_ =
+    this->declare_parameter<double>("structural_mesh_floor_quantile", 0.02);
+  structural_mesh_ceiling_quantile_ =
+    this->declare_parameter<double>("structural_mesh_ceiling_quantile", 0.98);
+  structural_mesh_min_room_height_ =
+    this->declare_parameter<double>("structural_mesh_min_room_height", 1.8);
+  structural_mesh_max_room_height_ =
+    this->declare_parameter<double>("structural_mesh_max_room_height", 4.0);
+  structural_mesh_min_obstacle_height_ =
+    this->declare_parameter<double>("structural_mesh_min_obstacle_height", 0.25);
+  structural_mesh_obstacle_height_padding_ =
+    this->declare_parameter<double>("structural_mesh_obstacle_height_padding", 0.05);
+  structural_mesh_height_quantization_ =
+    this->declare_parameter<double>("structural_mesh_height_quantization", 0.10);
+  structural_mesh_height_search_radius_cells_ =
+    this->declare_parameter<int>("structural_mesh_height_search_radius_cells", 1);
+  structural_mesh_max_grid_cells_ =
+    this->declare_parameter<int>("structural_mesh_max_grid_cells", 2000000);
+  structural_mesh_max_height_samples_ =
+    this->declare_parameter<int>("structural_mesh_max_height_samples", 200000);
+  structural_mesh_max_quads_ =
+    this->declare_parameter<int>("structural_mesh_max_quads", 250000);
   loop_closure_dedup_only_ = this->declare_parameter<bool>("loop_closure_dedup_only", false);
   map2d_export_prefix_ = this->declare_parameter<std::string>("map2d_export_prefix", "vertical_map2d");
   slam_map_topic_ = this->declare_parameter<std::string>("slam_map_topic", "/map");
@@ -579,6 +628,50 @@ void VerticalLidarMapper::loadParameters()
       this->get_logger(),
       "Parameter 'trajectory_export_prefix' was empty, defaulting to vertical_trajectory.");
   }
+
+  if (structural_mesh_export_prefix_.empty()) {
+    structural_mesh_export_prefix_ = "structural_environment";
+    RCLCPP_WARN(
+      this->get_logger(),
+      "Parameter 'structural_mesh_export_prefix' was empty, defaulting to structural_environment.");
+  }
+
+  structural_mesh_occupied_threshold_ = std::clamp(structural_mesh_occupied_threshold_, 1, 100);
+  structural_mesh_free_threshold_ = std::clamp(structural_mesh_free_threshold_, 0, 99);
+  if (structural_mesh_free_threshold_ >= structural_mesh_occupied_threshold_) {
+    structural_mesh_free_threshold_ = std::max(0, structural_mesh_occupied_threshold_ - 1);
+    RCLCPP_WARN(
+      this->get_logger(),
+      "Structural mesh free threshold must be below occupied threshold; clamped to %d.",
+      structural_mesh_free_threshold_);
+  }
+  structural_mesh_floor_quantile_ = std::clamp(structural_mesh_floor_quantile_, 0.0, 1.0);
+  structural_mesh_ceiling_quantile_ = std::clamp(structural_mesh_ceiling_quantile_, 0.0, 1.0);
+  if (structural_mesh_ceiling_quantile_ <= structural_mesh_floor_quantile_) {
+    structural_mesh_floor_quantile_ = 0.02;
+    structural_mesh_ceiling_quantile_ = 0.98;
+    RCLCPP_WARN(
+      this->get_logger(),
+      "Structural mesh height quantiles were invalid; defaulting to 0.02 and 0.98.");
+  }
+  if (structural_mesh_min_room_height_ <= 0.0) {
+    structural_mesh_min_room_height_ = 1.8;
+  }
+  if (structural_mesh_max_room_height_ < structural_mesh_min_room_height_) {
+    structural_mesh_max_room_height_ = structural_mesh_min_room_height_;
+  }
+  if (structural_mesh_default_ceiling_z_ <= structural_mesh_default_floor_z_) {
+    structural_mesh_default_ceiling_z_ =
+      structural_mesh_default_floor_z_ + structural_mesh_min_room_height_;
+  }
+  structural_mesh_min_obstacle_height_ = std::max(0.05, structural_mesh_min_obstacle_height_);
+  structural_mesh_obstacle_height_padding_ = std::max(0.0, structural_mesh_obstacle_height_padding_);
+  structural_mesh_height_quantization_ = std::max(0.01, structural_mesh_height_quantization_);
+  structural_mesh_height_search_radius_cells_ =
+    std::clamp(structural_mesh_height_search_radius_cells_, 0, 10);
+  structural_mesh_max_grid_cells_ = std::max(1000, structural_mesh_max_grid_cells_);
+  structural_mesh_max_height_samples_ = std::max(1000, structural_mesh_max_height_samples_);
+  structural_mesh_max_quads_ = std::max(1000, structural_mesh_max_quads_);
 
   if (map2d_resolution_ <= 0.0) {
     map2d_resolution_ = 0.10;
@@ -1592,6 +1685,27 @@ bool VerticalLidarMapper::saveGlobalCloudToPcd(std::string & output_path, std::s
     ++slam_map2d_export_count_;
   }
 
+  std::string structural_mesh_path;
+  if (export_structural_mesh_on_save_) {
+    std::string structural_mesh_error;
+    const bool structural_mesh_ok = saveStructuralModelToGlb(
+      cloud_copy,
+      export_dir,
+      stamp_sec,
+      stamp_nsec,
+      structural_mesh_path,
+      structural_mesh_error);
+    if (!structural_mesh_ok) {
+      last_structural_mesh_export_error_ = structural_mesh_error;
+      RCLCPP_WARN(
+        this->get_logger(),
+        "PCD saved, but structural GLB export was skipped: %s",
+        structural_mesh_error.c_str());
+    } else {
+      last_structural_mesh_export_error_.clear();
+    }
+  }
+
   std::string trajectory_path;
   if (export_trajectory_on_save_) {
     std::string trajectory_error;
@@ -1890,6 +2004,78 @@ bool VerticalLidarMapper::saveTrajectoryToCsv(
   return true;
 }
 
+bool VerticalLidarMapper::saveStructuralModelToGlb(
+  const pcl::PointCloud<pcl::PointXYZ>::Ptr & cloud_copy,
+  const std::filesystem::path & export_dir,
+  int64_t stamp_sec,
+  int64_t stamp_nsec,
+  std::string & output_path,
+  std::string & error_message)
+{
+  if (!cloud_copy || cloud_copy->empty()) {
+    error_message = "Global cloud is empty.";
+    return false;
+  }
+
+  std::optional<nav_msgs::msg::OccupancyGrid> map_copy;
+  {
+    std::lock_guard<std::mutex> lock(slam_map_mutex_);
+    map_copy = latest_slam_map_;
+  }
+  if (!map_copy.has_value()) {
+    error_message = "No SLAM occupancy map has been received on '" + slam_map_topic_ + "'.";
+    return false;
+  }
+  if (!map_copy->header.frame_id.empty() && map_copy->header.frame_id != target_frame_) {
+    error_message = "Global cloud frame '" + target_frame_ + "' does not match SLAM map frame '" +
+      map_copy->header.frame_id + "'.";
+    return false;
+  }
+
+  std::ostringstream file_name;
+  file_name << structural_mesh_export_prefix_ << "_" << stamp_sec << "_"
+            << std::setw(9) << std::setfill('0') << stamp_nsec << ".glb";
+  const std::filesystem::path glb_file = export_dir / file_name.str();
+
+  StructuralMeshConfig config;
+  config.occupied_threshold = structural_mesh_occupied_threshold_;
+  config.free_threshold = structural_mesh_free_threshold_;
+  config.auto_height = structural_mesh_auto_height_;
+  config.include_ceiling = structural_mesh_include_ceiling_;
+  config.use_obstacle_heights = structural_mesh_use_obstacle_heights_;
+  config.default_floor_z = structural_mesh_default_floor_z_;
+  config.default_ceiling_z = structural_mesh_default_ceiling_z_;
+  config.floor_quantile = structural_mesh_floor_quantile_;
+  config.ceiling_quantile = structural_mesh_ceiling_quantile_;
+  config.min_room_height = structural_mesh_min_room_height_;
+  config.max_room_height = structural_mesh_max_room_height_;
+  config.min_obstacle_height = structural_mesh_min_obstacle_height_;
+  config.obstacle_height_padding = structural_mesh_obstacle_height_padding_;
+  config.height_quantization = structural_mesh_height_quantization_;
+  config.height_search_radius_cells = structural_mesh_height_search_radius_cells_;
+  config.max_grid_cells = static_cast<std::size_t>(structural_mesh_max_grid_cells_);
+  config.max_height_samples = static_cast<std::size_t>(structural_mesh_max_height_samples_);
+  config.max_quads = static_cast<std::size_t>(structural_mesh_max_quads_);
+
+  StructuralMeshStats stats;
+  if (!exportStructuralMeshGlb(
+      *cloud_copy, map_copy.value(), config, glb_file, target_frame_, stats, error_message))
+  {
+    return false;
+  }
+
+  output_path = glb_file.string();
+  last_structural_mesh_export_path_ = output_path;
+  last_structural_mesh_vertices_ = stats.vertices;
+  last_structural_mesh_triangles_ = stats.triangles;
+  last_structural_mesh_bytes_ = stats.binary_bytes;
+  last_structural_mesh_floor_z_ = stats.floor_z;
+  last_structural_mesh_ceiling_z_ = stats.ceiling_z;
+  last_structural_mesh_duration_ms_ = stats.duration_ms;
+  ++structural_mesh_export_count_;
+  return true;
+}
+
 void VerticalLidarMapper::handleSavePcdRequest(
   const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
   std::shared_ptr<std_srvs::srv::Trigger::Response> response)
@@ -1917,6 +2103,14 @@ void VerticalLidarMapper::handleSavePcdRequest(
     }
     if (export_trajectory_on_save_ && !last_trajectory_export_path_.empty()) {
       oss << " | trajectory: " << last_trajectory_export_path_;
+    }
+    if (export_structural_mesh_on_save_ && last_structural_mesh_export_error_.empty() &&
+      !last_structural_mesh_export_path_.empty())
+    {
+      oss << " | structural GLB: " << last_structural_mesh_export_path_;
+    }
+    if (export_structural_mesh_on_save_ && !last_structural_mesh_export_error_.empty()) {
+      oss << " | structural GLB skipped: " << last_structural_mesh_export_error_;
     }
     response->message = oss.str();
   } else {
@@ -2093,6 +2287,22 @@ void VerticalLidarMapper::publishStatus()
     "last_trajectory_export_path",
     last_trajectory_export_path_.empty() ? "-" : last_trajectory_export_path_);
   add_kv("trajectory_points", std::to_string(trajectory_points_.size()));
+  add_kv("structural_mesh_export_enabled", export_structural_mesh_on_save_ ? "true" : "false");
+  add_kv("structural_mesh_export_count", std::to_string(structural_mesh_export_count_));
+  add_kv("structural_mesh_vertices", std::to_string(last_structural_mesh_vertices_));
+  add_kv("structural_mesh_triangles", std::to_string(last_structural_mesh_triangles_));
+  add_kv("structural_mesh_bytes", std::to_string(last_structural_mesh_bytes_));
+  add_kv("structural_mesh_floor_z", to_string_with_precision(last_structural_mesh_floor_z_, 3));
+  add_kv("structural_mesh_ceiling_z", to_string_with_precision(last_structural_mesh_ceiling_z_, 3));
+  add_kv(
+    "structural_mesh_duration_ms",
+    to_string_with_precision(last_structural_mesh_duration_ms_, 3));
+  add_kv(
+    "last_structural_mesh_export_path",
+    last_structural_mesh_export_path_.empty() ? "-" : last_structural_mesh_export_path_);
+  add_kv(
+    "last_structural_mesh_export_error",
+    last_structural_mesh_export_error_.empty() ? "-" : last_structural_mesh_export_error_);
 
   diagnostic_msgs::msg::DiagnosticArray array_msg;
   array_msg.header.stamp = this->now();

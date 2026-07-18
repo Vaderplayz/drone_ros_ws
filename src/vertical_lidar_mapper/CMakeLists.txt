@@ -32,6 +32,7 @@ include_directories(
 )
 
 add_executable(vertical_lidar_mapper_node
+  src/structural_mesh_exporter.cpp
   src/vertical_lidar_mapper.cpp
 )
 target_link_libraries(vertical_lidar_mapper_node PUBLIC

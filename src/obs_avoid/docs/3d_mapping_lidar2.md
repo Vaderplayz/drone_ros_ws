@@ -122,7 +122,9 @@ On `Ctrl+C`, the launcher automatically calls:
 ros2 service call /vertical_lidar_mapper/save_pcd std_srvs/srv/Trigger "{}"
 ```
 
-before stopping the mapper. The main 3D output is a `.pcd` point cloud.
+before stopping the mapper. The service writes one timestamp-matched asset set.
+The `.pcd` remains the measured geometry, while the `.glb` is the compact
+structural model intended for visual presentation.
 
 To export manually while the mapper is still running:
 
@@ -136,8 +138,33 @@ Default exports are written to:
 /home/pi5drone/drone_ros_ws/maps/vertical_3d
 ```
 
-The files include a global `.pcd`, a projected 2D `.pgm/.yaml`, and a trajectory
-`.csv`.
+The files include:
+
+- global lidar evidence as `.pcd`;
+- a compact structural environment as `.glb`;
+- projected and SLAM 2D maps as `.pgm/.yaml`;
+- the reconstructed trajectory as `.csv`.
+
+The GLB exporter greedily merges free occupancy cells into floor rectangles and
+merges collinear occupied/free boundaries into wall runs. It estimates the room
+floor and ceiling from bounded point-cloud quantiles, converts ROS Z-up geometry
+to glTF Y-up coordinates, adds normals/materials, and writes indexed triangles.
+It runs only during save. The real profile leaves the ceiling open for easier
+inspection and keeps local obstacle-height shaping disabled so sparse samples do
+not create stepped walls.
+
+View the newest GLB with Blender or the desktop's registered GLB viewer:
+
+```bash
+./src/obs_avoid/scripts/view_latest_glb.sh
+```
+
+Record the reprocessable blueprint, including raw scans, full odometry, TF, map,
+deskewed points and clouds, with:
+
+```bash
+RECORD_VERTICAL_BAG=1 ./src/master_scripts/start_real_3d_mapping_lidar2.sh
+```
 
 Disable shutdown autosave with:
 
@@ -181,7 +208,15 @@ ros2 topic echo --once /mapping/status
 Important status keys include scan/accepted/keyframe rates, scan age,
 deskewed-point count, pose interpolation failures, TF failures, local/global
 point counts, estimated cloud memory, correction magnitude, rebuild duration,
-and cooldown/freeze/yaw-rate drops.
+cooldown/freeze/yaw-rate drops, and structural-mesh vertices, triangles, bytes,
+height estimate, duration and output path.
+
+Structural export parameters are prefixed `structural_mesh_`. The Pi profile
+caps processing at 2,000,000 occupancy cells, 200,000 height samples and 250,000
+quads. Set `structural_mesh_auto_height: false` and provide default floor/ceiling
+Z values when the lidar has not observed both horizontal surfaces. Enable
+`structural_mesh_use_obstacle_heights` only after checking that local height
+coverage is sufficiently dense.
 
 ## Validation Order
 

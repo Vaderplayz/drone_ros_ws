@@ -21,6 +21,7 @@ ROS 2 (Humble/Rolling) package for building a rolling 3D point cloud map from a 
 - Publishes mapper diagnostics on `/mapping/status`
 - Provides on-demand export service on `/vertical_lidar_mapper/save_pcd` for:
   - global 3D cloud (`.pcd`)
+  - compact height-aware structural model (`.glb`)
   - 2D occupancy map (`.pgm` + `.yaml`)
   - drone trajectory (`.csv`)
 - Auto-saves map assets on node exit when `autosave_on_exit:=true` (default)
@@ -153,7 +154,7 @@ If map appears doubled/shifted after revisit with `target_frame:=map`:
 
 ## Export map assets for external viewers
 
-Save current global cloud + 2D map + trajectory:
+Save the current global cloud, structural GLB, 2D maps and trajectory:
 
 ```bash
 ros2 service call /vertical_lidar_mapper/save_pcd std_srvs/srv/Trigger "{}"
@@ -170,8 +171,12 @@ Default export directory:
 
 Output files share the same timestamp:
 - `vertical_global_map_<sec>_<nsec>.pcd`
+- `structural_environment_<sec>_<nsec>.glb`
 - `vertical_map2d_<sec>_<nsec>.pgm`
 - `vertical_map2d_<sec>_<nsec>.yaml`
 - `vertical_trajectory_<sec>_<nsec>.csv`
 
-Open `.pcd` in CloudCompare/MeshLab; use `.pgm + .yaml` with map tools; `.csv` can be plotted or loaded in the viewer app.
+The GLB contains merged floor rectangles and wall runs derived from the SLAM
+occupancy grid, with room height estimated from the corrected global cloud. It
+is an indexed, materialized visualization model rather than a replacement for
+the measured PCD. Open it in Blender or another glTF 2.0 viewer.

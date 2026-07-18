@@ -173,6 +173,13 @@ private:
     int64_t stamp_nsec,
     std::string & output_path,
     std::string & error_message) const;
+  bool saveStructuralModelToGlb(
+    const pcl::PointCloud<pcl::PointXYZ>::Ptr & cloud_copy,
+    const std::filesystem::path & export_dir,
+    int64_t stamp_sec,
+    int64_t stamp_nsec,
+    std::string & output_path,
+    std::string & error_message);
   pcl::PointCloud<pcl::PointXYZ>::Ptr voxelDownsample(
     const pcl::PointCloud<pcl::PointXYZ>::Ptr & input_cloud,
     double leaf_size) const;
@@ -237,6 +244,7 @@ private:
   std::string pcd_export_prefix_;
   std::string map2d_export_prefix_;
   std::string trajectory_export_prefix_;
+  std::string structural_mesh_export_prefix_;
   std::string integration_mode_{"keyframe"};
   std::string motion_odom_frame_{"odom"};
   std::string scan_stamp_reference_{"start"};
@@ -278,10 +286,29 @@ private:
   bool export_map2d_on_save_{true};
   bool export_slam_map2d_on_save_{true};
   bool export_trajectory_on_save_{true};
+  bool export_structural_mesh_on_save_{false};
+  bool structural_mesh_auto_height_{true};
+  bool structural_mesh_include_ceiling_{false};
+  bool structural_mesh_use_obstacle_heights_{false};
   bool loop_closure_dedup_only_{false};
   double map2d_resolution_{0.10};
   double map2d_padding_m_{1.0};
   double trajectory_min_step_{0.05};
+  int structural_mesh_occupied_threshold_{65};
+  int structural_mesh_free_threshold_{19};
+  double structural_mesh_default_floor_z_{0.0};
+  double structural_mesh_default_ceiling_z_{2.5};
+  double structural_mesh_floor_quantile_{0.02};
+  double structural_mesh_ceiling_quantile_{0.98};
+  double structural_mesh_min_room_height_{1.8};
+  double structural_mesh_max_room_height_{4.0};
+  double structural_mesh_min_obstacle_height_{0.25};
+  double structural_mesh_obstacle_height_padding_{0.05};
+  double structural_mesh_height_quantization_{0.10};
+  int structural_mesh_height_search_radius_cells_{1};
+  int structural_mesh_max_grid_cells_{2000000};
+  int structural_mesh_max_height_samples_{200000};
+  int structural_mesh_max_quads_{250000};
   std::string slam_map_topic_{"/map"};
   std::string slam_map2d_export_prefix_{"slam2d_map"};
   std::string map_rebase_map_frame_{"map"};
@@ -321,6 +348,15 @@ private:
   std::string last_slam_map2d_export_path_;
   std::string last_slam_map2d_yaml_path_;
   std::string last_trajectory_export_path_;
+  std::size_t structural_mesh_export_count_{0};
+  std::size_t last_structural_mesh_vertices_{0};
+  std::size_t last_structural_mesh_triangles_{0};
+  std::size_t last_structural_mesh_bytes_{0};
+  double last_structural_mesh_floor_z_{0.0};
+  double last_structural_mesh_ceiling_z_{0.0};
+  double last_structural_mesh_duration_ms_{0.0};
+  std::string last_structural_mesh_export_path_;
+  std::string last_structural_mesh_export_error_;
   std::size_t map_rebase_count_{0};
   double last_map_rebase_translation_m_{0.0};
   double last_map_rebase_yaw_rad_{0.0};

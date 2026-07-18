@@ -188,10 +188,10 @@ save_3d_map_on_exit() {
     return 0
   fi
   mkdir -p "${EXPORT_DIR}"
-  log "Autosaving 3D map through /vertical_lidar_mapper/save_pcd"
+  log "Autosaving 3D map assets through /vertical_lidar_mapper/save_pcd"
   if timeout "${SAVE_SERVICE_TIMEOUT_SEC}" ros2 service call \
     /vertical_lidar_mapper/save_pcd std_srvs/srv/Trigger "{}" >/dev/null 2>&1; then
-    log "3D map autosave requested; PCD output directory: ${EXPORT_DIR}"
+    log "3D map autosave requested; PCD/GLB output directory: ${EXPORT_DIR}"
   else
     log_warning "3D map autosave service call did not complete within ${SAVE_SERVICE_TIMEOUT_SEC}s"
   fi
@@ -505,6 +505,7 @@ start_mapper() {
       -p lidar_frame_override:="${LIDAR2_FRAME_ID}" \
       -p motion_odom_topic:="${PX4_ODOM_TOPIC}" \
       -p motion_odom_frame:="${ODOM_FRAME}" \
+      -p autosave_on_exit:=false \
       -p pcd_export_dir:="${EXPORT_DIR}" \
       -p map_rebase_map_frame:="${MAP_FRAME}" \
       -p map_rebase_odom_frame:="${ODOM_FRAME}" \
@@ -615,7 +616,7 @@ main() {
   ready_banner
 
   log "Export service: ros2 service call /vertical_lidar_mapper/save_pcd std_srvs/srv/Trigger '{}'"
-  log "On Ctrl+C, autosave requests a PCD export in ${EXPORT_DIR}"
+  log "On Ctrl+C, autosave requests one PCD/GLB asset set in ${EXPORT_DIR}"
   log "Runtime logs: ${LOG_DIR}"
   log "No PX4 parameter, arm, mode, movement, or setpoint command was sent"
 

@@ -500,6 +500,7 @@ Key env vars:
 
 - `scripts/export_global_pcd.sh`: wait for `/vertical_lidar_mapper/save_pcd` and trigger export.
 - `scripts/view_latest_pcd.sh`: optionally export then open newest `.pcd` in available viewer.
+- `scripts/view_latest_glb.sh`: optionally export then open the compact structural `.glb` model.
 - `scripts/start_trajectory_compare.sh`: run map-vs-odom-vs-ground-truth path publisher.
 - `scripts/run_offline_refine.sh`: replay a bag with selected profile and export refined assets.
 - `run_pc_viewer.sh`: build (if needed) and launch desktop cloud viewer.
