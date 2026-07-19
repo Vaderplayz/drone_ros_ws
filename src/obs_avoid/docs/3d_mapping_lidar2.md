@@ -33,6 +33,9 @@ scan plane vertical:
 LIDAR2_ROLL=1.57079632679
 LIDAR2_PITCH=0.0
 LIDAR2_YAW=1.57079632679
+LIDAR2_X=0.0
+LIDAR2_Y=0.0
+LIDAR2_Z=0.70
 ```
 
 Set `LIDAR2_X`, `LIDAR2_Y`, and `LIDAR2_Z` to the measured mount offset before
