@@ -187,8 +187,8 @@ Use `map` as the fixed frame for the default flow. Add:
 - TF: `/tf` and `/tf_static`
 
 The real C1 profile currently favors stability over detail: `voxel_leaf=0.10`,
-`global_voxel_leaf_size=0.08`, keyframes at `0.10 m` or `0.05 rad` motion (or
-after `0.50 s`), and a one-million-point global cap. It rejects integration
+`global_voxel_leaf_size=0.05`, keyframes at `0.05 m` or `0.04 rad` motion (or
+after `0.20 s`), and a one-million-point global cap. It rejects integration
 during fast yaw and applies conservative map-vs-odom pose gates. Floor
 exclusion is off so the vertical sweep retains the floor and other low points.
 

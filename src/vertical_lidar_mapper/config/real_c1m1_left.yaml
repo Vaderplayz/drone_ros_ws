@@ -27,12 +27,12 @@ vertical_lidar_mapper:
     keep_seconds: 30.0
 
     integration_mode: "keyframe"
-    keyframe_min_translation_m: 0.10
-    keyframe_min_yaw_rad: 0.05
-    keyframe_max_interval_sec: 0.50
+    keyframe_min_translation_m: 0.05
+    keyframe_min_yaw_rad: 0.04
+    keyframe_max_interval_sec: 0.20
     max_keyframes: 10000
 
-    global_voxel_leaf_size: 0.08
+    global_voxel_leaf_size: 0.05
     max_global_points: 1000000
     global_publish_hz: 1.0
 
