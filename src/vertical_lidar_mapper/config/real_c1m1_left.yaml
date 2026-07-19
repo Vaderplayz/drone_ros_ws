@@ -20,24 +20,24 @@ vertical_lidar_mapper:
     base_frame: "base_footprint"
     lidar_frame_override: "lidar_vert_link"
 
-    # Detailed real-C1 profile. Keep local voxels smaller than the expected
-    # point spacing so RViz does not visually break surfaces into coarse dots.
-    voxel_leaf: 0.03
-    max_points: 1500000
-    keep_seconds: 60.0
+    # Stability-first real-C1 profile. Coarse voxels and conservative
+    # keyframes keep pose noise and transient scans from dominating RViz.
+    voxel_leaf: 0.10
+    max_points: 500000
+    keep_seconds: 30.0
 
     integration_mode: "keyframe"
-    keyframe_min_translation_m: 0.02
-    keyframe_min_yaw_rad: 0.012
-    keyframe_max_interval_sec: 0.12
-    max_keyframes: 20000
+    keyframe_min_translation_m: 0.10
+    keyframe_min_yaw_rad: 0.05
+    keyframe_max_interval_sec: 0.50
+    max_keyframes: 10000
 
-    global_voxel_leaf_size: 0.025
-    max_global_points: 3000000
-    global_publish_hz: 2.0
+    global_voxel_leaf_size: 0.08
+    max_global_points: 1000000
+    global_publish_hz: 1.0
 
-    min_range: 0.15
-    max_range: 12.0
+    min_range: 0.25
+    max_range: 10.0
     exclude_floor_points: false
     floor_z_max: 0.10
 
@@ -55,31 +55,31 @@ vertical_lidar_mapper:
     motion_odom_frame: "odom"
     pose_buffer_duration_sec: 5.0
     pose_interpolation_max_gap_sec: 0.10
-    deskew_min_valid_ratio: 0.90
+    deskew_min_valid_ratio: 0.95
 
     drop_scan_on_excess_motion: true
-    max_integration_yaw_rate: 0.60
+    max_integration_yaw_rate: 0.35
     motion_odom_topic: "/mavros/local_position/odom"
 
     enable_relative_pose_gate: true
     relative_pose_map_frame: "map"
     relative_pose_odom_frame: "odom"
-    relative_pose_translation_error_threshold: 0.20
-    relative_pose_yaw_error_threshold: 0.15
-    relative_pose_min_motion_xy: 0.02
-    relative_pose_max_map_step_xy: 0.70
-    relative_pose_max_map_yaw_step: 0.35
+    relative_pose_translation_error_threshold: 0.08
+    relative_pose_yaw_error_threshold: 0.06
+    relative_pose_min_motion_xy: 0.03
+    relative_pose_max_map_step_xy: 0.25
+    relative_pose_max_map_yaw_step: 0.15
 
     enable_map_rebase: true
     map_rebase_map_frame: "map"
     map_rebase_odom_frame: "odom"
     map_rebase_translation_threshold: 0.08
     map_rebase_yaw_threshold: 0.04
-    map_rebase_cooldown_scans: 2
+    map_rebase_cooldown_scans: 6
     rebuild_on_map_correction: true
     rebuild_correction_translation_threshold_m: 0.08
     rebuild_correction_yaw_threshold_rad: 0.04
-    rebuild_freeze_scans_after_correction: 2
+    rebuild_freeze_scans_after_correction: 6
 
     pcd_export_dir: "/home/pi5drone/drone_ros_ws/maps/vertical_3d"
     pcd_export_prefix: "lidar2_vertical_global_map"

@@ -186,10 +186,11 @@ Use `map` as the fixed frame for the default flow. Add:
 - LaserScan: `/scan_vertical`
 - TF: `/tf` and `/tf_static`
 
-The real C1 profile favors a detailed but bounded cloud: `voxel_leaf=0.03`,
-`global_voxel_leaf_size=0.025`, keyframes at `0.02 m` or `0.012 rad` motion (or
-after `0.12 s`), and a three-million-point global cap. Floor exclusion is off so
-the vertical sweep retains the floor and other points below `z=0.10 m`.
+The real C1 profile currently favors stability over detail: `voxel_leaf=0.10`,
+`global_voxel_leaf_size=0.08`, keyframes at `0.10 m` or `0.05 rad` motion (or
+after `0.50 s`), and a one-million-point global cap. It rejects integration
+during fast yaw and applies conservative map-vs-odom pose gates. Floor
+exclusion is off so the vertical sweep retains the floor and other low points.
 
 The vertical mapper does not use parameters named `voxel_leaf_size`,
 `voxel_size`, `min_z`, `max_z`, `downsample`, `scan_stride`, or
