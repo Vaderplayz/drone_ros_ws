@@ -22,5 +22,17 @@ The same stages can still be run independently:
 ./src/master_scripts/start_real_3d_mapping_lidar2.sh
 ```
 
+When MAVROS and AprilTag are already running at boot and no 2D map is needed,
+use:
+
+```bash
+./src/master_scripts/start_independent_3d_mapping.sh
+```
+
+This launcher waits for `/mavros/local_position/odom`, creates the full-pose
+`odom -> base_footprint` TF only when it is missing, and starts lidar2 mapping
+directly in `odom`. Ctrl+C saves PCD and trajectory output; map-dependent 2D
+and GLB exports are disabled for this mode.
+
 The old paths under `src/obs_avoid/scripts/` remain as wrappers for
 compatibility.

@@ -51,6 +51,11 @@ MAPPING_STATUS_TOPIC="${MAPPING_STATUS_TOPIC:-/mapping/status}"
 EXPORT_DIR="${EXPORT_DIR:-${ROS_WS}/maps/vertical_3d}"
 RECORD_VERTICAL_BAG="${RECORD_VERTICAL_BAG:-0}"
 AUTO_SAVE_3D_MAP_ON_EXIT="${AUTO_SAVE_3D_MAP_ON_EXIT:-1}"
+EXPORT_MAP2D_ON_SAVE="${EXPORT_MAP2D_ON_SAVE:-true}"
+EXPORT_SLAM_MAP2D_ON_SAVE="${EXPORT_SLAM_MAP2D_ON_SAVE:-true}"
+EXPORT_STRUCTURAL_MESH_ON_SAVE="${EXPORT_STRUCTURAL_MESH_ON_SAVE:-true}"
+ENABLE_MAP_REBASE="${ENABLE_MAP_REBASE:-true}"
+ENABLE_RELATIVE_POSE_GATE="${ENABLE_RELATIVE_POSE_GATE:-true}"
 SAVE_SERVICE_TIMEOUT_SEC="${SAVE_SERVICE_TIMEOUT_SEC:-30}"
 PROCESS_STOP_TIMEOUT_SEC="${PROCESS_STOP_TIMEOUT_SEC:-5}"
 
@@ -506,6 +511,11 @@ start_mapper() {
       -p motion_odom_topic:="${PX4_ODOM_TOPIC}" \
       -p motion_odom_frame:="${ODOM_FRAME}" \
       -p autosave_on_exit:=false \
+      -p export_map2d_on_save:="${EXPORT_MAP2D_ON_SAVE}" \
+      -p export_slam_map2d_on_save:="${EXPORT_SLAM_MAP2D_ON_SAVE}" \
+      -p export_structural_mesh_on_save:="${EXPORT_STRUCTURAL_MESH_ON_SAVE}" \
+      -p enable_map_rebase:="${ENABLE_MAP_REBASE}" \
+      -p enable_relative_pose_gate:="${ENABLE_RELATIVE_POSE_GATE}" \
       -p pcd_export_dir:="${EXPORT_DIR}" \
       -p map_rebase_map_frame:="${MAP_FRAME}" \
       -p map_rebase_odom_frame:="${ODOM_FRAME}" \
