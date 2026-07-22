@@ -14,6 +14,13 @@ USE_SIM_TIME="${USE_SIM_TIME:-false}"
 PX4_ODOM_TOPIC="${PX4_ODOM_TOPIC:-/mavros/local_position/odom}"
 ODOM_FRAME="${ODOM_FRAME:-odom}"
 BASE_FRAME="${BASE_FRAME:-base_footprint}"
+LIDAR2_FRAME_ID="${LIDAR2_FRAME_ID:-lidar_vert_link}"
+LIDAR2_X="${LIDAR2_X:-0.0}"
+LIDAR2_Y="${LIDAR2_Y:-0.0}"
+LIDAR2_Z="${LIDAR2_Z:-0.70}"
+LIDAR2_ROLL="${LIDAR2_ROLL:-1.57079632679}"
+LIDAR2_PITCH="${LIDAR2_PITCH:-0.0}"
+LIDAR2_YAW="${LIDAR2_YAW:-1.57079632679}"
 GLOBAL_CLOUD_TOPIC="${GLOBAL_CLOUD_TOPIC:-/mapping/global_cloud}"
 WAIT_TIMEOUT_SEC="${WAIT_TIMEOUT_SEC:-90}"
 STOP_TIMEOUT_SEC="${STOP_TIMEOUT_SEC:-50}"
@@ -129,6 +136,46 @@ start_odom_tf_if_missing() {
   wait_for_transform "${ODOM_FRAME}" "${BASE_FRAME}" "${WAIT_TIMEOUT_SEC}" "${ODOM_TF_PID}"
 }
 
+validate_lidar2_extrinsic() {
+  local output translation rpy
+  output="$(timeout 3 ros2 run tf2_ros tf2_echo "${BASE_FRAME}" "${LIDAR2_FRAME_ID}" 2>&1 || true)"
+  translation="$(awk -F'[][]' '/^- Translation:/{print $2; exit}' <<<"${output}")"
+  rpy="$(awk -F'[][]' '/^- Rotation: in RPY \(radian\)/{print $2; exit}' <<<"${output}")"
+  if [[ -z "${translation}" || -z "${rpy}" ]]; then
+    fail "could not inspect TF ${BASE_FRAME} -> ${LIDAR2_FRAME_ID}"
+    return 1
+  fi
+
+  if ! awk \
+    -v translation="${translation}" -v rpy="${rpy}" \
+    -v expected_translation="${LIDAR2_X},${LIDAR2_Y},${LIDAR2_Z}" \
+    -v expected_rpy="${LIDAR2_ROLL},${LIDAR2_PITCH},${LIDAR2_YAW}" '
+      function abs(value) {return value < 0 ? -value : value}
+      function angle_error(left, right, delta) {
+        delta = left - right
+        while (delta > 3.141592653589793) delta -= 6.283185307179586
+        while (delta < -3.141592653589793) delta += 6.283185307179586
+        return abs(delta)
+      }
+      BEGIN {
+        split(translation, actual_t, ",")
+        split(expected_translation, expected_t, ",")
+        split(rpy, actual_r, ",")
+        split(expected_rpy, expected_r, ",")
+        valid = 1
+        for (i = 1; i <= 3; i++) {
+          if (abs(actual_t[i] - expected_t[i]) > 0.02) valid = 0
+          if (angle_error(actual_r[i], expected_r[i]) > 0.03) valid = 0
+        }
+        exit(valid ? 0 : 1)
+      }'
+  then
+    fail "TF ${BASE_FRAME} -> ${LIDAR2_FRAME_ID} does not match requested translation/RPY: [${translation}] [${rpy}]"
+    return 1
+  fi
+  log "Verified lidar2 TF: translation=[${translation}] RPY=[${rpy}]"
+}
+
 start_3d_mapping() {
   log "Starting lidar2 mapping in ${ODOM_FRAME}; no 2D map is required"
   setsid env \
@@ -138,6 +185,13 @@ start_3d_mapping() {
     PX4_ODOM_TOPIC="${PX4_ODOM_TOPIC}" \
     ODOM_FRAME="${ODOM_FRAME}" \
     BASE_FRAME="${BASE_FRAME}" \
+    LIDAR2_FRAME_ID="${LIDAR2_FRAME_ID}" \
+    LIDAR2_X="${LIDAR2_X}" \
+    LIDAR2_Y="${LIDAR2_Y}" \
+    LIDAR2_Z="${LIDAR2_Z}" \
+    LIDAR2_ROLL="${LIDAR2_ROLL}" \
+    LIDAR2_PITCH="${LIDAR2_PITCH}" \
+    LIDAR2_YAW="${LIDAR2_YAW}" \
     TARGET_FRAME="${ODOM_FRAME}" \
     REQUIRE_2D_MAP=0 \
     EXPORT_MAP2D_ON_SAVE=false \
@@ -147,6 +201,8 @@ start_3d_mapping() {
     ENABLE_RELATIVE_POSE_GATE=false \
     "${MAPPING_3D_SCRIPT}" &
   MAPPING_3D_PID=$!
+  wait_for_transform "${BASE_FRAME}" "${LIDAR2_FRAME_ID}" "${WAIT_TIMEOUT_SEC}" "${MAPPING_3D_PID}"
+  validate_lidar2_extrinsic
   wait_for_message "${GLOBAL_CLOUD_TOPIC}" "${WAIT_TIMEOUT_SEC}" "${MAPPING_3D_PID}"
 }
 
@@ -209,7 +265,7 @@ main() {
   source "${ROS_SETUP}"
   set -u
 
-  for command in ros2 timeout setsid flock grep tee; do
+  for command in ros2 timeout setsid flock grep tee awk; do
     command -v "${command}" >/dev/null 2>&1 || { fail "missing command: ${command}"; return 1; }
   done
   ros2 pkg prefix vertical_lidar_mapper >/dev/null 2>&1 || {

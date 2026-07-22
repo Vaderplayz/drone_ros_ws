@@ -1,8 +1,9 @@
 # Real Lidar2 3D Mapping
 
 This runs the new vertical C1M1 RPLIDAR as an observer-only 3D mapping layer.
-It is independent from lidar1, RF2O, 2D SLAM, MAVROS, AprilTag, and flight
-control. It does not arm, change PX4 mode, or publish setpoints.
+It does not manage lidar1, MAVROS, AprilTag, or flight control, and it does not
+arm, change PX4 mode, or publish setpoints. It can run without RF2O and 2D SLAM
+when MAVROS/AprilTag odometry is already available.
 
 ## Hardware Defaults
 
@@ -63,11 +64,25 @@ Then start lidar2 3D mapping:
 ./src/master_scripts/start_real_3d_mapping_lidar2.sh
 ```
 
-For odom-only 3D accumulation without the 2D map:
+When MAVROS and AprilTag already run at boot, start odom-only 3D accumulation
+without lidar1, RF2O, or 2D SLAM:
 
 ```bash
-REQUIRE_2D_MAP=0 TARGET_FRAME=odom ./src/master_scripts/start_real_3d_mapping_lidar2.sh
+./src/master_scripts/start_independent_3d_mapping.sh
 ```
+
+This launcher waits for `/mavros/local_position/odom`, reuses an existing
+`odom -> base_footprint` TF or starts a full-pose bridge when it is absent, and
+then starts lidar2 plus the mapper. Use `odom` as the RViz fixed frame and add
+PointCloud2 `/mapping/global_cloud`. Verify the mount after startup:
+
+```bash
+ros2 run tf2_ros tf2_echo base_footprint lidar_vert_link
+```
+
+The translation must be approximately `[0.0, 0.0, 0.70]`. Ctrl+C saves PCD
+and trajectory files under `maps/vertical_3d`; map-dependent 2D and GLB exports
+are intentionally disabled in this mode.
 
 ## Actual Pose And TF Pipeline
 
