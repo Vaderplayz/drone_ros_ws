@@ -161,11 +161,16 @@ VerticalLidarMapper::VerticalLidarMapper(const rclcpp::NodeOptions & options)
     });
 
   if (enable_full_pose_deskew_) {
-    // The callback performs and diagnoses all scan-time and per-beam lookups.
-    // A MessageFilter would silently drop scans before those counters run.
+    // Delay completed scans until odometry brackets their final beam.
     scan_sub_ = this->create_subscription<sensor_msgs::msg::LaserScan>(
       scan_topic_, rclcpp::SensorDataQoS(),
       std::bind(&VerticalLidarMapper::scanCallback, this, std::placeholders::_1));
+
+    const double deskew_queue_period_sec = 1.0 / std::max(1.0, deskew_queue_poll_hz_);
+    deskew_queue_timer_ = this->create_wall_timer(
+      std::chrono::duration_cast<std::chrono::nanoseconds>(
+        std::chrono::duration<double>(deskew_queue_period_sec)),
+      std::bind(&VerticalLidarMapper::onDeskewQueueTimer, this));
   } else {
     scan_filter_sub_ = std::make_shared<message_filters::Subscriber<sensor_msgs::msg::LaserScan>>();
     scan_filter_sub_->subscribe(this, scan_topic_, rclcpp::SensorDataQoS().get_rmw_qos_profile());
@@ -212,13 +217,16 @@ VerticalLidarMapper::VerticalLidarMapper(const rclcpp::NodeOptions & options)
     max_keyframes_);
   RCLCPP_INFO(
     this->get_logger(),
-    "Full-pose deskew: %s (required=%s odom_topic='%s' odom_frame='%s' stamp_reference='%s' pose_gap<=%.3fs output='%s').",
+    "Full-pose deskew: %s (required=%s odom_topic='%s' odom_frame='%s' stamp_reference='%s' pose_gap<=%.3fs wait_timeout=%.3fs queue=%d poll=%.1fHz output='%s').",
     enable_full_pose_deskew_ ? "enabled" : "disabled",
     require_full_pose_deskew_ ? "true" : "false",
     motion_odom_topic_.c_str(),
     motion_odom_frame_.c_str(),
     scan_stamp_reference_.c_str(),
     pose_interpolation_max_gap_sec_,
+    deskew_wait_for_pose_timeout_sec_,
+    deskew_pending_queue_size_,
+    deskew_queue_poll_hz_,
     deskewed_cloud_topic_.c_str());
   RCLCPP_INFO(
     this->get_logger(),
@@ -335,6 +343,11 @@ void VerticalLidarMapper::loadParameters()
   pose_interpolation_max_gap_sec_ = this->declare_parameter<double>(
     "pose_interpolation_max_gap_sec", 0.20);
   deskew_min_valid_ratio_ = this->declare_parameter<double>("deskew_min_valid_ratio", 0.90);
+  deskew_wait_for_pose_timeout_sec_ =
+    this->declare_parameter<double>("deskew_wait_for_pose_timeout_sec", 0.35);
+  deskew_queue_poll_hz_ = this->declare_parameter<double>("deskew_queue_poll_hz", 100.0);
+  deskew_pending_queue_size_ = this->declare_parameter<int>("deskew_pending_queue_size", 30);
+  deskew_max_scans_per_cycle_ = this->declare_parameter<int>("deskew_max_scans_per_cycle", 2);
   scan_stamp_reference_ = this->declare_parameter<std::string>("scan_stamp_reference", "start");
   debug_ = this->declare_parameter<bool>("debug", false);
   exclude_floor_points_ = this->declare_parameter<bool>("exclude_floor_points", false);
@@ -604,6 +617,34 @@ void VerticalLidarMapper::loadParameters()
   if (deskew_min_valid_ratio_ <= 0.0 || deskew_min_valid_ratio_ > 1.0) {
     deskew_min_valid_ratio_ = 0.90;
     RCLCPP_WARN(this->get_logger(), "Parameter 'deskew_min_valid_ratio' invalid, defaulting to 0.90.");
+  }
+
+  if (deskew_wait_for_pose_timeout_sec_ <= 0.0) {
+    deskew_wait_for_pose_timeout_sec_ = 0.35;
+    RCLCPP_WARN(
+      this->get_logger(),
+      "Parameter 'deskew_wait_for_pose_timeout_sec' <= 0.0, defaulting to 0.35.");
+  }
+
+  if (deskew_queue_poll_hz_ <= 0.0) {
+    deskew_queue_poll_hz_ = 100.0;
+    RCLCPP_WARN(
+      this->get_logger(),
+      "Parameter 'deskew_queue_poll_hz' <= 0.0, defaulting to 100.0.");
+  }
+
+  if (deskew_pending_queue_size_ <= 0) {
+    deskew_pending_queue_size_ = 30;
+    RCLCPP_WARN(
+      this->get_logger(),
+      "Parameter 'deskew_pending_queue_size' <= 0, defaulting to 30.");
+  }
+
+  if (deskew_max_scans_per_cycle_ <= 0) {
+    deskew_max_scans_per_cycle_ = 2;
+    RCLCPP_WARN(
+      this->get_logger(),
+      "Parameter 'deskew_max_scans_per_cycle' <= 0, defaulting to 2.");
   }
 
   if (scan_stamp_reference_ != "start" && scan_stamp_reference_ != "end") {
@@ -1255,6 +1296,38 @@ rclcpp::Time VerticalLidarMapper::resolveScanStamp(const sensor_msgs::msg::Laser
   }
 
   return rclcpp::Time(scan_msg.header.stamp, this->get_clock()->get_clock_type());
+}
+
+double VerticalLidarMapper::scanDurationSec(
+  const sensor_msgs::msg::LaserScan & scan_msg) const
+{
+  if (std::isfinite(scan_msg.scan_time) && scan_msg.scan_time > 0.0F) {
+    return static_cast<double>(scan_msg.scan_time);
+  }
+  if (scan_msg.ranges.size() > 1U &&
+    std::isfinite(scan_msg.time_increment) && scan_msg.time_increment > 0.0F)
+  {
+    return static_cast<double>(scan_msg.ranges.size() - 1U) *
+           static_cast<double>(scan_msg.time_increment);
+  }
+  return 0.0;
+}
+
+void VerticalLidarMapper::scanPoseWindow(
+  const sensor_msgs::msg::LaserScan & scan_msg,
+  const rclcpp::Time & reference_stamp,
+  rclcpp::Time & first_pose_stamp,
+  rclcpp::Time & last_pose_stamp) const
+{
+  const rclcpp::Duration scan_duration =
+    rclcpp::Duration::from_seconds(scanDurationSec(scan_msg));
+  if (scan_stamp_reference_ == "end") {
+    first_pose_stamp = reference_stamp - scan_duration;
+    last_pose_stamp = reference_stamp;
+  } else {
+    first_pose_stamp = reference_stamp;
+    last_pose_stamp = reference_stamp + scan_duration;
+  }
 }
 
 std::string VerticalLidarMapper::resolveSourceFrame(const sensor_msgs::msg::LaserScan & scan_msg) const
@@ -2412,7 +2485,11 @@ void VerticalLidarMapper::publishStatus()
   add_kv("keyframe_creation_rate_hz", to_string_with_precision(keyframe_rate_hz, 2));
   add_kv("total_scans_seen", std::to_string(total_scans_seen_));
   add_kv("accepted_scans", std::to_string(accepted_scan_count_));
-  add_kv("dropped_scans", std::to_string(total_scans_seen_ - accepted_scan_count_));
+  const std::size_t pending_scan_count = pending_deskew_scans_.size();
+  const std::size_t completed_scan_count =
+    accepted_scan_count_ + pending_scan_count <= total_scans_seen_ ?
+    total_scans_seen_ - accepted_scan_count_ - pending_scan_count : 0U;
+  add_kv("dropped_scans", std::to_string(completed_scan_count));
   add_kv("last_scan_drop_reason", last_scan_drop_reason_);
   add_kv("last_scan_age_sec", to_string_with_precision(last_scan_age_sec_, 4));
   add_kv("total_scans_processed", std::to_string(total_scans_processed_));
@@ -2434,6 +2511,14 @@ void VerticalLidarMapper::publishStatus()
   add_kv("deskewed_scans", std::to_string(deskewed_scan_count_));
   add_kv("deskew_failures", std::to_string(deskew_failure_count_));
   add_kv("pose_interpolation_failures", std::to_string(pose_interpolation_failure_count_));
+  add_kv("deskew_pending_scans", std::to_string(pending_scan_count));
+  add_kv("deskew_queue_max_depth", std::to_string(deskew_queue_max_depth_));
+  add_kv("deskew_queue_overflows", std::to_string(deskew_queue_overflow_count_));
+  add_kv("deskew_pose_wait_timeouts", std::to_string(deskew_pose_wait_timeout_count_));
+  add_kv("deskew_pose_history_misses", std::to_string(deskew_pose_history_miss_count_));
+  add_kv("deskew_pose_wait_sec", to_string_with_precision(last_deskew_pose_wait_sec_, 4));
+  add_kv("deskew_pose_wait_max_sec", to_string_with_precision(max_deskew_pose_wait_sec_, 4));
+  add_kv("deskew_pose_lag_sec", to_string_with_precision(last_deskew_pose_lag_sec_, 4));
   add_kv("last_valid_input_points", std::to_string(last_valid_input_point_count_));
   add_kv("last_deskewed_points", std::to_string(last_deskewed_point_count_));
   add_kv("deskewed_points_total", std::to_string(deskewed_points_total_));
@@ -2550,8 +2635,95 @@ void VerticalLidarMapper::onStatusTimer()
 void VerticalLidarMapper::scanCallback(const sensor_msgs::msg::LaserScan::ConstSharedPtr scan_msg)
 {
   ++total_scans_seen_;
-
   const rclcpp::Time scan_stamp = resolveScanStamp(*scan_msg);
+
+  if (!enable_full_pose_deskew_) {
+    processScan(scan_msg, scan_stamp);
+    return;
+  }
+
+  const std::size_t queue_cap = static_cast<std::size_t>(deskew_pending_queue_size_);
+  while (pending_deskew_scans_.size() >= queue_cap) {
+    pending_deskew_scans_.pop_front();
+    ++deskew_failure_count_;
+    ++deskew_queue_overflow_count_;
+    last_scan_drop_reason_ = "deskew_queue_overflow";
+  }
+  pending_deskew_scans_.push_back(PendingScan{
+    scan_msg, scan_stamp, std::chrono::steady_clock::now()});
+  deskew_queue_max_depth_ = std::max(
+    deskew_queue_max_depth_, pending_deskew_scans_.size());
+}
+
+void VerticalLidarMapper::onDeskewQueueTimer()
+{
+  std::size_t processed_this_cycle = 0;
+  const std::size_t cycle_limit = static_cast<std::size_t>(deskew_max_scans_per_cycle_);
+
+  while (!pending_deskew_scans_.empty() && processed_this_cycle < cycle_limit) {
+    const auto steady_now = std::chrono::steady_clock::now();
+    const PendingScan pending = pending_deskew_scans_.front();
+    const double wait_sec =
+      std::chrono::duration<double>(steady_now - pending.enqueued_at).count();
+    last_deskew_pose_wait_sec_ = wait_sec;
+    max_deskew_pose_wait_sec_ = std::max(max_deskew_pose_wait_sec_, wait_sec);
+
+    rclcpp::Time first_pose_stamp(0, 0, this->get_clock()->get_clock_type());
+    rclcpp::Time last_pose_stamp(0, 0, this->get_clock()->get_clock_type());
+    scanPoseWindow(
+      *pending.message, pending.reference_stamp, first_pose_stamp, last_pose_stamp);
+
+    const auto poses = snapshotPoseBuffer();
+    if (poses.size() >= 2U && first_pose_stamp < poses.front().stamp) {
+      pending_deskew_scans_.pop_front();
+      ++deskew_failure_count_;
+      ++deskew_pose_history_miss_count_;
+      last_scan_drop_reason_ = "deskew_pose_history_unavailable";
+      RCLCPP_WARN_THROTTLE(
+        this->get_logger(),
+        *this->get_clock(),
+        2000,
+        "Dropping vertical scan: pose history starts %.3fs after the first beam.",
+        (poses.front().stamp - first_pose_stamp).seconds());
+      ++processed_this_cycle;
+      continue;
+    }
+
+    if (poses.size() >= 2U) {
+      last_deskew_pose_lag_sec_ =
+        std::max(0.0, (last_pose_stamp - poses.back().stamp).seconds());
+      if (poses.back().stamp >= last_pose_stamp) {
+        pending_deskew_scans_.pop_front();
+        processScan(pending.message, pending.reference_stamp);
+        ++processed_this_cycle;
+        continue;
+      }
+    }
+
+    if (wait_sec >= deskew_wait_for_pose_timeout_sec_) {
+      pending_deskew_scans_.pop_front();
+      ++deskew_failure_count_;
+      ++deskew_pose_wait_timeout_count_;
+      last_scan_drop_reason_ = "deskew_pose_wait_timeout";
+      RCLCPP_WARN_THROTTLE(
+        this->get_logger(),
+        *this->get_clock(),
+        2000,
+        "Dropping vertical scan after waiting %.3fs for odometry through its final beam (remaining lag %.3fs).",
+        wait_sec,
+        last_deskew_pose_lag_sec_);
+      ++processed_this_cycle;
+      continue;
+    }
+
+    break;
+  }
+}
+
+void VerticalLidarMapper::processScan(
+  const sensor_msgs::msg::LaserScan::ConstSharedPtr scan_msg,
+  const rclcpp::Time & scan_stamp)
+{
   last_scan_stamp_ = scan_stamp;
   last_scan_age_sec_ = (this->now() - scan_stamp).seconds();
   warnIfTimeMismatch(scan_stamp);

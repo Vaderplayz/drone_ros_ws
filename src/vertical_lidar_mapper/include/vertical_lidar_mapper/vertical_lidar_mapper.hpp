@@ -3,6 +3,7 @@
 #ifndef VERTICAL_LIDAR_MAPPER__VERTICAL_LIDAR_MAPPER_HPP_
 #define VERTICAL_LIDAR_MAPPER__VERTICAL_LIDAR_MAPPER_HPP_
 
+#include <chrono>
 #include <deque>
 #include <cstdint>
 #include <filesystem>
@@ -81,12 +82,29 @@ private:
     tf2::Transform pose_odom_base;
   };
 
+  struct PendingScan
+  {
+    sensor_msgs::msg::LaserScan::ConstSharedPtr message;
+    rclcpp::Time reference_stamp;
+    std::chrono::steady_clock::time_point enqueued_at;
+  };
+
   void loadParameters();
   void motionOdomCallback(const nav_msgs::msg::Odometry::SharedPtr msg);
   void scanCallback(const sensor_msgs::msg::LaserScan::ConstSharedPtr scan_msg);
+  void processScan(
+    const sensor_msgs::msg::LaserScan::ConstSharedPtr scan_msg,
+    const rclcpp::Time & scan_stamp);
+  void onDeskewQueueTimer();
 
   std::string resolveSourceFrame(const sensor_msgs::msg::LaserScan & scan_msg) const;
   rclcpp::Time resolveScanStamp(const sensor_msgs::msg::LaserScan & scan_msg) const;
+  double scanDurationSec(const sensor_msgs::msg::LaserScan & scan_msg) const;
+  void scanPoseWindow(
+    const sensor_msgs::msg::LaserScan & scan_msg,
+    const rclcpp::Time & reference_stamp,
+    rclcpp::Time & first_pose_stamp,
+    rclcpp::Time & last_pose_stamp) const;
 
   void pruneOldScans(const rclcpp::Time & newest_stamp);
   void enforceRawPointCap();
@@ -210,6 +228,7 @@ private:
   rclcpp::Publisher<diagnostic_msgs::msg::DiagnosticArray>::SharedPtr status_pub_;
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr save_pcd_service_;
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr rebuild_global_service_;
+  rclcpp::TimerBase::SharedPtr deskew_queue_timer_;
   rclcpp::TimerBase::SharedPtr global_publish_timer_;
   rclcpp::TimerBase::SharedPtr status_timer_;
 
@@ -225,6 +244,7 @@ private:
   std::optional<nav_msgs::msg::Odometry> motion_odom_;
   mutable std::mutex pose_buffer_mutex_;
   std::deque<PoseSample> pose_buffer_;
+  std::deque<PendingScan> pending_deskew_scans_;
   mutable std::mutex slam_map_mutex_;
   std::optional<nav_msgs::msg::OccupancyGrid> latest_slam_map_;
   std::optional<rclcpp::Time> last_scan_stamp_;
@@ -270,6 +290,10 @@ private:
   double pose_buffer_duration_sec_{5.0};
   double pose_interpolation_max_gap_sec_{0.20};
   double deskew_min_valid_ratio_{0.90};
+  double deskew_wait_for_pose_timeout_sec_{0.35};
+  double deskew_queue_poll_hz_{100.0};
+  int deskew_pending_queue_size_{30};
+  int deskew_max_scans_per_cycle_{2};
   bool debug_{false};
   bool exclude_floor_points_{false};
   double floor_z_max_{0.15};
@@ -406,6 +430,10 @@ private:
   std::size_t deskewed_scan_count_{0};
   std::size_t deskew_failure_count_{0};
   std::size_t pose_interpolation_failure_count_{0};
+  std::size_t deskew_pose_wait_timeout_count_{0};
+  std::size_t deskew_pose_history_miss_count_{0};
+  std::size_t deskew_queue_overflow_count_{0};
+  std::size_t deskew_queue_max_depth_{0};
   std::size_t deskewed_points_total_{0};
   std::size_t last_deskewed_point_count_{0};
   std::size_t last_valid_input_point_count_{0};
@@ -414,6 +442,9 @@ private:
   double last_pose_bracket_gap_sec_{0.0};
   double last_pose_buffer_oldest_age_sec_{0.0};
   double last_pose_buffer_newest_age_sec_{0.0};
+  double last_deskew_pose_wait_sec_{0.0};
+  double max_deskew_pose_wait_sec_{0.0};
+  double last_deskew_pose_lag_sec_{0.0};
   double last_motion_yaw_rate_{0.0};
   double last_motion_vertical_speed_{0.0};
   double last_motion_tilt_rate_{0.0};

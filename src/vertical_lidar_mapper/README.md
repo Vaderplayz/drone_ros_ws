@@ -10,6 +10,8 @@ ROS 2 (Humble/Rolling) package for building a rolling 3D point cloud map from a 
 - Projects rigid fallback scans via `laser_geometry::LaserProjection`
 - Deskews each vertical beam from buffered full 6-DoF MAVROS odometry using
   linear translation interpolation and quaternion SLERP
+- Holds completed scans in a bounded queue until odometry brackets the final
+  beam, avoiding false deskew rejection from normal odometry transport delay
 - Uses the scan timestamp and each beam's `time_increment`; it never falls back
   to latest TF for scan integration
 - Publishes deskewed scan-reference points on `/vertical_points_deskewed`
@@ -110,6 +112,24 @@ ros2 topic echo --once /clock
 ros2 topic echo --once /scan_vertical | grep stamp
 ros2 topic echo --once /mavros/local_position/odom | grep stamp
 ```
+
+For a real start-stamped LiDAR, the mapper waits up to
+`deskew_wait_for_pose_timeout_sec` for odometry to cover the scan end. The
+queue is bounded by `deskew_pending_queue_size` and drained at
+`deskew_queue_poll_hz`, with at most `deskew_max_scans_per_cycle` scans handled
+per timer callback.
+
+Verify deskew throughput and queue health:
+
+```bash
+ros2 topic echo /mapping/status --once --timeout 10 | \
+grep -A1 -E 'vertical_scan_input_rate_hz|accepted_scan_rate_hz|last_scan_drop_reason|deskew_pending_scans|deskew_pose_wait_timeouts|deskew_queue_overflows|deskew_pose_wait_sec|deskew_pose_lag_sec|pose_interpolation_failures'
+```
+
+With `/scan_vertical` near 10 Hz and MAVROS odometry near 30 Hz, the accepted
+rate should approach the input rate after startup. The pending queue should
+normally stay around one or two scans, while wait timeouts and overflows remain
+at zero.
 
 ## TF checks
 
