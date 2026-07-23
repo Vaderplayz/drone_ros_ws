@@ -113,7 +113,14 @@ private:
   pcl::PointCloud<pcl::PointXYZ>::Ptr transformCloud(
     const pcl::PointCloud<pcl::PointXYZ>::Ptr & input_cloud,
     const tf2::Transform & transform) const;
-  bool shouldDropGlobalIntegration(double & yaw_rate, double & odom_age_sec) const;
+  bool estimateFloorHeight(
+    const pcl::PointCloud<pcl::PointXYZ>::Ptr & cloud,
+    double & floor_z) const;
+  bool shouldDropGlobalIntegration(
+    double & yaw_rate,
+    double & vertical_speed,
+    double & tilt_rate,
+    double & odom_age_sec) const;
   bool shouldDropByRelativePoseConsistency(
     const rclcpp::Time & scan_stamp,
     double & translation_error_m,
@@ -221,11 +228,13 @@ private:
   mutable std::mutex slam_map_mutex_;
   std::optional<nav_msgs::msg::OccupancyGrid> latest_slam_map_;
   std::optional<rclcpp::Time> last_scan_stamp_;
+  std::optional<rclcpp::Time> last_local_map_publish_stamp_;
   std::optional<geometry_msgs::msg::TransformStamped> last_applied_map_to_odom_tf_;
   std::optional<geometry_msgs::msg::TransformStamped> last_relative_pose_map_base_tf_;
   std::optional<geometry_msgs::msg::TransformStamped> last_relative_pose_odom_base_tf_;
   std::optional<tf2::Transform> last_keyframe_pose_;
   std::optional<rclcpp::Time> last_keyframe_stamp_;
+  std::optional<double> floor_reference_z_;
   std::vector<TrajectoryPoint> trajectory_points_;
   std::deque<Keyframe> keyframes_;
   std::optional<Eigen::Vector3f> last_trajectory_point_;
@@ -252,6 +261,7 @@ private:
   double voxel_leaf_{0.15};
   int max_points_{500000};
   double keep_seconds_{30.0};
+  double local_map_publish_hz_{2.0};
   double min_range_{0.2};
   double max_range_{12.0};
   double tf_timeout_{0.05};
@@ -263,6 +273,12 @@ private:
   bool debug_{false};
   bool exclude_floor_points_{false};
   double floor_z_max_{0.15};
+  bool enable_floor_stabilization_{false};
+  double floor_stabilization_percentile_{0.10};
+  double floor_stabilization_band_m_{0.08};
+  int floor_stabilization_min_points_{30};
+  double floor_stabilization_max_correction_m_{0.25};
+  bool drop_scan_on_floor_stabilization_failure_{true};
 
   double keyframe_min_translation_m_{0.10};
   double keyframe_min_yaw_rad_{0.06};
@@ -271,8 +287,12 @@ private:
   double global_voxel_leaf_size_{0.12};
   int max_global_points_{1500000};
   double global_publish_hz_{2.0};
+  int global_revoxelize_every_n_scans_{10};
   bool drop_scan_on_excess_motion_{true};
   double max_integration_yaw_rate_{0.5};
+  double max_integration_vertical_speed_{0.5};
+  double max_integration_tilt_rate_{0.5};
+  double max_motion_odom_age_sec_{0.25};
   bool rebuild_on_map_correction_{true};
   double rebuild_correction_translation_threshold_m_{0.03};
   double rebuild_correction_yaw_threshold_rad_{0.01};
@@ -329,6 +349,11 @@ private:
   std::size_t tf_failures_{0};
   std::size_t tf_filter_drop_count_{0};
   std::size_t dropped_excess_motion_count_{0};
+  std::size_t dropped_stale_odom_count_{0};
+  std::size_t dropped_yaw_motion_count_{0};
+  std::size_t dropped_vertical_motion_count_{0};
+  std::size_t dropped_tilt_motion_count_{0};
+  std::size_t global_integrations_since_revoxel_{0};
   std::size_t global_revoxelization_count_{0};
   std::size_t total_scans_seen_{0};
   std::size_t total_scans_processed_{0};
@@ -337,6 +362,11 @@ private:
   std::size_t keyframe_drop_non_keyframe_count_{0};
   std::size_t keyframe_eviction_count_{0};
   std::size_t floor_points_dropped_{0};
+  std::size_t floor_stabilization_corrections_{0};
+  std::size_t floor_stabilization_estimate_failures_{0};
+  std::size_t floor_stabilization_rejections_{0};
+  double last_observed_floor_z_{0.0};
+  double last_floor_correction_m_{0.0};
   std::size_t pcd_export_count_{0};
   bool autosave_completed_{false};
   std::string last_pcd_export_path_;
@@ -384,6 +414,10 @@ private:
   double last_pose_bracket_gap_sec_{0.0};
   double last_pose_buffer_oldest_age_sec_{0.0};
   double last_pose_buffer_newest_age_sec_{0.0};
+  double last_motion_yaw_rate_{0.0};
+  double last_motion_vertical_speed_{0.0};
+  double last_motion_tilt_rate_{0.0};
+  double last_motion_odom_age_sec_{0.0};
   std::string last_scan_drop_reason_{"none"};
   std::optional<rclcpp::Time> last_status_stamp_;
   std::size_t last_status_scans_seen_{0};

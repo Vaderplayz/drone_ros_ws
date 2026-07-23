@@ -34,5 +34,12 @@ This launcher waits for `/mavros/local_position/odom`, creates the full-pose
 directly in `odom`. Ctrl+C saves PCD and trajectory output; map-dependent 2D
 and GLB exports are disabled for this mode.
 
+Floor stabilization is enabled for the real lidar profile. Disable it for a
+diagnostic run with:
+
+```bash
+ENABLE_FLOOR_STABILIZATION=false ./src/master_scripts/start_independent_3d_mapping.sh
+```
+
 The old paths under `src/obs_avoid/scripts/` remain as wrappers for
 compatibility.

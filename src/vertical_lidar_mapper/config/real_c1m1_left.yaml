@@ -20,26 +20,34 @@ vertical_lidar_mapper:
     base_frame: "base_footprint"
     lidar_frame_override: "lidar_vert_link"
 
-    # Stability-first real-C1 profile. Coarse voxels and conservative
-    # keyframes keep pose noise and transient scans from dominating RViz.
+    # Stability-first room profile. Integrate often enough to fill walls, but
+    # keep the global cloud coarse and bounded for a Raspberry Pi 5.
     voxel_leaf: 0.10
     max_points: 500000
     keep_seconds: 30.0
+    local_map_publish_hz: 2.0
 
     integration_mode: "keyframe"
-    keyframe_min_translation_m: 0.05
-    keyframe_min_yaw_rad: 0.04
-    keyframe_max_interval_sec: 0.20
+    keyframe_min_translation_m: 0.03
+    keyframe_min_yaw_rad: 0.025
+    keyframe_max_interval_sec: 0.10
     max_keyframes: 10000
 
-    global_voxel_leaf_size: 0.05
-    max_global_points: 1000000
-    global_publish_hz: 1.0
+    global_voxel_leaf_size: 0.08
+    max_global_points: 400000
+    global_publish_hz: 3.0
+    global_revoxelize_every_n_scans: 10
 
     min_range: 0.25
     max_range: 10.0
     exclude_floor_points: false
     floor_z_max: 0.10
+    enable_floor_stabilization: true
+    floor_stabilization_percentile: 0.10
+    floor_stabilization_band_m: 0.08
+    floor_stabilization_min_points: 30
+    floor_stabilization_max_correction_m: 0.25
+    drop_scan_on_floor_stabilization_failure: true
 
     tf_timeout: 0.25
     tf_filter_queue_size: 150
@@ -58,7 +66,10 @@ vertical_lidar_mapper:
     deskew_min_valid_ratio: 0.95
 
     drop_scan_on_excess_motion: true
-    max_integration_yaw_rate: 0.35
+    max_integration_yaw_rate: 0.70
+    max_integration_vertical_speed: 0.40
+    max_integration_tilt_rate: 0.45
+    max_motion_odom_age_sec: 0.20
     motion_odom_topic: "/mavros/local_position/odom"
 
     enable_relative_pose_gate: true

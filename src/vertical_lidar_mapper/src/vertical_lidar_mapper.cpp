@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <array>
 #include <chrono>
+#include <cstddef>
 #include <cstdint>
 #include <cstdlib>
 #include <cmath>
@@ -193,12 +194,14 @@ VerticalLidarMapper::VerticalLidarMapper(const rclcpp::NodeOptions & options)
 
   RCLCPP_INFO(
     this->get_logger(),
-    "vertical_lidar_mapper started. scan_topic='%s' target_frame='%s' local_voxel=%.3f global_voxel=%.3f global_cap=%d",
+    "vertical_lidar_mapper started. scan_topic='%s' target_frame='%s' local_voxel=%.3f global_voxel=%.3f global_cap=%d global_publish=%.1fHz revoxel_every=%d",
     scan_topic_.c_str(),
     target_frame_.c_str(),
     voxel_leaf_,
     global_voxel_leaf_size_,
-    max_global_points_);
+    max_global_points_,
+    global_publish_hz_,
+    global_revoxelize_every_n_scans_);
   RCLCPP_INFO(
     this->get_logger(),
     "Global integration mode: %s (keyframe_min_translation=%.3fm keyframe_min_yaw=%.3frad keyframe_max_interval=%.3fs max_keyframes=%d).",
@@ -217,6 +220,14 @@ VerticalLidarMapper::VerticalLidarMapper(const rclcpp::NodeOptions & options)
     scan_stamp_reference_.c_str(),
     pose_interpolation_max_gap_sec_,
     deskewed_cloud_topic_.c_str());
+  RCLCPP_INFO(
+    this->get_logger(),
+    "Stable integration gate: %s (odom_age<=%.3fs |yaw_rate|<=%.3frad/s |vertical_speed|<=%.3fm/s tilt_rate<=%.3frad/s).",
+    drop_scan_on_excess_motion_ ? "enabled" : "disabled",
+    max_motion_odom_age_sec_,
+    max_integration_yaw_rate_,
+    max_integration_vertical_speed_,
+    max_integration_tilt_rate_);
   RCLCPP_INFO(
     this->get_logger(),
     "Map-rebase: %s (map_frame='%s' odom_frame='%s' trans_th=%.3fm yaw_th=%.3frad)",
@@ -246,6 +257,15 @@ VerticalLidarMapper::VerticalLidarMapper(const rclcpp::NodeOptions & options)
     exclude_floor_points_ ? "enabled" : "disabled",
     floor_z_max_,
     target_frame_.c_str());
+  RCLCPP_INFO(
+    this->get_logger(),
+    "Floor stabilization: %s (percentile=%.2f band=%.2fm min_points=%d max_correction=%.2fm drop_failure=%s).",
+    enable_floor_stabilization_ ? "enabled" : "disabled",
+    floor_stabilization_percentile_,
+    floor_stabilization_band_m_,
+    floor_stabilization_min_points_,
+    floor_stabilization_max_correction_m_,
+    drop_scan_on_floor_stabilization_failure_ ? "true" : "false");
   const std::string save_service_name = this->get_fully_qualified_name() + std::string("/save_pcd");
   const std::string rebuild_service_name = this->get_fully_qualified_name() + std::string("/rebuild_global");
   RCLCPP_INFO(
@@ -305,6 +325,7 @@ void VerticalLidarMapper::loadParameters()
   voxel_leaf_ = this->declare_parameter<double>("voxel_leaf", 0.15);
   max_points_ = this->declare_parameter<int>("max_points", 500000);
   keep_seconds_ = this->declare_parameter<double>("keep_seconds", 30.0);
+  local_map_publish_hz_ = this->declare_parameter<double>("local_map_publish_hz", 2.0);
   min_range_ = this->declare_parameter<double>("min_range", 0.2);
   max_range_ = this->declare_parameter<double>("max_range", 12.0);
   tf_timeout_ = this->declare_parameter<double>("tf_timeout", 0.05);
@@ -318,6 +339,18 @@ void VerticalLidarMapper::loadParameters()
   debug_ = this->declare_parameter<bool>("debug", false);
   exclude_floor_points_ = this->declare_parameter<bool>("exclude_floor_points", false);
   floor_z_max_ = this->declare_parameter<double>("floor_z_max", 0.15);
+  enable_floor_stabilization_ =
+    this->declare_parameter<bool>("enable_floor_stabilization", false);
+  floor_stabilization_percentile_ =
+    this->declare_parameter<double>("floor_stabilization_percentile", 0.10);
+  floor_stabilization_band_m_ =
+    this->declare_parameter<double>("floor_stabilization_band_m", 0.08);
+  floor_stabilization_min_points_ =
+    this->declare_parameter<int>("floor_stabilization_min_points", 30);
+  floor_stabilization_max_correction_m_ =
+    this->declare_parameter<double>("floor_stabilization_max_correction_m", 0.25);
+  drop_scan_on_floor_stabilization_failure_ =
+    this->declare_parameter<bool>("drop_scan_on_floor_stabilization_failure", true);
 
   integration_mode_ = normalize_integration_mode(
     this->declare_parameter<std::string>("integration_mode", "keyframe"));
@@ -328,8 +361,16 @@ void VerticalLidarMapper::loadParameters()
   global_voxel_leaf_size_ = this->declare_parameter<double>("global_voxel_leaf_size", 0.12);
   max_global_points_ = this->declare_parameter<int>("max_global_points", 1500000);
   global_publish_hz_ = this->declare_parameter<double>("global_publish_hz", 2.0);
+  global_revoxelize_every_n_scans_ =
+    this->declare_parameter<int>("global_revoxelize_every_n_scans", 10);
   drop_scan_on_excess_motion_ = this->declare_parameter<bool>("drop_scan_on_excess_motion", true);
   max_integration_yaw_rate_ = this->declare_parameter<double>("max_integration_yaw_rate", 0.5);
+  max_integration_vertical_speed_ =
+    this->declare_parameter<double>("max_integration_vertical_speed", 0.5);
+  max_integration_tilt_rate_ =
+    this->declare_parameter<double>("max_integration_tilt_rate", 0.5);
+  max_motion_odom_age_sec_ =
+    this->declare_parameter<double>("max_motion_odom_age_sec", 0.25);
   motion_odom_topic_ = this->declare_parameter<std::string>("motion_odom_topic", "/mavros/local_position/odom");
   motion_odom_frame_ = this->declare_parameter<std::string>("motion_odom_frame", "odom");
   rebuild_on_map_correction_ = this->declare_parameter<bool>("rebuild_on_map_correction", true);
@@ -435,6 +476,13 @@ void VerticalLidarMapper::loadParameters()
     RCLCPP_WARN(this->get_logger(), "Parameter 'voxel_leaf' <= 0.0, local voxel filtering is disabled.");
   }
 
+  if (local_map_publish_hz_ <= 0.0) {
+    local_map_publish_hz_ = 2.0;
+    RCLCPP_WARN(
+      this->get_logger(),
+      "Parameter 'local_map_publish_hz' <= 0.0, defaulting to 2.0 Hz.");
+  }
+
   if (keyframe_min_translation_m_ < 0.0) {
     keyframe_min_translation_m_ = 0.0;
     RCLCPP_WARN(
@@ -478,6 +526,41 @@ void VerticalLidarMapper::loadParameters()
   if (global_publish_hz_ <= 0.0) {
     global_publish_hz_ = 2.0;
     RCLCPP_WARN(this->get_logger(), "Parameter 'global_publish_hz' <= 0.0, defaulting to 2.0 Hz.");
+  }
+
+  if (global_revoxelize_every_n_scans_ <= 0) {
+    global_revoxelize_every_n_scans_ = 1;
+    RCLCPP_WARN(
+      this->get_logger(),
+      "Parameter 'global_revoxelize_every_n_scans' <= 0, clamped to 1.");
+  }
+
+  if (max_integration_yaw_rate_ < 0.0) {
+    max_integration_yaw_rate_ = 0.0;
+    RCLCPP_WARN(
+      this->get_logger(),
+      "Parameter 'max_integration_yaw_rate' was negative, clamped to 0.0.");
+  }
+
+  if (max_integration_vertical_speed_ < 0.0) {
+    max_integration_vertical_speed_ = 0.0;
+    RCLCPP_WARN(
+      this->get_logger(),
+      "Parameter 'max_integration_vertical_speed' was negative, clamped to 0.0.");
+  }
+
+  if (max_integration_tilt_rate_ < 0.0) {
+    max_integration_tilt_rate_ = 0.0;
+    RCLCPP_WARN(
+      this->get_logger(),
+      "Parameter 'max_integration_tilt_rate' was negative, clamped to 0.0.");
+  }
+
+  if (max_motion_odom_age_sec_ <= 0.0) {
+    max_motion_odom_age_sec_ = 0.25;
+    RCLCPP_WARN(
+      this->get_logger(),
+      "Parameter 'max_motion_odom_age_sec' <= 0.0, defaulting to 0.25.");
   }
 
   if (rebuild_correction_translation_threshold_m_ < 0.0) {
@@ -531,6 +614,27 @@ void VerticalLidarMapper::loadParameters()
   if (!std::isfinite(floor_z_max_)) {
     floor_z_max_ = 0.15;
     RCLCPP_WARN(this->get_logger(), "Parameter 'floor_z_max' was non-finite, defaulting to 0.15.");
+  }
+
+  floor_stabilization_percentile_ =
+    std::clamp(floor_stabilization_percentile_, 0.01, 0.40);
+  if (floor_stabilization_band_m_ <= 0.0) {
+    floor_stabilization_band_m_ = 0.08;
+    RCLCPP_WARN(
+      this->get_logger(),
+      "Parameter 'floor_stabilization_band_m' <= 0.0, defaulting to 0.08.");
+  }
+  if (floor_stabilization_min_points_ <= 0) {
+    floor_stabilization_min_points_ = 30;
+    RCLCPP_WARN(
+      this->get_logger(),
+      "Parameter 'floor_stabilization_min_points' <= 0, defaulting to 30.");
+  }
+  if (floor_stabilization_max_correction_m_ <= 0.0) {
+    floor_stabilization_max_correction_m_ = 0.25;
+    RCLCPP_WARN(
+      this->get_logger(),
+      "Parameter 'floor_stabilization_max_correction_m' <= 0.0, defaulting to 0.25.");
   }
 
   if (map_rebase_translation_threshold_ < 0.0) {
@@ -820,6 +924,59 @@ pcl::PointCloud<pcl::PointXYZ>::Ptr VerticalLidarMapper::transformCloud(
   }
   pcl::transformPointCloud(*input_cloud, *output_cloud, to_eigen_matrix(transform));
   return output_cloud;
+}
+
+bool VerticalLidarMapper::estimateFloorHeight(
+  const pcl::PointCloud<pcl::PointXYZ>::Ptr & cloud,
+  double & floor_z) const
+{
+  floor_z = 0.0;
+  if (!cloud ||
+    cloud->size() < static_cast<std::size_t>(floor_stabilization_min_points_))
+  {
+    return false;
+  }
+
+  std::vector<float> z_values;
+  z_values.reserve(cloud->size());
+  for (const auto & point : cloud->points) {
+    if (std::isfinite(point.z)) {
+      z_values.push_back(point.z);
+    }
+  }
+  if (z_values.size() < static_cast<std::size_t>(floor_stabilization_min_points_)) {
+    return false;
+  }
+
+  const std::size_t percentile_index = std::min(
+    z_values.size() - 1U,
+    static_cast<std::size_t>(
+      floor_stabilization_percentile_ *
+      static_cast<double>(z_values.size() - 1U)));
+  std::nth_element(
+    z_values.begin(),
+    z_values.begin() + static_cast<std::ptrdiff_t>(percentile_index),
+    z_values.end());
+  const float candidate_z = z_values[percentile_index];
+
+  std::vector<float> floor_band;
+  floor_band.reserve(z_values.size() / 4U);
+  for (const float z : z_values) {
+    if (std::fabs(z - candidate_z) <= floor_stabilization_band_m_) {
+      floor_band.push_back(z);
+    }
+  }
+  if (floor_band.size() < static_cast<std::size_t>(floor_stabilization_min_points_)) {
+    return false;
+  }
+
+  const std::size_t median_index = floor_band.size() / 2U;
+  std::nth_element(
+    floor_band.begin(),
+    floor_band.begin() + static_cast<std::ptrdiff_t>(median_index),
+    floor_band.end());
+  floor_z = static_cast<double>(floor_band[median_index]);
+  return std::isfinite(floor_z);
 }
 
 bool VerticalLidarMapper::buildDeskewedLocalCloud(
@@ -1179,9 +1336,15 @@ void VerticalLidarMapper::recordTfLookupSampleMs(double duration_ms)
   }
 }
 
-bool VerticalLidarMapper::shouldDropGlobalIntegration(double & yaw_rate, double & odom_age_sec) const
+bool VerticalLidarMapper::shouldDropGlobalIntegration(
+  double & yaw_rate,
+  double & vertical_speed,
+  double & tilt_rate,
+  double & odom_age_sec) const
 {
   yaw_rate = 0.0;
+  vertical_speed = 0.0;
+  tilt_rate = 0.0;
   odom_age_sec = 0.0;
 
   if (!drop_scan_on_excess_motion_ || !motion_odom_.has_value() || !last_scan_stamp_.has_value()) {
@@ -1190,16 +1353,25 @@ bool VerticalLidarMapper::shouldDropGlobalIntegration(double & yaw_rate, double 
 
   const auto & odom = motion_odom_.value();
   yaw_rate = odom.twist.twist.angular.z;
+  vertical_speed = odom.twist.twist.linear.z;
+  tilt_rate = std::hypot(
+    odom.twist.twist.angular.x,
+    odom.twist.twist.angular.y);
 
   const rclcpp::Time odom_stamp(odom.header.stamp, this->get_clock()->get_clock_type());
   odom_age_sec = std::fabs((last_scan_stamp_.value() - odom_stamp).seconds());
 
-  // Do not gate with stale motion estimates.
-  if (odom_age_sec > 0.25) {
-    return false;
+  if (!std::isfinite(yaw_rate) || !std::isfinite(vertical_speed) ||
+    !std::isfinite(tilt_rate) || !std::isfinite(odom_age_sec))
+  {
+    return true;
   }
 
-  return std::fabs(yaw_rate) > max_integration_yaw_rate_;
+  return
+    (odom_age_sec > max_motion_odom_age_sec_) ||
+    (std::fabs(yaw_rate) > max_integration_yaw_rate_) ||
+    (std::fabs(vertical_speed) > max_integration_vertical_speed_) ||
+    (tilt_rate > max_integration_tilt_rate_);
 }
 
 bool VerticalLidarMapper::shouldDropByRelativePoseConsistency(
@@ -1332,17 +1504,33 @@ void VerticalLidarMapper::integrateGlobalCloud(const pcl::PointCloud<pcl::PointX
     return;
   }
 
-  *global_cloud_ += *scan_cloud;
+  const auto integration_cloud = global_voxel_leaf_size_ > 0.0 ?
+    voxelDownsample(scan_cloud, global_voxel_leaf_size_) : scan_cloud;
+  *global_cloud_ += *integration_cloud;
+  ++total_scans_global_integrated_;
+  ++global_integrations_since_revoxel_;
+
   if (!loop_closure_dedup_only_) {
-    enforceGlobalCloudLimits();
+    const bool periodic_revoxel =
+      global_integrations_since_revoxel_ >=
+      static_cast<std::size_t>(global_revoxelize_every_n_scans_);
+    const bool over_point_cap =
+      max_global_points_ > 0 &&
+      global_cloud_->size() > static_cast<std::size_t>(max_global_points_);
+    if (periodic_revoxel || over_point_cap) {
+      enforceGlobalCloudLimits();
+      global_integrations_since_revoxel_ = 0;
+    } else {
+      global_points_total_ = global_cloud_->size();
+    }
   } else {
     global_points_total_ = global_cloud_->size();
   }
-  ++total_scans_global_integrated_;
 }
 
 void VerticalLidarMapper::enforceGlobalCloudLimits()
 {
+  ++global_revoxelization_count_;
   if (global_voxel_leaf_size_ > 0.0) {
     global_cloud_ = voxelDownsample(global_cloud_, global_voxel_leaf_size_);
   }
@@ -1357,8 +1545,6 @@ void VerticalLidarMapper::enforceGlobalCloudLimits()
         global_cloud_ = voxelDownsample(global_cloud_, adaptive_leaf);
         ++iter;
       }
-      ++global_revoxelization_count_;
-
       if (global_cloud_->size() > cap) {
         global_cloud_->points.resize(cap);
         global_cloud_->width = static_cast<uint32_t>(global_cloud_->points.size());
@@ -1409,12 +1595,11 @@ bool VerticalLidarMapper::maybeIntegrateAsKeyframe(
     double pitch = 0.0;
     double yaw = 0.0;
     tf2::Matrix3x3(delta.getRotation()).getRPY(roll, pitch, yaw);
-    const double translation_xy =
-      std::hypot(delta.getOrigin().x(), delta.getOrigin().y());
+    const double translation_3d = delta.getOrigin().length();
     const double yaw_abs = std::fabs(normalize_angle(yaw));
     const double dt = std::fabs((scan_stamp - last_keyframe_stamp_.value()).seconds());
     insert_keyframe =
-      (translation_xy >= keyframe_min_translation_m_) ||
+      (translation_3d >= keyframe_min_translation_m_) ||
       (yaw_abs >= keyframe_min_yaw_rad_) ||
       (dt >= keyframe_max_interval_sec_);
   }
@@ -1539,6 +1724,20 @@ void VerticalLidarMapper::publishMap(const rclcpp::Time & stamp)
   if (scan_queue_.empty()) {
     return;
   }
+
+  if (map_pub_->get_subscription_count() == 0U &&
+    map_pub_->get_intra_process_subscription_count() == 0U)
+  {
+    return;
+  }
+
+  if (last_local_map_publish_stamp_.has_value()) {
+    const double elapsed = (stamp - last_local_map_publish_stamp_.value()).seconds();
+    if (elapsed >= 0.0 && elapsed < (1.0 / local_map_publish_hz_)) {
+      return;
+    }
+  }
+  last_local_map_publish_stamp_ = stamp;
 
   pcl::PointCloud<pcl::PointXYZ>::Ptr map_cloud = buildVoxelizedMapCloud();
 
@@ -2223,6 +2422,14 @@ void VerticalLidarMapper::publishStatus()
   add_kv("keyframe_drop_non_keyframe", std::to_string(keyframe_drop_non_keyframe_count_));
   add_kv("keyframe_evictions", std::to_string(keyframe_eviction_count_));
   add_kv("dropped_excess_motion", std::to_string(dropped_excess_motion_count_));
+  add_kv("dropped_stale_odom", std::to_string(dropped_stale_odom_count_));
+  add_kv("dropped_yaw_motion", std::to_string(dropped_yaw_motion_count_));
+  add_kv("dropped_vertical_motion", std::to_string(dropped_vertical_motion_count_));
+  add_kv("dropped_tilt_motion", std::to_string(dropped_tilt_motion_count_));
+  add_kv("motion_odom_age_sec", to_string_with_precision(last_motion_odom_age_sec_, 4));
+  add_kv("motion_yaw_rate_rad_s", to_string_with_precision(last_motion_yaw_rate_, 3));
+  add_kv("motion_vertical_speed_m_s", to_string_with_precision(last_motion_vertical_speed_, 3));
+  add_kv("motion_tilt_rate_rad_s", to_string_with_precision(last_motion_tilt_rate_, 3));
   add_kv("full_pose_deskew_enabled", enable_full_pose_deskew_ ? "true" : "false");
   add_kv("deskewed_scans", std::to_string(deskewed_scan_count_));
   add_kv("deskew_failures", std::to_string(deskew_failure_count_));
@@ -2237,15 +2444,35 @@ void VerticalLidarMapper::publishStatus()
   add_kv("exclude_floor_points", exclude_floor_points_ ? "true" : "false");
   add_kv("floor_z_max_m", to_string_with_precision(floor_z_max_, 3));
   add_kv("floor_points_dropped", std::to_string(floor_points_dropped_));
+  add_kv("floor_stabilization_enabled", enable_floor_stabilization_ ? "true" : "false");
+  add_kv(
+    "floor_reference_z_m",
+    floor_reference_z_.has_value() ?
+    to_string_with_precision(floor_reference_z_.value(), 3) : "unset");
+  add_kv("observed_floor_z_m", to_string_with_precision(last_observed_floor_z_, 3));
+  add_kv("floor_correction_m", to_string_with_precision(last_floor_correction_m_, 3));
+  add_kv(
+    "floor_stabilization_corrections",
+    std::to_string(floor_stabilization_corrections_));
+  add_kv(
+    "floor_stabilization_estimate_failures",
+    std::to_string(floor_stabilization_estimate_failures_));
+  add_kv(
+    "floor_stabilization_rejections",
+    std::to_string(floor_stabilization_rejections_));
   add_kv("tf_filter_drops", std::to_string(tf_filter_drop_count_));
   add_kv("tf_lookup_failures", std::to_string(tf_failures_));
   add_kv("tf_lookup_p95_ms", to_string_with_precision(tf_p95_ms, 3));
   add_kv("local_raw_points", std::to_string(raw_points_total_));
   add_kv("local_voxel_points", std::to_string(last_local_voxel_point_count_));
+  add_kv("local_map_publish_hz", to_string_with_precision(local_map_publish_hz_, 2));
   add_kv("raw_keyframe_points", std::to_string(raw_keyframe_points));
   add_kv("global_points", std::to_string(global_points_total_));
   add_kv("memory_estimate_mib", to_string_with_precision(memory_estimate_mib, 1));
   add_kv("global_revoxelizations", std::to_string(global_revoxelization_count_));
+  add_kv(
+    "global_integrations_since_revoxel",
+    std::to_string(global_integrations_since_revoxel_));
   add_kv("map_rebase_enabled", enable_map_rebase_ ? "true" : "false");
   add_kv("map_rebase_count", std::to_string(map_rebase_count_));
   add_kv("last_map_rebase_translation_m", to_string_with_precision(last_map_rebase_translation_m_, 3));
@@ -2500,6 +2727,65 @@ void VerticalLidarMapper::scanCallback(const sensor_msgs::msg::LaserScan::ConstS
     last_scan_drop_reason_ = "empty_target_cloud";
     return;
   }
+
+  last_floor_correction_m_ = 0.0;
+  if (enable_floor_stabilization_) {
+    double observed_floor_z = 0.0;
+    if (!estimateFloorHeight(scan_cloud, observed_floor_z)) {
+      ++floor_stabilization_estimate_failures_;
+      if (drop_scan_on_floor_stabilization_failure_) {
+        last_scan_drop_reason_ = "floor_estimate_unavailable";
+        RCLCPP_WARN_THROTTLE(
+          this->get_logger(),
+          *this->get_clock(),
+          2000,
+          "Dropping vertical scan because a reliable floor band was not found.");
+        return;
+      }
+    } else {
+      last_observed_floor_z_ = observed_floor_z;
+      if (!floor_reference_z_.has_value()) {
+        floor_reference_z_ = observed_floor_z;
+        RCLCPP_INFO(
+          this->get_logger(),
+          "Initialized floor stabilization reference at z=%.3fm in frame '%s'.",
+          floor_reference_z_.value(),
+          target_frame_.c_str());
+      }
+
+      const double floor_correction = floor_reference_z_.value() - observed_floor_z;
+      last_floor_correction_m_ = floor_correction;
+      if (std::fabs(floor_correction) > floor_stabilization_max_correction_m_) {
+        ++floor_stabilization_rejections_;
+        last_scan_drop_reason_ = "floor_correction_too_large";
+        RCLCPP_WARN_THROTTLE(
+          this->get_logger(),
+          *this->get_clock(),
+          1000,
+          "Dropping vertical scan: floor correction %.3fm exceeds %.3fm. Check MAVROS altitude continuity.",
+          floor_correction,
+          floor_stabilization_max_correction_m_);
+        return;
+      }
+
+      if (std::fabs(floor_correction) > 1e-4) {
+        const float correction = static_cast<float>(floor_correction);
+        for (auto & point : scan_cloud->points) {
+          point.z += correction;
+        }
+
+        tf2::Vector3 target_origin = pose_target_source.getOrigin();
+        target_origin.setZ(target_origin.z() + floor_correction);
+        pose_target_source.setOrigin(target_origin);
+
+        tf2::Vector3 odom_origin = pose_odom_source.getOrigin();
+        odom_origin.setZ(odom_origin.z() + floor_correction);
+        pose_odom_source.setOrigin(odom_origin);
+        ++floor_stabilization_corrections_;
+      }
+    }
+  }
+
   sensor_msgs::msg::PointCloud2 cloud_target_msg;
   pcl::toROSMsg(*scan_cloud, cloud_target_msg);
   cloud_target_msg.header.frame_id = target_frame_;
@@ -2584,8 +2870,15 @@ void VerticalLidarMapper::scanCallback(const sensor_msgs::msg::LaserScan::ConstS
   publishMap(scan_stamp);
 
   double yaw_rate = 0.0;
+  double vertical_speed = 0.0;
+  double tilt_rate = 0.0;
   double odom_age_sec = 0.0;
-  const bool drop_excess_motion = shouldDropGlobalIntegration(yaw_rate, odom_age_sec);
+  const bool drop_excess_motion = shouldDropGlobalIntegration(
+    yaw_rate, vertical_speed, tilt_rate, odom_age_sec);
+  last_motion_yaw_rate_ = yaw_rate;
+  last_motion_vertical_speed_ = vertical_speed;
+  last_motion_tilt_rate_ = tilt_rate;
+  last_motion_odom_age_sec_ = odom_age_sec;
 
   double relative_translation_error_m = 0.0;
   double relative_yaw_error_rad = 0.0;
@@ -2617,14 +2910,38 @@ void VerticalLidarMapper::scanCallback(const sensor_msgs::msg::LaserScan::ConstS
   if (drop_global) {
     if (drop_excess_motion) {
       ++dropped_excess_motion_count_;
+      const bool stale_or_invalid =
+        !std::isfinite(odom_age_sec) ||
+        odom_age_sec > max_motion_odom_age_sec_;
+      const bool excessive_yaw =
+        !std::isfinite(yaw_rate) ||
+        std::fabs(yaw_rate) > max_integration_yaw_rate_;
+      const bool excessive_vertical =
+        !std::isfinite(vertical_speed) ||
+        std::fabs(vertical_speed) > max_integration_vertical_speed_;
+      const bool excessive_tilt =
+        !std::isfinite(tilt_rate) ||
+        tilt_rate > max_integration_tilt_rate_;
+      dropped_stale_odom_count_ += stale_or_invalid ? 1U : 0U;
+      dropped_yaw_motion_count_ += excessive_yaw ? 1U : 0U;
+      dropped_vertical_motion_count_ += excessive_vertical ? 1U : 0U;
+      dropped_tilt_motion_count_ += excessive_tilt ? 1U : 0U;
+      last_scan_drop_reason_ = stale_or_invalid ? "global_stale_odom" :
+        excessive_vertical ? "global_vertical_motion" :
+        excessive_tilt ? "global_tilt_motion" : "global_yaw_motion";
       RCLCPP_WARN_THROTTLE(
         this->get_logger(),
         *this->get_clock(),
         1000,
-        "Dropped scan from global integration: |yaw_rate|=%.3f > %.3f rad/s (odom_age=%.3fs).",
+        "Dropped unstable global scan: odom_age=%.3fs (max %.3f), |yaw|=%.3f (max %.3f), |vz|=%.3f (max %.3f), tilt_rate=%.3f (max %.3f).",
+        odom_age_sec,
+        max_motion_odom_age_sec_,
         std::fabs(yaw_rate),
         max_integration_yaw_rate_,
-        odom_age_sec);
+        std::fabs(vertical_speed),
+        max_integration_vertical_speed_,
+        tilt_rate,
+        max_integration_tilt_rate_);
     }
 
     if (drop_relative_pose) {

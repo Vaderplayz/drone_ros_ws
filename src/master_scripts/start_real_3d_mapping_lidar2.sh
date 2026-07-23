@@ -56,6 +56,7 @@ EXPORT_SLAM_MAP2D_ON_SAVE="${EXPORT_SLAM_MAP2D_ON_SAVE:-true}"
 EXPORT_STRUCTURAL_MESH_ON_SAVE="${EXPORT_STRUCTURAL_MESH_ON_SAVE:-true}"
 ENABLE_MAP_REBASE="${ENABLE_MAP_REBASE:-true}"
 ENABLE_RELATIVE_POSE_GATE="${ENABLE_RELATIVE_POSE_GATE:-true}"
+ENABLE_FLOOR_STABILIZATION="${ENABLE_FLOOR_STABILIZATION:-true}"
 SAVE_SERVICE_TIMEOUT_SEC="${SAVE_SERVICE_TIMEOUT_SEC:-30}"
 PROCESS_STOP_TIMEOUT_SEC="${PROCESS_STOP_TIMEOUT_SEC:-5}"
 
@@ -295,6 +296,13 @@ validate_settings() {
     0|1) ;;
     *) log_error "REQUIRE_2D_MAP must be 0 or 1, got '${REQUIRE_2D_MAP}'"; return 1 ;;
   esac
+  case "${ENABLE_FLOOR_STABILIZATION}" in
+    true|false) ;;
+    *)
+      log_error "ENABLE_FLOOR_STABILIZATION must be true or false, got '${ENABLE_FLOOR_STABILIZATION}'"
+      return 1
+      ;;
+  esac
   for topic in "${LIDAR2_SCAN_TOPIC}" "${DESKEWED_CLOUD_TOPIC}" "${VERTICAL_CLOUD_TOPIC}" "${VERTICAL_MAP_TOPIC}" \
     "${GLOBAL_CLOUD_TOPIC}" "${MAPPING_STATUS_TOPIC}" "${PX4_ODOM_TOPIC}"; do
     if [[ ! "${topic}" =~ ^/[A-Za-z0-9_/]+$ || "${topic}" == *//* || "${topic}" == */ ]]; then
@@ -516,6 +524,7 @@ start_mapper() {
       -p export_structural_mesh_on_save:="${EXPORT_STRUCTURAL_MESH_ON_SAVE}" \
       -p enable_map_rebase:="${ENABLE_MAP_REBASE}" \
       -p enable_relative_pose_gate:="${ENABLE_RELATIVE_POSE_GATE}" \
+      -p enable_floor_stabilization:="${ENABLE_FLOOR_STABILIZATION}" \
       -p pcd_export_dir:="${EXPORT_DIR}" \
       -p map_rebase_map_frame:="${MAP_FRAME}" \
       -p map_rebase_odom_frame:="${ODOM_FRAME}" \

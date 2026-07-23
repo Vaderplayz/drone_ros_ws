@@ -17,6 +17,8 @@ ROS 2 (Humble/Rolling) package for building a rolling 3D point cloud map from a 
   `z/roll/pitch` (`/mavros/local_position/odom`)
 - Publishes latest transformed scan on `/vertical_cloud`
 - Accumulates scans over a rolling time window and publishes voxelized map on `/vertical_map`
+- Skips the rolling-map rebuild when `/vertical_map` has no subscribers and
+  rate-limits it with `local_map_publish_hz`
 - Publishes bounded global cloud map on `/mapping/global_cloud`
 - Publishes mapper diagnostics on `/mapping/status`
 - Provides on-demand export service on `/vertical_lidar_mapper/save_pcd` for:
@@ -33,7 +35,10 @@ ROS 2 (Humble/Rolling) package for building a rolling 3D point cloud map from a 
   throttled warnings
 - Uses direct, diagnosed scan-time lookups for full-pose deskew; the legacy
   rigid-scan mode retains its TF message filter
-- Motion-gates global integration when yaw-rate is too high (`drop_scan_on_excess_motion`)
+- Motion-gates global integration when odometry is stale or yaw, vertical, or
+  roll/pitch motion is too fast (`drop_scan_on_excess_motion`)
+- Optionally anchors each complete vertical scan to a robust lower-percentile
+  floor estimate so small altitude drift does not stack floor and wall layers
 - Compares SLAM-relative motion vs odom-relative motion and drops inconsistent global integration (`enable_relative_pose_gate`)
 - Rebuilds accumulated points on `map->odom` corrections to reduce loop-closure double walls (`enable_map_rebase`)
 - Supports `integration_mode`:
@@ -134,6 +139,9 @@ If map appears doubled/shifted after revisit with `target_frame:=map`:
   - `keyframe_min_translation_m`
   - `keyframe_min_yaw_rad`
   - `keyframe_max_interval_sec`
+- `keyframe_min_translation_m` uses full 3D distance, including height changes.
+- Use `global_revoxelize_every_n_scans` to amortize global voxel filtering on
+  constrained hardware while still downsampling every incoming keyframe.
 - Tune `map_rebase_translation_threshold` / `map_rebase_yaw_threshold`
 - Tune `relative_pose_translation_error_threshold` / `relative_pose_yaw_error_threshold`
 - If relocalization jumps are large, also tune:
