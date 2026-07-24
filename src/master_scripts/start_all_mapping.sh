@@ -14,6 +14,9 @@ MAPPING_2D_SCRIPT="${MAPPING_2D_SCRIPT:-${SCRIPT_DIR}/start_2d_mapping_only.sh}"
 MAPPING_3D_SCRIPT="${MAPPING_3D_SCRIPT:-${SCRIPT_DIR}/start_real_3d_mapping_lidar2.sh}"
 
 FUSION_SCAN_TOPIC="${FUSION_SCAN_TOPIC:-/scan_rf2o}"
+FUSION_ODOM_TOPIC="${FUSION_ODOM_TOPIC:-/lidar/odom}"
+FUSION_BRIDGE_DIAGNOSTICS_TOPIC="${FUSION_BRIDGE_DIAGNOSTICS_TOPIC:-/lidar_odom_px4_bridge/diagnostics}"
+PX4_ODOMETRY_OUT_TOPIC="${PX4_ODOMETRY_OUT_TOPIC:-/mavros/odometry/out}"
 PX4_ODOM_TOPIC="${PX4_ODOM_TOPIC:-/mavros/local_position/odom}"
 MAP_TOPIC="${MAP_TOPIC:-/map}"
 GLOBAL_CLOUD_TOPIC="${GLOBAL_CLOUD_TOPIC:-/mapping/global_cloud}"
@@ -22,9 +25,13 @@ BASE_FRAME="${BASE_FRAME:-base_footprint}"
 MAP_FRAME="${MAP_FRAME:-map}"
 
 FUSION_WAIT_SEC="${FUSION_WAIT_SEC:-120}"
+FUSION_BRIDGE_OUTPUT_WAIT_SEC="${FUSION_BRIDGE_OUTPUT_WAIT_SEC:-15}"
 MAPPING_2D_WAIT_SEC="${MAPPING_2D_WAIT_SEC:-180}"
 MAPPING_3D_WAIT_SEC="${MAPPING_3D_WAIT_SEC:-120}"
 CHILD_STOP_TIMEOUT_SEC="${CHILD_STOP_TIMEOUT_SEC:-50}"
+REQUIRE_PX4_BRIDGE_OUTPUT="${REQUIRE_PX4_BRIDGE_OUTPUT:-0}"
+MAPPING_3D_ENABLE_MAP_REBASE="${MAPPING_3D_ENABLE_MAP_REBASE:-false}"
+MAPPING_3D_ENABLE_RELATIVE_POSE_GATE="${MAPPING_3D_ENABLE_RELATIVE_POSE_GATE:-true}"
 
 RUN_STAMP="$(date +%Y%m%d_%H%M%S)"
 LOG_DIR="${ROS_WS}/runtime_logs/all_mapping_${RUN_STAMP}"
@@ -174,6 +181,10 @@ validate_environment() {
   for command in ros2 timeout setsid flock grep tee; do
     command -v "${command}" >/dev/null 2>&1 || fail "missing command: ${command}"
   done
+  if [[ "${REQUIRE_PX4_BRIDGE_OUTPUT}" != "0" &&
+    "${REQUIRE_PX4_BRIDGE_OUTPUT}" != "1" ]]; then
+    fail "REQUIRE_PX4_BRIDGE_OUTPUT must be 0 or 1"
+  fi
 }
 
 main() {
@@ -199,19 +210,49 @@ main() {
   log "Starting complete real-drone mapping stack"
   log "MAVROS and the boot AprilTag pipeline remain externally managed"
 
-  start_launcher "RF2O/PX4 fusion" "${FUSION_SCRIPT}"
+  start_launcher "RF2O/PX4 fusion" "${FUSION_SCRIPT}" \
+    CANONICAL_SCAN_TOPIC="${FUSION_SCAN_TOPIC}" \
+    LIDAR_ODOM_TOPIC="${FUSION_ODOM_TOPIC}" \
+    PX4_ODOMETRY_OUT_TOPIC="${PX4_ODOMETRY_OUT_TOPIC}" \
+    PX4_BRIDGE_DIAGNOSTICS_TOPIC="${FUSION_BRIDGE_DIAGNOSTICS_TOPIC}" \
+    PX4_BRIDGE_WAIT_SEC="${FUSION_BRIDGE_OUTPUT_WAIT_SEC}" \
+    PX4_ODOM_TOPIC="${PX4_ODOM_TOPIC}" \
+    ODOM_PARENT_FRAME="${ODOM_FRAME}" \
+    BASE_FRAME="${BASE_FRAME}"
   FUSION_PID="${LAST_STARTED_PID}"
   wait_for_message "${FUSION_SCAN_TOPIC}" "${FUSION_WAIT_SEC}" best_effort "${FUSION_PID}"
+  wait_for_message "${FUSION_ODOM_TOPIC}" "${FUSION_WAIT_SEC}" best_effort "${FUSION_PID}"
   wait_for_message "${PX4_ODOM_TOPIC}" "${FUSION_WAIT_SEC}" best_effort "${FUSION_PID}"
   wait_for_transform "${ODOM_FRAME}" "${BASE_FRAME}" "${FUSION_WAIT_SEC}" "${FUSION_PID}"
+  wait_for_message "${FUSION_BRIDGE_DIAGNOSTICS_TOPIC}" "${FUSION_WAIT_SEC}" reliable "${FUSION_PID}"
+  if [[ "${REQUIRE_PX4_BRIDGE_OUTPUT}" == "1" ]]; then
+    wait_for_message "${PX4_ODOMETRY_OUT_TOPIC}" "${FUSION_WAIT_SEC}" reliable "${FUSION_PID}"
+  else
+    log "Fusion stage ready; ${PX4_ODOMETRY_OUT_TOPIC} is not required for observer-only mapping"
+  fi
 
-  start_launcher "2D mapping" "${MAPPING_2D_SCRIPT}"
+  start_launcher "2D mapping" "${MAPPING_2D_SCRIPT}" \
+    SOURCE_SCAN_TOPIC="${FUSION_SCAN_TOPIC}" \
+    ODOM_TOPIC="${PX4_ODOM_TOPIC}" \
+    MAP_TOPIC="${MAP_TOPIC}" \
+    MAP_FRAME="${MAP_FRAME}" \
+    ODOM_FRAME="${ODOM_FRAME}" \
+    BASE_FRAME="${BASE_FRAME}"
   MAPPING_2D_PID="${LAST_STARTED_PID}"
   wait_for_message "${MAP_TOPIC}" "${MAPPING_2D_WAIT_SEC}" reliable "${MAPPING_2D_PID}"
   wait_for_transform "${MAP_FRAME}" "${ODOM_FRAME}" "${MAPPING_2D_WAIT_SEC}" "${MAPPING_2D_PID}"
 
   start_launcher "3D mapping" "${MAPPING_3D_SCRIPT}" \
-    REQUIRE_2D_MAP=1 AUTO_SAVE_3D_MAP_ON_EXIT=1
+    PX4_ODOM_TOPIC="${PX4_ODOM_TOPIC}" \
+    TARGET_FRAME="${MAP_FRAME}" \
+    MAP_FRAME="${MAP_FRAME}" \
+    ODOM_FRAME="${ODOM_FRAME}" \
+    BASE_FRAME="${BASE_FRAME}" \
+    GLOBAL_CLOUD_TOPIC="${GLOBAL_CLOUD_TOPIC}" \
+    ENABLE_MAP_REBASE="${MAPPING_3D_ENABLE_MAP_REBASE}" \
+    ENABLE_RELATIVE_POSE_GATE="${MAPPING_3D_ENABLE_RELATIVE_POSE_GATE}" \
+    REQUIRE_2D_MAP=1 \
+    AUTO_SAVE_3D_MAP_ON_EXIT=1
   MAPPING_3D_PID="${LAST_STARTED_PID}"
   wait_for_message "${GLOBAL_CLOUD_TOPIC}" "${MAPPING_3D_WAIT_SEC}" reliable "${MAPPING_3D_PID}"
 

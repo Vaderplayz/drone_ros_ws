@@ -82,6 +82,7 @@ LAST_STARTED_PID=""
 EXTERNAL_RPLIDAR=0
 LOCK_ACQUIRED=0
 SHUTDOWN_REASON="normal exit"
+PX4_BRIDGE_OUTPUT_READY=0
 
 if [[ -t 1 ]]; then
   GREEN=$'\033[1;32m'
@@ -396,7 +397,7 @@ acquire_launcher_lock() {
 
 wait_for_message() {
   local topic="$1" timeout_sec="$2" reliability="$3" pid="${4:-}"
-  local logfile="${5:-}" start elapsed last_progress=-1
+  local logfile="${5:-}" requirement="${6:-required}" start elapsed last_progress=-1
   start="$(date +%s)"
   while true; do
     if [[ -n "${pid}" ]] && ! kill -0 "${pid}" 2>/dev/null; then
@@ -413,7 +414,11 @@ wait_for_message() {
     fi
     elapsed=$(( $(date +%s) - start ))
     if (( elapsed >= timeout_sec )); then
-      log_error "no message on ${topic} after ${timeout_sec}s"
+      if [[ "${requirement}" == "optional" ]]; then
+        log_warning "no message on optional topic ${topic} after ${timeout_sec}s"
+      else
+        log_error "no message on ${topic} after ${timeout_sec}s"
+      fi
       if [[ -n "${logfile}" ]]; then
         tail -n 40 "${logfile}" 2>/dev/null || true
       fi
@@ -719,15 +724,29 @@ start_rf2o_and_monitor() {
 }
 
 start_px4_bridge() {
-  require_existing_mavros_disarmed
+  # Startup already verified MAVROS and the disarmed state. The bridge keeps
+  # its own safety gate active and can survive a transient MAVROS reconnect.
   start_process lidar_odom_px4_bridge "${PX4_BRIDGE_LOG}" \
     ros2 run obs_avoid lidar_odom_px4_bridge --ros-args --params-file "${ODOM_PARAMS_FILE}" \
       -p health_csv_path:="${PX4_BRIDGE_HEALTH_CSV}" -p use_sim_time:="${USE_SIM_TIME}"
   local bridge_pid="${LAST_STARTED_PID}"
-  wait_for_message "${PX4_ODOMETRY_OUT_TOPIC}" "${PX4_BRIDGE_WAIT_SEC}" reliable \
+  wait_for_message "${PX4_BRIDGE_DIAGNOSTICS_TOPIC}" 15 reliable \
     "${bridge_pid}" "${PX4_BRIDGE_LOG}"
-  require_publisher_count "${PX4_ODOMETRY_OUT_TOPIC}" 1
-  log_started "RF2O feed to PX4 via ${PX4_ODOMETRY_OUT_TOPIC}"
+
+  if wait_for_message "${PX4_ODOMETRY_OUT_TOPIC}" "${PX4_BRIDGE_WAIT_SEC}" reliable \
+    "${bridge_pid}" "${PX4_BRIDGE_LOG}" optional
+  then
+    require_publisher_count "${PX4_ODOMETRY_OUT_TOPIC}" 1
+    PX4_BRIDGE_OUTPUT_READY=1
+    log_started "RF2O feed to PX4 via ${PX4_ODOMETRY_OUT_TOPIC}"
+  else
+    local wait_status=$?
+    if [[ "${wait_status}" -ne 12 ]] || ! kill -0 "${bridge_pid}" 2>/dev/null; then
+      return "${wait_status}"
+    fi
+    log_warning "PX4 bridge is alive but output remains gated; mapping inputs are ready and startup will continue"
+    log_warning "The bridge will publish automatically when MAVROS, PX4 odometry, scan, and RF2O health inputs are valid"
+  fi
 }
 
 start_diagnostic_bag() {
@@ -765,9 +784,17 @@ ready_banner() {
   printf '\n%s' "${GREEN}"
   printf '######################################################################\n'
   printf '#                                                                    #\n'
-  printf '#                         ALL SYSTEM READY                           #\n'
+  if [[ "${PX4_BRIDGE_OUTPUT_READY}" == "1" ]]; then
+    printf '#                         ALL SYSTEM READY                           #\n'
+  else
+    printf '#                    MAPPING READY - PX4 FEED PENDING                #\n'
+  fi
   printf '#                                                                    #\n'
-  printf '#             RF2O odometry is feeding PX4 through MAVROS            #\n'
+  if [[ "${PX4_BRIDGE_OUTPUT_READY}" == "1" ]]; then
+    printf '#             RF2O odometry is feeding PX4 through MAVROS            #\n'
+  else
+    printf '#          RF2O is healthy; PX4 bridge is waiting for its gate       #\n'
+  fi
   printf '#                                                                    #\n'
   printf '######################################################################\n'
   printf '%s\n' "${RESET}"
@@ -824,7 +851,11 @@ main() {
   write_snapshot
   ready_banner
 
-  log "ROS/MAVROS feed is ready; verify EKF2 external-vision aid flags before flight"
+  if [[ "${PX4_BRIDGE_OUTPUT_READY}" == "1" ]]; then
+    log "ROS/MAVROS feed is ready; verify EKF2 external-vision aid flags before flight"
+  else
+    log_warning "Mapping is ready, but PX4 external-odometry output was not observed before the startup deadline"
+  fi
   log "No PX4 parameter, arm, mode, or movement command was sent"
   log "Runtime logs: ${LOG_DIR}"
   while true; do

@@ -87,7 +87,9 @@ vertical_lidar_mapper:
     relative_pose_max_map_step_xy: 0.25
     relative_pose_max_map_yaw_step: 0.15
 
-    enable_map_rebase: true
+    # Points are already integrated in the fixed map frame. Applying each
+    # map->odom delta to the accumulated cloud shifts old walls away from /map.
+    enable_map_rebase: false
     map_rebase_map_frame: "map"
     map_rebase_odom_frame: "odom"
     map_rebase_translation_threshold: 0.08

@@ -153,8 +153,11 @@ If messages drop:
 - Sim time mismatch (`use_sim_time` not enabled consistently)
 
 If map appears doubled/shifted after revisit with `target_frame:=map`:
-- Keep `enable_map_rebase:=true` (default)
-- Keep `enable_relative_pose_gate:=true` to reject SLAM-vs-odom inconsistent scan integrations
+- Keep `enable_map_rebase:=false` for the real profile. Accumulated points are
+  already expressed in `map`; repeatedly applying `map -> odom` deltas moves
+  old walls away from the occupancy map.
+- Keep `enable_relative_pose_gate:=true` to reject SLAM-vs-odom inconsistent
+  scan integrations using frame-invariant relative base motion.
 - Use keyframe integration (`integration_mode:=keyframe`) with:
   - `keyframe_min_translation_m`
   - `keyframe_min_yaw_rad`

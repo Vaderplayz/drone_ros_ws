@@ -1503,8 +1503,10 @@ bool VerticalLidarMapper::shouldDropByRelativePoseConsistency(
   const tf2::Transform curr_odom_tf = to_tf2_transform(tf_odom_base);
   const tf2::Transform prev_odom_tf = to_tf2_transform(last_relative_pose_odom_base_tf_.value());
 
-  const tf2::Transform map_delta = curr_map_tf * prev_map_tf.inverse();
-  const tf2::Transform odom_delta = curr_odom_tf * prev_odom_tf.inverse();
+  // Express both motions in the previous base frame. Comparing translations
+  // expressed directly in map and odom is invalid when those frames differ in yaw.
+  const tf2::Transform map_delta = prev_map_tf.inverse() * curr_map_tf;
+  const tf2::Transform odom_delta = prev_odom_tf.inverse() * curr_odom_tf;
 
   const double map_dx = map_delta.getOrigin().x();
   const double map_dy = map_delta.getOrigin().y();
