@@ -67,11 +67,11 @@ Then start lidar2 3D mapping:
 ./src/master_scripts/start_real_3d_mapping_lidar2.sh
 ```
 
-The real launcher seeds poses from `odom` and accumulates self-aligned 3D
-keyframes in `vertical_map`. It publishes the inverse registration correction
-as `odom -> vertical_map`. Use RViz Fixed Frame `map` to display the corrected
-cloud through `map -> odom -> vertical_map`; the 2D transform is applied after
-internal 3D scan-to-submap alignment without double correction.
+The real launcher seeds poses from `odom`; single-scan ICP is experimental and
+disabled by default because a vertical 2D scan is planar-degenerate. Use RViz
+Fixed Frame `map` to display the default cloud through `map -> odom`. When the
+experiment is explicitly enabled, corrected keyframes use `vertical_map` and
+the TF chain becomes `map -> odom -> vertical_map`.
 
 When MAVROS and AprilTag already run at boot, start odom-only 3D accumulation
 without lidar1, RF2O, or 2D SLAM:
@@ -111,12 +111,15 @@ odom -> base_footprint (planar x/y/yaw from px4_odom_flatten_node)
 
 stored full T_odom_lidar(timestamp)
     + stored deskewed local keyframe points
-    + bounded scan-to-submap ICP correction in x/y/yaw
-    -> /mapping/global_cloud in vertical_map
+    -> /mapping/global_cloud in odom
 
-map -> odom -> vertical_map
-    * complete internally aligned 3D cloud
+map -> odom
+    * default odometry-accumulated 3D cloud
     -> RViz display and map-frame structural export
+
+Experimental enable_scan_matching=true:
+    odom -> vertical_map
+    * single-scan ICP-corrected cloud
 ```
 
 The planar TF remains the prediction input for 2D SLAM. The vertical mapper

@@ -78,10 +78,10 @@ vertical_lidar_mapper:
     max_motion_odom_age_sec: 0.20
     motion_odom_topic: "/mavros/local_position/odom"
 
-    # Align each candidate keyframe against a bounded recent 3D submap before
-    # global insertion. Odometry remains the initial guess and is never fed
-    # back into MAVROS/PX4. Only x/y/yaw corrections can reach the global map.
-    enable_scan_matching: true
+    # Experimental only. A single vertical 2D scan is planar-degenerate and
+    # can falsely converge in ICP, so the real profile relies on odometry until
+    # registration uses an observable multi-scan source submap.
+    enable_scan_matching: false
     scan_matching_map_frame: "vertical_map"
     scan_matching_drop_on_failure: true
     scan_matching_max_rate_hz: 4.0

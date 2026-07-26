@@ -39,8 +39,8 @@ ROS 2 (Humble/Rolling) package for building a rolling 3D point cloud map from a 
   rigid-scan mode retains its TF message filter
 - Motion-gates global integration when odometry is stale or yaw, vertical, or
   roll/pitch motion is too fast (`drop_scan_on_excess_motion`)
-- Self-aligns candidate keyframes against a bounded, voxelized prior 3D
-  submap using odometry-seeded PCL ICP (`enable_scan_matching`)
+- Can experimentally align candidate keyframes against a bounded, voxelized
+  prior 3D submap using odometry-seeded PCL ICP (`enable_scan_matching`)
 - Restricts scan-matching corrections to `x/y/yaw`, rejects weak overlap or
   excessive corrections, and never feeds corrected poses back into MAVROS/PX4
 - Optionally anchors each complete vertical scan to a robust lower-percentile
@@ -151,13 +151,12 @@ ros2 run tf2_ros tf2_echo base_link lidar_vert_link
   current corrected scan in `lidar_vert_link`
 - Add `PointCloud2` display for `/vertical_map`
 
-For the real combined 2D + 3D profile, odometry seeds registration and the
-corrected global cloud is published in `vertical_map`. RViz uses `map` as its
-Fixed Frame and transforms through `map -> odom -> vertical_map`. This keeps
-the 3D and 2D corrections separate and avoids double-applying odometry drift
-correction. `/mapping/global_cloud` publishing at 3 Hz is only the display
-refresh rate; check `keyframe_creation_rate_hz` for actual integration
-throughput.
+For the real combined 2D + 3D profile, use `map` as RViz's Fixed Frame. With
+the default scan matcher disabled, `/mapping/global_cloud` is in `odom` and
+RViz transforms it through `map -> odom`. The experimental scan matcher instead
+publishes the cloud in `vertical_map` and adds `odom -> vertical_map`.
+`/mapping/global_cloud` publishing at 3 Hz is only the display refresh rate;
+check `keyframe_creation_rate_hz` for actual integration throughput.
 
 If messages drop:
 - Missing TF in chain `target_frame -> base_link -> lidar frame`
@@ -196,18 +195,24 @@ If map appears doubled/shifted after revisit with `target_frame:=map`:
   - `map_rebase_cooldown_remaining_scans`, `map_rebase_cooldown_drops`
 
 For stability-first real mapping, prefer `target_frame:=odom`,
-`enable_map_rebase:=false`, and `enable_relative_pose_gate:=false`. The PCD is
-then saved in the odom-initialized `vertical_map` coordinates. If a SLAM
-occupancy map is available, the structural GLB exporter transforms the cloud
-snapshot into the map frame before building the model.
+`enable_map_rebase:=false`, `enable_relative_pose_gate:=false`, and
+`enable_scan_matching:=false`. The PCD is then saved in `odom` coordinates. If
+a SLAM occupancy map is available, the structural GLB exporter transforms the
+cloud snapshot into the map frame before building the model.
 
 ### 3D self-alignment
 
-The real profile enables bounded scan-to-submap matching. Each candidate
-keyframe starts from its full MAVROS odometry pose, then PCL ICP compares its
-non-floor points with a radius-limited prior 3D submap. Only corrections that
-pass convergence, overlap, RMSE, translation, yaw, z, and tilt limits are
-accepted. The accepted planar correction seeds following keyframes.
+This mode is experimental and disabled in the real profile. One vertical 2D
+scan projects to nearly a line in XY, so point-to-point ICP can falsely report
+convergence after sliding the scan onto an unrelated wall or neighboring
+slice. Reusing that correction can bend walls and make the result worse than
+odometry-only accumulation.
+
+When explicitly enabled, each candidate keyframe starts from its full MAVROS
+odometry pose, then PCL ICP compares its non-floor points with a radius-limited
+prior 3D submap. Corrections must pass convergence, overlap, RMSE, translation,
+yaw, z, and tilt limits, but these checks do not make a single vertical slice
+geometrically observable.
 
 Registration runs at up to `scan_matching_max_rate_hz`; intermediate
 keyframes use the latest accepted correction. When strict failure dropping is
@@ -222,10 +227,11 @@ ros2 topic echo /mapping/status --once --timeout 10 | \
 grep -A1 -E 'scan_matching_(status|lock_valid|attempts|accepted|rejected|dropped_keyframes|overlap_ratio|rmse_m|step_translation_m|step_yaw_deg|duration_ms)'
 ```
 
-Healthy tracking normally reports `status=aligned`, `lock_valid=true`, useful
-overlap above the configured threshold, and corrections within the configured
-bounds. Always start a fresh 3D map after changing registration or lidar
-extrinsic settings; already inserted doubled walls are not edited in place.
+An experimental run is usable only while it consistently reports
+`status=aligned`, `lock_valid=true`, useful overlap above the configured
+threshold, and corrections within the configured bounds. Always start a fresh
+3D map after changing registration or lidar extrinsic settings; already
+inserted doubled walls are not edited in place.
 
 ## Export map assets for external viewers
 
