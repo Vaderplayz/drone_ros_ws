@@ -27,13 +27,16 @@ ros2 pkg prefix sllidar_ros2
 ```
 
 The default static TF assumes ROS body axes `x-forward`, `y-left`, `z-up`, and
-the C1M1 local `+X` forward direction points to the drone's left. This makes the
-scan plane vertical:
+the C1M1 physical forward mark points to the drone's left. Slamtec's
+`sllidar_ros2` conversion publishes that physical direction as LaserScan local
+`-X`, so the scan-frame yaw is `-90` degrees rather than the physical mount
+heading of `+90` degrees. This makes the scan plane vertical and keeps lidar2
+aligned with lidar1:
 
 ```bash
 LIDAR2_ROLL=1.57079632679
 LIDAR2_PITCH=0.0
-LIDAR2_YAW=1.57079632679
+LIDAR2_YAW=-1.57079632679
 LIDAR2_X=0.0
 LIDAR2_Y=0.0
 LIDAR2_Z=0.70
@@ -52,7 +55,7 @@ cd /home/pi5drone/drone_ros_ws
 ```
 
 Start the independent 2D SLAM map if you want the 3D cloud accumulated in the
-`map` frame:
+same RViz view:
 
 ```bash
 ./src/master_scripts/start_2d_mapping_only.sh
@@ -63,6 +66,12 @@ Then start lidar2 3D mapping:
 ```bash
 ./src/master_scripts/start_real_3d_mapping_lidar2.sh
 ```
+
+The real launcher seeds poses from `odom` and accumulates self-aligned 3D
+keyframes in `vertical_map`. It publishes the inverse registration correction
+as `odom -> vertical_map`. Use RViz Fixed Frame `map` to display the corrected
+cloud through `map -> odom -> vertical_map`; the 2D transform is applied after
+internal 3D scan-to-submap alignment without double correction.
 
 When MAVROS and AprilTag already run at boot, start odom-only 3D accumulation
 without lidar1, RF2O, or 2D SLAM:
@@ -100,10 +109,14 @@ odom -> base_footprint (planar x/y/yaw from px4_odom_flatten_node)
     -> slam_toolbox
     -> map -> odom
 
-map -> odom
-    * stored full T_odom_lidar(timestamp)
-    * stored deskewed local keyframe points
-    -> /mapping/global_cloud in map
+stored full T_odom_lidar(timestamp)
+    + stored deskewed local keyframe points
+    + bounded scan-to-submap ICP correction in x/y/yaw
+    -> /mapping/global_cloud in vertical_map
+
+map -> odom -> vertical_map
+    * complete internally aligned 3D cloud
+    -> RViz display and map-frame structural export
 ```
 
 The planar TF remains the prediction input for 2D SLAM. The vertical mapper

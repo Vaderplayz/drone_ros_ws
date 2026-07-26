@@ -16,7 +16,7 @@ vertical_lidar_mapper:
     global_map_topic: "/mapping/global_cloud"
     status_topic: "/mapping/status"
 
-    target_frame: "map"
+    target_frame: "odom"
     base_frame: "base_footprint"
     lidar_frame_override: "lidar_vert_link"
 
@@ -78,7 +78,32 @@ vertical_lidar_mapper:
     max_motion_odom_age_sec: 0.20
     motion_odom_topic: "/mavros/local_position/odom"
 
-    enable_relative_pose_gate: true
+    # Align each candidate keyframe against a bounded recent 3D submap before
+    # global insertion. Odometry remains the initial guess and is never fed
+    # back into MAVROS/PX4. Only x/y/yaw corrections can reach the global map.
+    enable_scan_matching: true
+    scan_matching_map_frame: "vertical_map"
+    scan_matching_drop_on_failure: true
+    scan_matching_max_rate_hz: 4.0
+    scan_matching_submap_radius_m: 4.0
+    scan_matching_submap_half_height_m: 3.0
+    scan_matching_voxel_leaf_size_m: 0.12
+    scan_matching_max_correspondence_distance_m: 0.45
+    scan_matching_max_iterations: 20
+    scan_matching_max_submap_points: 12000
+    scan_matching_min_source_points: 80
+    scan_matching_min_submap_points: 400
+    scan_matching_min_correspondences: 50
+    scan_matching_min_overlap_ratio: 0.30
+    scan_matching_max_rmse_m: 0.18
+    scan_matching_max_translation_correction_m: 0.30
+    scan_matching_max_yaw_correction_rad: 0.30
+    scan_matching_max_z_correction_m: 0.10
+    scan_matching_max_tilt_correction_rad: 0.10
+    scan_matching_min_height_above_floor_m: 0.15
+    scan_matching_warmup_keyframes: 8
+
+    enable_relative_pose_gate: false
     relative_pose_map_frame: "map"
     relative_pose_odom_frame: "odom"
     relative_pose_translation_error_threshold: 0.08
@@ -87,15 +112,15 @@ vertical_lidar_mapper:
     relative_pose_max_map_step_xy: 0.25
     relative_pose_max_map_yaw_step: 0.15
 
-    # Points are already integrated in the fixed map frame. Applying each
-    # map->odom delta to the accumulated cloud shifts old walls away from /map.
+    # The real profile first builds an internally aligned cloud in odom.
+    # Applying map->odom deltas to stored points would distort that 3D submap.
     enable_map_rebase: false
     map_rebase_map_frame: "map"
     map_rebase_odom_frame: "odom"
     map_rebase_translation_threshold: 0.08
     map_rebase_yaw_threshold: 0.04
     map_rebase_cooldown_scans: 6
-    rebuild_on_map_correction: true
+    rebuild_on_map_correction: false
     rebuild_correction_translation_threshold_m: 0.08
     rebuild_correction_yaw_threshold_rad: 0.04
     rebuild_freeze_scans_after_correction: 6

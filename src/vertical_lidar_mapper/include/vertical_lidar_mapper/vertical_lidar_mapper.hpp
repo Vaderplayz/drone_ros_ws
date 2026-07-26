@@ -31,11 +31,13 @@
 #include <tf2_ros/buffer.hpp>
 #include <tf2_ros/create_timer_ros.hpp>
 #include <tf2_ros/message_filter.hpp>
+#include <tf2_ros/transform_broadcaster.hpp>
 #include <tf2_ros/transform_listener.hpp>
 #else
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/create_timer_ros.h>
 #include <tf2_ros/message_filter.h>
+#include <tf2_ros/transform_broadcaster.h>
 #include <tf2_ros/transform_listener.h>
 #endif
 
@@ -70,6 +72,7 @@ private:
     rclcpp::Time stamp;
     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_local;
     tf2::Transform pose_odom_source;
+    tf2::Transform pose_self_aligned_source;
     tf2::Transform pose_target_source;
     std::string source_frame;
     bool deskewed{false};
@@ -152,6 +155,17 @@ private:
     double & correction_yaw_rad);
   void integrateGlobalCloud(const pcl::PointCloud<pcl::PointXYZ>::Ptr & scan_cloud);
   void enforceGlobalCloudLimits();
+  bool alignKeyframeToSubmap(
+    const pcl::PointCloud<pcl::PointXYZ>::Ptr & predicted_cloud,
+    const tf2::Transform & predicted_pose,
+    tf2::Transform & aligned_pose,
+    pcl::PointCloud<pcl::PointXYZ>::Ptr & aligned_cloud,
+    std::string & failure_reason);
+  pcl::PointCloud<pcl::PointXYZ>::Ptr buildScanMatchingSubmap(
+    const tf2::Vector3 & center) const;
+  pcl::PointCloud<pcl::PointXYZ>::Ptr prepareScanMatchingCloud(
+    const pcl::PointCloud<pcl::PointXYZ>::Ptr & input_cloud,
+    double voxel_leaf_size) const;
   bool maybeIntegrateAsKeyframe(
     const pcl::PointCloud<pcl::PointXYZ>::Ptr & cloud_local,
     const pcl::PointCloud<pcl::PointXYZ>::Ptr & cloud_target,
@@ -164,7 +178,9 @@ private:
   bool rebuildGlobalCloudFromKeyframes(std::string & error_message);
   void recordTrajectoryPoint(
     const rclcpp::Time & stamp,
-    const geometry_msgs::msg::TransformStamped & tf_target);
+    const tf2::Transform & pose_target);
+  std::string globalCloudFrame() const;
+  void publishScanMatchingFrame(const rclcpp::Time & stamp);
   void publishGlobalMap(const rclcpp::Time & stamp);
   void publishStatus();
   void onGlobalPublishTimer();
@@ -235,6 +251,7 @@ private:
   std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
   std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
   std::shared_ptr<tf2_ros::CreateTimerROS> tf_timer_interface_;
+  std::shared_ptr<tf2_ros::TransformBroadcaster> scan_matching_tf_broadcaster_;
 
   std::deque<TimedScan> scan_queue_;
   std::size_t raw_points_total_{0};
@@ -258,6 +275,8 @@ private:
   std::vector<TrajectoryPoint> trajectory_points_;
   std::deque<Keyframe> keyframes_;
   std::optional<Eigen::Vector3f> last_trajectory_point_;
+  tf2::Transform scan_matching_correction_;
+  std::optional<rclcpp::Time> last_scan_matching_attempt_stamp_;
 
   std::string scan_topic_;
   std::string target_frame_;
@@ -277,6 +296,7 @@ private:
   std::string integration_mode_{"keyframe"};
   std::string motion_odom_frame_{"odom"};
   std::string scan_stamp_reference_{"start"};
+  std::string scan_matching_map_frame_{"vertical_map"};
 
   double voxel_leaf_{0.15};
   int max_points_{500000};
@@ -325,6 +345,9 @@ private:
   bool tilt_compensation_{true};
   bool enable_relative_pose_gate_{true};
   bool enable_map_rebase_{true};
+  bool enable_scan_matching_{false};
+  bool scan_matching_drop_on_failure_{false};
+  bool scan_matching_lock_valid_{false};
   bool pcd_export_binary_{true};
   bool autosave_on_exit_{true};
   bool export_map2d_on_save_{true};
@@ -366,6 +389,24 @@ private:
   double relative_pose_min_motion_xy_{0.02};
   double relative_pose_max_map_step_xy_{0.50};
   double relative_pose_max_map_yaw_step_{0.25};
+  double scan_matching_max_rate_hz_{4.0};
+  double scan_matching_submap_radius_m_{4.0};
+  double scan_matching_submap_half_height_m_{3.0};
+  double scan_matching_voxel_leaf_size_m_{0.12};
+  double scan_matching_max_correspondence_distance_m_{0.35};
+  double scan_matching_min_overlap_ratio_{0.35};
+  double scan_matching_max_rmse_m_{0.16};
+  double scan_matching_max_translation_correction_m_{0.20};
+  double scan_matching_max_yaw_correction_rad_{0.20};
+  double scan_matching_max_z_correction_m_{0.08};
+  double scan_matching_max_tilt_correction_rad_{0.08};
+  double scan_matching_min_height_above_floor_m_{0.15};
+  int scan_matching_max_iterations_{20};
+  int scan_matching_max_submap_points_{12000};
+  int scan_matching_min_source_points_{80};
+  int scan_matching_min_submap_points_{400};
+  int scan_matching_min_correspondences_{50};
+  int scan_matching_warmup_keyframes_{8};
   int map_rebase_cooldown_scans_{10};
   int map_rebase_cooldown_remaining_scans_{0};
   int tf_filter_queue_size_{50};
@@ -418,6 +459,23 @@ private:
   double rebuild_last_duration_ms_{0.0};
   std::size_t relative_pose_gate_drop_count_{0};
   std::size_t relative_pose_gate_lookup_failures_{0};
+  std::size_t scan_matching_attempt_count_{0};
+  std::size_t scan_matching_accept_count_{0};
+  std::size_t scan_matching_reject_count_{0};
+  std::size_t scan_matching_drop_count_{0};
+  std::size_t scan_matching_insufficient_submap_count_{0};
+  std::size_t scan_matching_nonconverged_count_{0};
+  std::size_t scan_matching_quality_reject_count_{0};
+  std::size_t scan_matching_bounds_reject_count_{0};
+  std::size_t last_scan_matching_source_points_{0};
+  std::size_t last_scan_matching_submap_points_{0};
+  std::size_t last_scan_matching_correspondences_{0};
+  double last_scan_matching_overlap_ratio_{0.0};
+  double last_scan_matching_rmse_m_{0.0};
+  double last_scan_matching_correction_translation_m_{0.0};
+  double last_scan_matching_correction_yaw_rad_{0.0};
+  double last_scan_matching_duration_ms_{0.0};
+  std::string last_scan_matching_status_{"disabled"};
   double last_relative_pose_translation_error_m_{0.0};
   double last_relative_pose_yaw_error_rad_{0.0};
   double last_relative_pose_motion_xy_m_{0.0};

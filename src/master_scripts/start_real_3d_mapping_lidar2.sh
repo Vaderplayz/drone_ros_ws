@@ -23,24 +23,25 @@ LIDAR2_SCAN_MODE="${LIDAR2_SCAN_MODE:-Standard}"
 
 ODOM_FRAME="${ODOM_FRAME:-odom}"
 BASE_FRAME="${BASE_FRAME:-base_footprint}"
-TARGET_FRAME="${TARGET_FRAME:-map}"
+TARGET_FRAME="${TARGET_FRAME:-${ODOM_FRAME}}"
 MAP_FRAME="${MAP_FRAME:-map}"
 PX4_ODOM_TOPIC="${PX4_ODOM_TOPIC:-/mavros/local_position/odom}"
-REQUIRE_2D_MAP="${REQUIRE_2D_MAP:-1}"
+REQUIRE_2D_MAP="${REQUIRE_2D_MAP:-0}"
 WAIT_TIMEOUT_SEC="${WAIT_TIMEOUT_SEC:-90}"
 POINTCLOUD_WAIT_SEC="${POINTCLOUD_WAIT_SEC:-90}"
 
 # Mount convention:
 # - ROS base frame is x-forward, y-left, z-up.
-# - The C1M1 local +X ("forward") points to the drone's left (+Y).
-# - The scan plane is vertical, with local +Y pointing up.
+# - The C1M1 physical forward mark points to the drone's left (+Y).
+# - sllidar_ros2 publishes that physical direction as LaserScan local -X.
+# - LaserScan local +Y points up when the scan plane is vertical.
 START_LIDAR2_STATIC_TF="${START_LIDAR2_STATIC_TF:-1}"
 LIDAR2_X="${LIDAR2_X:-0.0}"
 LIDAR2_Y="${LIDAR2_Y:-0.0}"
 LIDAR2_Z="${LIDAR2_Z:-0.70}"
 LIDAR2_ROLL="${LIDAR2_ROLL:-1.57079632679}"
 LIDAR2_PITCH="${LIDAR2_PITCH:-0.0}"
-LIDAR2_YAW="${LIDAR2_YAW:-1.57079632679}"
+LIDAR2_YAW="${LIDAR2_YAW:--1.57079632679}"
 
 MAPPER_PARAMS_FILE="${MAPPER_PARAMS_FILE:-${ROS_WS}/src/vertical_lidar_mapper/config/real_c1m1_left.yaml}"
 VERTICAL_CLOUD_TOPIC="${VERTICAL_CLOUD_TOPIC:-/vertical_cloud}"
@@ -55,8 +56,10 @@ EXPORT_MAP2D_ON_SAVE="${EXPORT_MAP2D_ON_SAVE:-true}"
 EXPORT_SLAM_MAP2D_ON_SAVE="${EXPORT_SLAM_MAP2D_ON_SAVE:-true}"
 EXPORT_STRUCTURAL_MESH_ON_SAVE="${EXPORT_STRUCTURAL_MESH_ON_SAVE:-true}"
 ENABLE_MAP_REBASE="${ENABLE_MAP_REBASE:-false}"
-ENABLE_RELATIVE_POSE_GATE="${ENABLE_RELATIVE_POSE_GATE:-true}"
+ENABLE_RELATIVE_POSE_GATE="${ENABLE_RELATIVE_POSE_GATE:-false}"
 ENABLE_FLOOR_STABILIZATION="${ENABLE_FLOOR_STABILIZATION:-true}"
+ENABLE_SCAN_MATCHING="${ENABLE_SCAN_MATCHING:-true}"
+SCAN_MATCHING_DROP_ON_FAILURE="${SCAN_MATCHING_DROP_ON_FAILURE:-true}"
 SAVE_SERVICE_TIMEOUT_SEC="${SAVE_SERVICE_TIMEOUT_SEC:-30}"
 PROCESS_STOP_TIMEOUT_SEC="${PROCESS_STOP_TIMEOUT_SEC:-5}"
 
@@ -299,7 +302,9 @@ validate_settings() {
   for boolean_value in \
     "${ENABLE_FLOOR_STABILIZATION}" \
     "${ENABLE_MAP_REBASE}" \
-    "${ENABLE_RELATIVE_POSE_GATE}"; do
+    "${ENABLE_RELATIVE_POSE_GATE}" \
+    "${ENABLE_SCAN_MATCHING}" \
+    "${SCAN_MATCHING_DROP_ON_FAILURE}"; do
     case "${boolean_value}" in
       true|false) ;;
       *)
@@ -491,6 +496,46 @@ start_lidar2_static_tf() {
   wait_for_transform "${BASE_FRAME}" "${LIDAR2_FRAME_ID}" "${WAIT_TIMEOUT_SEC}" "${pid}" "${STATIC_TF_LOG}"
 }
 
+validate_lidar2_extrinsic() {
+  local output translation rpy
+  output="$(timeout 3 ros2 run tf2_ros tf2_echo "${BASE_FRAME}" "${LIDAR2_FRAME_ID}" 2>&1 || true)"
+  translation="$(awk -F'[][]' '/^- Translation:/{print $2; exit}' <<<"${output}")"
+  rpy="$(awk -F'[][]' '/^- Rotation: in RPY \(radian\)/{print $2; exit}' <<<"${output}")"
+  if [[ -z "${translation}" || -z "${rpy}" ]]; then
+    log_error "could not inspect TF ${BASE_FRAME} -> ${LIDAR2_FRAME_ID}"
+    return 1
+  fi
+
+  if ! awk \
+    -v translation="${translation}" -v rpy="${rpy}" \
+    -v expected_translation="${LIDAR2_X},${LIDAR2_Y},${LIDAR2_Z}" \
+    -v expected_rpy="${LIDAR2_ROLL},${LIDAR2_PITCH},${LIDAR2_YAW}" '
+      function abs(value) {return value < 0 ? -value : value}
+      function angle_error(left, right, delta) {
+        delta = left - right
+        while (delta > 3.141592653589793) delta -= 6.283185307179586
+        while (delta < -3.141592653589793) delta += 6.283185307179586
+        return abs(delta)
+      }
+      BEGIN {
+        split(translation, actual_t, ",")
+        split(expected_translation, expected_t, ",")
+        split(rpy, actual_r, ",")
+        split(expected_rpy, expected_r, ",")
+        valid = 1
+        for (i = 1; i <= 3; i++) {
+          if (abs(actual_t[i] - expected_t[i]) > 0.02) valid = 0
+          if (angle_error(actual_r[i], expected_r[i]) > 0.03) valid = 0
+        }
+        exit(valid ? 0 : 1)
+      }'
+  then
+    log_error "TF ${BASE_FRAME} -> ${LIDAR2_FRAME_ID} does not match requested translation/RPY: [${translation}] [${rpy}]"
+    return 1
+  fi
+  log_started "verified lidar2 TF: translation=[${translation}] RPY=[${rpy}]"
+}
+
 require_mapper_namespace_free() {
   local nodes topic count
   nodes="$(ros2 node list 2>/dev/null || true)"
@@ -530,6 +575,8 @@ start_mapper() {
       -p enable_map_rebase:="${ENABLE_MAP_REBASE}" \
       -p enable_relative_pose_gate:="${ENABLE_RELATIVE_POSE_GATE}" \
       -p enable_floor_stabilization:="${ENABLE_FLOOR_STABILIZATION}" \
+      -p enable_scan_matching:="${ENABLE_SCAN_MATCHING}" \
+      -p scan_matching_drop_on_failure:="${SCAN_MATCHING_DROP_ON_FAILURE}" \
       -p pcd_export_dir:="${EXPORT_DIR}" \
       -p map_rebase_map_frame:="${MAP_FRAME}" \
       -p map_rebase_odom_frame:="${ODOM_FRAME}" \
@@ -633,6 +680,7 @@ main() {
   wait_for_2d_map_if_required
   start_lidar2_driver
   start_lidar2_static_tf
+  validate_lidar2_extrinsic
   wait_for_transform "${TARGET_FRAME}" "${LIDAR2_FRAME_ID}" "${WAIT_TIMEOUT_SEC}"
   start_vertical_bag
   start_mapper

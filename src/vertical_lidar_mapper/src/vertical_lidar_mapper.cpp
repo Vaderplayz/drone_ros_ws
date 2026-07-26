@@ -21,12 +21,15 @@
 #include <utility>
 #include <vector>
 
+#include <Eigen/Geometry>
 #include <diagnostic_msgs/msg/diagnostic_status.hpp>
 #include <diagnostic_msgs/msg/key_value.hpp>
 #include <pcl/common/transforms.h>
 #include <pcl/filters/filter.h>
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/io/pcd_io.h>
+#include <pcl/kdtree/kdtree_flann.h>
+#include <pcl/registration/icp.h>
 #include <pcl_conversions/pcl_conversions.h>
 #include <tf2/LinearMath/Matrix3x3.hpp>
 #include <tf2/LinearMath/Quaternion.hpp>
@@ -94,6 +97,19 @@ tf2::Transform to_tf2_transform(const geometry_msgs::msg::TransformStamped & t_m
   return tf;
 }
 
+tf2::Transform to_tf2_transform(const Eigen::Matrix4f & matrix)
+{
+  Eigen::Matrix3f rotation_matrix = matrix.block<3, 3>(0, 0);
+  Eigen::Quaternionf rotation(rotation_matrix);
+  rotation.normalize();
+
+  tf2::Transform transform;
+  transform.setOrigin(tf2::Vector3(matrix(0, 3), matrix(1, 3), matrix(2, 3)));
+  transform.setRotation(tf2::Quaternion(
+      rotation.x(), rotation.y(), rotation.z(), rotation.w()));
+  return transform;
+}
+
 Eigen::Matrix4f to_eigen_matrix(const tf2::Transform & tf)
 {
   Eigen::Matrix4f m = Eigen::Matrix4f::Identity();
@@ -113,6 +129,7 @@ Eigen::Matrix4f to_eigen_matrix(const tf2::Transform & tf)
 VerticalLidarMapper::VerticalLidarMapper(const rclcpp::NodeOptions & options)
 : rclcpp::Node("vertical_lidar_mapper", options), global_cloud_(std::make_shared<pcl::PointCloud<pcl::PointXYZ>>())
 {
+  scan_matching_correction_.setIdentity();
   loadParameters();
 
   tf_buffer_ = std::make_shared<tf2_ros::Buffer>(this->get_clock());
@@ -121,6 +138,10 @@ VerticalLidarMapper::VerticalLidarMapper(const rclcpp::NodeOptions & options)
     this->get_node_timers_interface());
   tf_buffer_->setCreateTimerInterface(tf_timer_interface_);
   tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
+  if (enable_scan_matching_) {
+    scan_matching_tf_broadcaster_ =
+      std::make_shared<tf2_ros::TransformBroadcaster>(*this);
+  }
 
   cloud_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(
     cloud_topic_, rclcpp::SensorDataQoS());
@@ -255,6 +276,20 @@ VerticalLidarMapper::VerticalLidarMapper(const rclcpp::NodeOptions & options)
     relative_pose_min_motion_xy_,
     relative_pose_max_map_step_xy_,
     relative_pose_max_map_yaw_step_);
+  RCLCPP_INFO(
+    this->get_logger(),
+    "3D scan matching: %s (map_frame='%s' max_rate=%.1fHz radius=%.2fm voxel=%.2fm corr_dist=%.2fm overlap>=%.2f rmse<=%.2fm correction<=%.2fm/%.1fdeg drop_failure=%s).",
+    enable_scan_matching_ ? "enabled" : "disabled",
+    scan_matching_map_frame_.c_str(),
+    scan_matching_max_rate_hz_,
+    scan_matching_submap_radius_m_,
+    scan_matching_voxel_leaf_size_m_,
+    scan_matching_max_correspondence_distance_m_,
+    scan_matching_min_overlap_ratio_,
+    scan_matching_max_rmse_m_,
+    scan_matching_max_translation_correction_m_,
+    scan_matching_max_yaw_correction_rad_ * 57.2957795,
+    scan_matching_drop_on_failure_ ? "true" : "false");
   RCLCPP_INFO(
     this->get_logger(),
     "Map-rebase cooldown: %d scans after correction.",
@@ -414,6 +449,48 @@ void VerticalLidarMapper::loadParameters()
     this->declare_parameter<double>("relative_pose_max_map_step_xy", 0.50);
   relative_pose_max_map_yaw_step_ =
     this->declare_parameter<double>("relative_pose_max_map_yaw_step", 0.25);
+  enable_scan_matching_ =
+    this->declare_parameter<bool>("enable_scan_matching", false);
+  scan_matching_map_frame_ =
+    this->declare_parameter<std::string>("scan_matching_map_frame", "vertical_map");
+  scan_matching_drop_on_failure_ =
+    this->declare_parameter<bool>("scan_matching_drop_on_failure", false);
+  scan_matching_max_rate_hz_ =
+    this->declare_parameter<double>("scan_matching_max_rate_hz", 4.0);
+  scan_matching_submap_radius_m_ =
+    this->declare_parameter<double>("scan_matching_submap_radius_m", 4.0);
+  scan_matching_submap_half_height_m_ =
+    this->declare_parameter<double>("scan_matching_submap_half_height_m", 3.0);
+  scan_matching_voxel_leaf_size_m_ =
+    this->declare_parameter<double>("scan_matching_voxel_leaf_size_m", 0.12);
+  scan_matching_max_correspondence_distance_m_ =
+    this->declare_parameter<double>("scan_matching_max_correspondence_distance_m", 0.35);
+  scan_matching_max_iterations_ =
+    this->declare_parameter<int>("scan_matching_max_iterations", 20);
+  scan_matching_max_submap_points_ =
+    this->declare_parameter<int>("scan_matching_max_submap_points", 12000);
+  scan_matching_min_source_points_ =
+    this->declare_parameter<int>("scan_matching_min_source_points", 80);
+  scan_matching_min_submap_points_ =
+    this->declare_parameter<int>("scan_matching_min_submap_points", 400);
+  scan_matching_min_correspondences_ =
+    this->declare_parameter<int>("scan_matching_min_correspondences", 50);
+  scan_matching_min_overlap_ratio_ =
+    this->declare_parameter<double>("scan_matching_min_overlap_ratio", 0.35);
+  scan_matching_max_rmse_m_ =
+    this->declare_parameter<double>("scan_matching_max_rmse_m", 0.16);
+  scan_matching_max_translation_correction_m_ =
+    this->declare_parameter<double>("scan_matching_max_translation_correction_m", 0.20);
+  scan_matching_max_yaw_correction_rad_ =
+    this->declare_parameter<double>("scan_matching_max_yaw_correction_rad", 0.20);
+  scan_matching_max_z_correction_m_ =
+    this->declare_parameter<double>("scan_matching_max_z_correction_m", 0.08);
+  scan_matching_max_tilt_correction_rad_ =
+    this->declare_parameter<double>("scan_matching_max_tilt_correction_rad", 0.08);
+  scan_matching_min_height_above_floor_m_ =
+    this->declare_parameter<double>("scan_matching_min_height_above_floor_m", 0.15);
+  scan_matching_warmup_keyframes_ =
+    this->declare_parameter<int>("scan_matching_warmup_keyframes", 8);
   map_rebase_cooldown_scans_ =
     this->declare_parameter<int>("map_rebase_cooldown_scans", 10);
   pcd_export_dir_ = this->declare_parameter<std::string>("pcd_export_dir", "/home/lehaitrung/vertical_mapper_exports");
@@ -719,6 +796,74 @@ void VerticalLidarMapper::loadParameters()
     RCLCPP_WARN(this->get_logger(), "Parameter 'relative_pose_max_map_yaw_step' was negative, clamped to 0.0.");
   }
 
+  if (enable_scan_matching_ && target_frame_ != motion_odom_frame_) {
+    enable_scan_matching_ = false;
+    RCLCPP_WARN(
+      this->get_logger(),
+      "3D scan matching currently requires target_frame='%s'; disabled because target_frame='%s'.",
+      motion_odom_frame_.c_str(),
+      target_frame_.c_str());
+  }
+  if (scan_matching_map_frame_.empty() ||
+    scan_matching_map_frame_ == target_frame_ ||
+    scan_matching_map_frame_ == base_frame_)
+  {
+    scan_matching_map_frame_ = "vertical_map";
+    RCLCPP_WARN(
+      this->get_logger(),
+      "Parameter 'scan_matching_map_frame' was empty or conflicted with another frame; using 'vertical_map'.");
+  }
+  if (scan_matching_max_rate_hz_ <= 0.0) {
+    scan_matching_max_rate_hz_ = 4.0;
+    RCLCPP_WARN(
+      this->get_logger(),
+      "Parameter 'scan_matching_max_rate_hz' <= 0.0, defaulting to 4.0.");
+  }
+  if (scan_matching_submap_radius_m_ <= 0.0) {
+    scan_matching_submap_radius_m_ = 4.0;
+  }
+  if (scan_matching_submap_half_height_m_ <= 0.0) {
+    scan_matching_submap_half_height_m_ = 3.0;
+  }
+  if (scan_matching_voxel_leaf_size_m_ <= 0.0) {
+    scan_matching_voxel_leaf_size_m_ = 0.12;
+  }
+  if (scan_matching_max_correspondence_distance_m_ <= 0.0) {
+    scan_matching_max_correspondence_distance_m_ = 0.35;
+  }
+  scan_matching_max_iterations_ = std::max(1, scan_matching_max_iterations_);
+  scan_matching_max_submap_points_ = std::max(100, scan_matching_max_submap_points_);
+  scan_matching_min_source_points_ = std::max(10, scan_matching_min_source_points_);
+  scan_matching_min_submap_points_ = std::max(50, scan_matching_min_submap_points_);
+  scan_matching_min_correspondences_ = std::max(10, scan_matching_min_correspondences_);
+  scan_matching_min_overlap_ratio_ = std::clamp(scan_matching_min_overlap_ratio_, 0.05, 1.0);
+  if (scan_matching_max_rmse_m_ <= 0.0) {
+    scan_matching_max_rmse_m_ = 0.16;
+  }
+  if (scan_matching_max_translation_correction_m_ <= 0.0) {
+    scan_matching_max_translation_correction_m_ = 0.20;
+  }
+  if (scan_matching_max_yaw_correction_rad_ <= 0.0) {
+    scan_matching_max_yaw_correction_rad_ = 0.20;
+  }
+  if (scan_matching_max_z_correction_m_ < 0.0) {
+    scan_matching_max_z_correction_m_ = 0.0;
+  }
+  if (scan_matching_max_tilt_correction_rad_ < 0.0) {
+    scan_matching_max_tilt_correction_rad_ = 0.0;
+  }
+  if (scan_matching_min_height_above_floor_m_ < 0.0) {
+    scan_matching_min_height_above_floor_m_ = 0.0;
+  }
+  scan_matching_warmup_keyframes_ = std::max(1, scan_matching_warmup_keyframes_);
+  if (scan_matching_min_correspondences_ > scan_matching_min_source_points_) {
+    scan_matching_min_correspondences_ = scan_matching_min_source_points_;
+  }
+  if (scan_matching_max_submap_points_ < scan_matching_min_submap_points_) {
+    scan_matching_max_submap_points_ = scan_matching_min_submap_points_;
+  }
+  last_scan_matching_status_ = enable_scan_matching_ ? "warming_up" : "disabled";
+
   if (map_rebase_cooldown_scans_ < 0) {
     map_rebase_cooldown_scans_ = 0;
     RCLCPP_WARN(this->get_logger(), "Parameter 'map_rebase_cooldown_scans' was negative, clamped to 0.");
@@ -736,6 +881,12 @@ void VerticalLidarMapper::loadParameters()
     RCLCPP_WARN(
       this->get_logger(),
       "Parameter 'loop_closure_dedup_only=true' requires integration_mode='keyframe'. Forcing keyframe mode.");
+  }
+  if (enable_scan_matching_ && integration_mode_ != "keyframe") {
+    integration_mode_ = "keyframe";
+    RCLCPP_WARN(
+      this->get_logger(),
+      "Parameter 'enable_scan_matching=true' requires integration_mode='keyframe'. Forcing keyframe mode.");
   }
 
   if (pcd_export_dir_.empty()) {
@@ -1646,6 +1797,233 @@ void VerticalLidarMapper::enforceGlobalCloudLimits()
   global_points_total_ = global_cloud_->size();
 }
 
+pcl::PointCloud<pcl::PointXYZ>::Ptr VerticalLidarMapper::prepareScanMatchingCloud(
+  const pcl::PointCloud<pcl::PointXYZ>::Ptr & input_cloud,
+  double voxel_leaf_size) const
+{
+  auto prepared = std::make_shared<pcl::PointCloud<pcl::PointXYZ>>();
+  if (!input_cloud || input_cloud->empty()) {
+    return prepared;
+  }
+
+  const bool filter_floor =
+    floor_reference_z_.has_value() && scan_matching_min_height_above_floor_m_ > 0.0;
+  const double minimum_z = filter_floor ?
+    floor_reference_z_.value() + scan_matching_min_height_above_floor_m_ :
+    -std::numeric_limits<double>::infinity();
+  prepared->reserve(input_cloud->size());
+  for (const auto & point : input_cloud->points) {
+    if (!std::isfinite(point.x) || !std::isfinite(point.y) || !std::isfinite(point.z)) {
+      continue;
+    }
+    if (static_cast<double>(point.z) < minimum_z) {
+      continue;
+    }
+    prepared->push_back(point);
+  }
+
+  if (voxel_leaf_size > 0.0 && !prepared->empty()) {
+    prepared = voxelDownsample(prepared, voxel_leaf_size);
+  }
+  return prepared;
+}
+
+pcl::PointCloud<pcl::PointXYZ>::Ptr VerticalLidarMapper::buildScanMatchingSubmap(
+  const tf2::Vector3 & center) const
+{
+  auto submap = std::make_shared<pcl::PointCloud<pcl::PointXYZ>>();
+  if (!global_cloud_ || global_cloud_->empty()) {
+    return submap;
+  }
+
+  const double radius_squared =
+    scan_matching_submap_radius_m_ * scan_matching_submap_radius_m_;
+  submap->reserve(std::min(
+      global_cloud_->size(),
+      static_cast<std::size_t>(scan_matching_max_submap_points_ * 2)));
+  for (const auto & point : global_cloud_->points) {
+    const double dx = static_cast<double>(point.x) - center.x();
+    const double dy = static_cast<double>(point.y) - center.y();
+    const double dz = static_cast<double>(point.z) - center.z();
+    if ((dx * dx + dy * dy) > radius_squared ||
+      std::fabs(dz) > scan_matching_submap_half_height_m_)
+    {
+      continue;
+    }
+    submap->push_back(point);
+  }
+
+  submap = prepareScanMatchingCloud(submap, scan_matching_voxel_leaf_size_m_);
+  const std::size_t point_cap = static_cast<std::size_t>(scan_matching_max_submap_points_);
+  if (submap->size() > point_cap) {
+    auto sampled = std::make_shared<pcl::PointCloud<pcl::PointXYZ>>();
+    sampled->reserve(point_cap);
+    const double stride = static_cast<double>(submap->size()) /
+      static_cast<double>(point_cap);
+    for (std::size_t index = 0; index < point_cap; ++index) {
+      const std::size_t source_index = std::min(
+        static_cast<std::size_t>(std::floor(static_cast<double>(index) * stride)),
+        submap->size() - 1U);
+      sampled->push_back(submap->points[source_index]);
+    }
+    submap = sampled;
+  }
+  return submap;
+}
+
+bool VerticalLidarMapper::alignKeyframeToSubmap(
+  const pcl::PointCloud<pcl::PointXYZ>::Ptr & predicted_cloud,
+  const tf2::Transform & predicted_pose,
+  tf2::Transform & aligned_pose,
+  pcl::PointCloud<pcl::PointXYZ>::Ptr & aligned_cloud,
+  std::string & failure_reason)
+{
+  const auto start = std::chrono::steady_clock::now();
+  auto finish = [this, &start]() {
+      last_scan_matching_duration_ms_ = std::chrono::duration<double, std::milli>(
+        std::chrono::steady_clock::now() - start).count();
+    };
+
+  ++scan_matching_attempt_count_;
+  failure_reason.clear();
+  aligned_pose = predicted_pose;
+  aligned_cloud = predicted_cloud;
+  last_scan_matching_correspondences_ = 0;
+  last_scan_matching_overlap_ratio_ = 0.0;
+  last_scan_matching_rmse_m_ = 0.0;
+  last_scan_matching_correction_translation_m_ = 0.0;
+  last_scan_matching_correction_yaw_rad_ = 0.0;
+
+  const auto source = prepareScanMatchingCloud(
+    predicted_cloud, scan_matching_voxel_leaf_size_m_);
+  const auto target = buildScanMatchingSubmap(predicted_pose.getOrigin());
+  last_scan_matching_source_points_ = source->size();
+  last_scan_matching_submap_points_ = target->size();
+
+  if (source->size() < static_cast<std::size_t>(scan_matching_min_source_points_) ||
+    target->size() < static_cast<std::size_t>(scan_matching_min_submap_points_))
+  {
+    ++scan_matching_reject_count_;
+    ++scan_matching_insufficient_submap_count_;
+    last_scan_matching_status_ = "insufficient_geometry";
+    failure_reason = "insufficient scan or submap geometry";
+    finish();
+    return false;
+  }
+
+  pcl::IterativeClosestPoint<pcl::PointXYZ, pcl::PointXYZ> icp;
+  icp.setInputSource(source);
+  icp.setInputTarget(target);
+  icp.setMaximumIterations(scan_matching_max_iterations_);
+  icp.setMaxCorrespondenceDistance(scan_matching_max_correspondence_distance_m_);
+  icp.setTransformationEpsilon(1e-5);
+  icp.setEuclideanFitnessEpsilon(1e-5);
+
+  pcl::PointCloud<pcl::PointXYZ> icp_aligned;
+  try {
+    icp.align(icp_aligned);
+  } catch (const std::exception & ex) {
+    ++scan_matching_reject_count_;
+    ++scan_matching_nonconverged_count_;
+    last_scan_matching_status_ = "registration_exception";
+    failure_reason = ex.what();
+    finish();
+    return false;
+  }
+
+  if (!icp.hasConverged() || !icp.getFinalTransformation().allFinite()) {
+    ++scan_matching_reject_count_;
+    ++scan_matching_nonconverged_count_;
+    last_scan_matching_status_ = "not_converged";
+    failure_reason = "ICP did not converge";
+    finish();
+    return false;
+  }
+
+  const tf2::Transform full_delta = to_tf2_transform(icp.getFinalTransformation());
+  double correction_roll = 0.0;
+  double correction_pitch = 0.0;
+  double correction_yaw = 0.0;
+  tf2::Matrix3x3(full_delta.getRotation()).getRPY(
+    correction_roll, correction_pitch, correction_yaw);
+  correction_yaw = normalize_angle(correction_yaw);
+  const double correction_translation = std::hypot(
+    full_delta.getOrigin().x(), full_delta.getOrigin().y());
+  last_scan_matching_correction_translation_m_ = correction_translation;
+  last_scan_matching_correction_yaw_rad_ = correction_yaw;
+
+  const bool correction_out_of_bounds =
+    correction_translation > scan_matching_max_translation_correction_m_ ||
+    std::fabs(correction_yaw) > scan_matching_max_yaw_correction_rad_ ||
+    std::fabs(full_delta.getOrigin().z()) > scan_matching_max_z_correction_m_ ||
+    std::fabs(correction_roll) > scan_matching_max_tilt_correction_rad_ ||
+    std::fabs(correction_pitch) > scan_matching_max_tilt_correction_rad_;
+  if (correction_out_of_bounds) {
+    ++scan_matching_reject_count_;
+    ++scan_matching_bounds_reject_count_;
+    last_scan_matching_status_ = "correction_out_of_bounds";
+    failure_reason = "ICP correction exceeded planar safety bounds";
+    finish();
+    return false;
+  }
+
+  tf2::Quaternion planar_rotation;
+  planar_rotation.setRPY(0.0, 0.0, correction_yaw);
+  planar_rotation.normalize();
+  tf2::Transform planar_delta;
+  planar_delta.setOrigin(tf2::Vector3(
+      full_delta.getOrigin().x(), full_delta.getOrigin().y(), 0.0));
+  planar_delta.setRotation(planar_rotation);
+
+  const auto quality_cloud = transformCloud(source, planar_delta);
+  pcl::KdTreeFLANN<pcl::PointXYZ> search;
+  search.setInputCloud(target);
+  std::vector<int> nearest_index(1);
+  std::vector<float> nearest_distance_squared(1);
+  const double maximum_distance_squared =
+    scan_matching_max_correspondence_distance_m_ *
+    scan_matching_max_correspondence_distance_m_;
+  double squared_error_sum = 0.0;
+  std::size_t correspondences = 0;
+  for (const auto & point : quality_cloud->points) {
+    if (search.nearestKSearch(
+        point, 1, nearest_index, nearest_distance_squared) == 1 &&
+      static_cast<double>(nearest_distance_squared[0]) <= maximum_distance_squared)
+    {
+      squared_error_sum += static_cast<double>(nearest_distance_squared[0]);
+      ++correspondences;
+    }
+  }
+
+  const double overlap_ratio = quality_cloud->empty() ? 0.0 :
+    static_cast<double>(correspondences) / static_cast<double>(quality_cloud->size());
+  const double rmse = correspondences == 0U ?
+    std::numeric_limits<double>::infinity() :
+    std::sqrt(squared_error_sum / static_cast<double>(correspondences));
+  last_scan_matching_correspondences_ = correspondences;
+  last_scan_matching_overlap_ratio_ = overlap_ratio;
+  last_scan_matching_rmse_m_ = rmse;
+
+  if (correspondences < static_cast<std::size_t>(scan_matching_min_correspondences_) ||
+    overlap_ratio < scan_matching_min_overlap_ratio_ ||
+    !std::isfinite(rmse) || rmse > scan_matching_max_rmse_m_)
+  {
+    ++scan_matching_reject_count_;
+    ++scan_matching_quality_reject_count_;
+    last_scan_matching_status_ = "quality_rejected";
+    failure_reason = "ICP overlap or RMSE did not pass";
+    finish();
+    return false;
+  }
+
+  aligned_pose = planar_delta * predicted_pose;
+  aligned_cloud = transformCloud(predicted_cloud, planar_delta);
+  ++scan_matching_accept_count_;
+  last_scan_matching_status_ = "aligned";
+  finish();
+  return true;
+}
+
 bool VerticalLidarMapper::maybeIntegrateAsKeyframe(
   const pcl::PointCloud<pcl::PointXYZ>::Ptr & cloud_local,
   const pcl::PointCloud<pcl::PointXYZ>::Ptr & cloud_target,
@@ -1660,12 +2038,18 @@ bool VerticalLidarMapper::maybeIntegrateAsKeyframe(
     return false;
   }
 
-  const tf2::Transform current_pose = pose_target_source;
+  tf2::Transform current_pose = pose_target_source;
+  pcl::PointCloud<pcl::PointXYZ>::Ptr current_cloud = cloud_target;
+  if (enable_scan_matching_) {
+    current_pose = scan_matching_correction_ * pose_target_source;
+    current_cloud = transformCloud(cloud_local, current_pose);
+  }
+
   bool insert_keyframe = false;
   if (!last_keyframe_pose_.has_value() || !last_keyframe_stamp_.has_value()) {
     insert_keyframe = true;
   } else {
-    const tf2::Transform delta = current_pose * last_keyframe_pose_.value().inverse();
+    const tf2::Transform delta = last_keyframe_pose_.value().inverse() * current_pose;
     double roll = 0.0;
     double pitch = 0.0;
     double yaw = 0.0;
@@ -1684,13 +2068,68 @@ bool VerticalLidarMapper::maybeIntegrateAsKeyframe(
     return false;
   }
 
+  if (enable_scan_matching_ &&
+    keyframes_.size() >= static_cast<std::size_t>(scan_matching_warmup_keyframes_))
+  {
+    const double minimum_attempt_interval = 1.0 / scan_matching_max_rate_hz_;
+    const bool interval_elapsed =
+      !last_scan_matching_attempt_stamp_.has_value() ||
+      (scan_stamp - last_scan_matching_attempt_stamp_.value()).seconds() >=
+      minimum_attempt_interval;
+    const bool should_attempt = !scan_matching_lock_valid_ || interval_elapsed;
+    if (should_attempt) {
+      last_scan_matching_attempt_stamp_ = scan_stamp;
+      tf2::Transform aligned_pose;
+      pcl::PointCloud<pcl::PointXYZ>::Ptr aligned_cloud;
+      std::string failure_reason;
+      if (alignKeyframeToSubmap(
+          current_cloud,
+          current_pose,
+          aligned_pose,
+          aligned_cloud,
+          failure_reason))
+      {
+        current_pose = aligned_pose;
+        current_cloud = aligned_cloud;
+        scan_matching_correction_ = current_pose * pose_target_source.inverse();
+        scan_matching_lock_valid_ = true;
+      } else {
+        scan_matching_lock_valid_ = false;
+        RCLCPP_WARN_THROTTLE(
+          this->get_logger(),
+          *this->get_clock(),
+          1000,
+          "3D scan matching rejected keyframe: %s (source=%zu submap=%zu overlap=%.2f rmse=%.3fm correction=%.3fm/%.2fdeg).",
+          failure_reason.c_str(),
+          last_scan_matching_source_points_,
+          last_scan_matching_submap_points_,
+          last_scan_matching_overlap_ratio_,
+          last_scan_matching_rmse_m_,
+          last_scan_matching_correction_translation_m_,
+          last_scan_matching_correction_yaw_rad_ * 57.2957795);
+        if (scan_matching_drop_on_failure_ &&
+          last_scan_matching_status_ != "insufficient_geometry")
+        {
+          ++scan_matching_drop_count_;
+          last_scan_drop_reason_ = "scan_matching_failed";
+          return false;
+        }
+      }
+    }
+  } else if (enable_scan_matching_) {
+    last_scan_matching_status_ = "warming_up";
+  }
+
+  const tf2::Transform pose_self_aligned_source =
+    enable_scan_matching_ ? current_pose : pose_odom_source;
   auto keyframe_cloud = std::make_shared<pcl::PointCloud<pcl::PointXYZ>>(*cloud_local);
   keyframes_.push_back(Keyframe{
     next_keyframe_id_++, scan_stamp, keyframe_cloud, pose_odom_source,
-    pose_target_source, source_frame, deskewed, input_points});
+    pose_self_aligned_source, current_pose, source_frame, deskewed, input_points});
   last_keyframe_pose_ = current_pose;
   last_keyframe_stamp_ = scan_stamp;
-  integrateGlobalCloud(cloud_target);
+  integrateGlobalCloud(current_cloud);
+  recordTrajectoryPoint(scan_stamp, current_pose);
   ++total_scans_keyframe_integrated_;
 
   if (max_keyframes_ > 0) {
@@ -1727,7 +2166,9 @@ bool VerticalLidarMapper::rebuildGlobalCloudFromKeyframes(std::string & error_me
     if (!keyframe.cloud_local || keyframe.cloud_local->empty()) {
       continue;
     }
-    keyframe.pose_target_source = pose_target_odom * keyframe.pose_odom_source;
+    keyframe.pose_target_source = enable_scan_matching_ ?
+      keyframe.pose_self_aligned_source :
+      pose_target_odom * keyframe.pose_self_aligned_source;
     const auto cloud_target = transformCloud(keyframe.cloud_local, keyframe.pose_target_source);
     *rebuilt_cloud += *cloud_target;
     if (!loop_closure_dedup_only_ && global_voxel_leaf_size_ > 0.0 && rebuilt_cloud->size() > periodic_threshold) {
@@ -1760,11 +2201,11 @@ bool VerticalLidarMapper::rebuildGlobalCloudFromKeyframes(std::string & error_me
 
 void VerticalLidarMapper::recordTrajectoryPoint(
   const rclcpp::Time & stamp,
-  const geometry_msgs::msg::TransformStamped & tf_target)
+  const tf2::Transform & pose_target)
 {
-  const float x = static_cast<float>(tf_target.transform.translation.x);
-  const float y = static_cast<float>(tf_target.transform.translation.y);
-  const float z = static_cast<float>(tf_target.transform.translation.z);
+  const float x = static_cast<float>(pose_target.getOrigin().x());
+  const float y = static_cast<float>(pose_target.getOrigin().y());
+  const float z = static_cast<float>(pose_target.getOrigin().z());
 
   if (trajectory_min_step_ > 0.0 && last_trajectory_point_.has_value()) {
     const Eigen::Vector3f current(x, y, z);
@@ -1776,6 +2217,33 @@ void VerticalLidarMapper::recordTrajectoryPoint(
 
   trajectory_points_.push_back(TrajectoryPoint{stamp, x, y, z});
   last_trajectory_point_ = Eigen::Vector3f(x, y, z);
+}
+
+std::string VerticalLidarMapper::globalCloudFrame() const
+{
+  return enable_scan_matching_ ? scan_matching_map_frame_ : target_frame_;
+}
+
+void VerticalLidarMapper::publishScanMatchingFrame(const rclcpp::Time & stamp)
+{
+  if (!enable_scan_matching_ || !scan_matching_tf_broadcaster_) {
+    return;
+  }
+
+  const tf2::Transform pose_odom_vertical_map = scan_matching_correction_.inverse();
+  geometry_msgs::msg::TransformStamped transform;
+  transform.header.stamp = stamp;
+  transform.header.frame_id = motion_odom_frame_;
+  transform.child_frame_id = scan_matching_map_frame_;
+  transform.transform.translation.x = pose_odom_vertical_map.getOrigin().x();
+  transform.transform.translation.y = pose_odom_vertical_map.getOrigin().y();
+  transform.transform.translation.z = pose_odom_vertical_map.getOrigin().z();
+  const auto rotation = pose_odom_vertical_map.getRotation();
+  transform.transform.rotation.x = rotation.x();
+  transform.transform.rotation.y = rotation.y();
+  transform.transform.rotation.z = rotation.z();
+  transform.transform.rotation.w = rotation.w();
+  scan_matching_tf_broadcaster_->sendTransform(transform);
 }
 
 pcl::PointCloud<pcl::PointXYZ>::Ptr VerticalLidarMapper::buildVoxelizedMapCloud() const
@@ -1862,7 +2330,7 @@ void VerticalLidarMapper::publishGlobalMap(const rclcpp::Time & stamp)
 
   sensor_msgs::msg::PointCloud2 map_msg;
   pcl::toROSMsg(*global_cloud_, map_msg);
-  map_msg.header.frame_id = target_frame_;
+  map_msg.header.frame_id = globalCloudFrame();
   map_msg.header.stamp = stamp;
   global_map_pub_->publish(map_msg);
 }
@@ -2300,10 +2768,26 @@ bool VerticalLidarMapper::saveStructuralModelToGlb(
     error_message = "No SLAM occupancy map has been received on '" + slam_map_topic_ + "'.";
     return false;
   }
-  if (!map_copy->header.frame_id.empty() && map_copy->header.frame_id != target_frame_) {
-    error_message = "Global cloud frame '" + target_frame_ + "' does not match SLAM map frame '" +
-      map_copy->header.frame_id + "'.";
-    return false;
+
+  auto structural_cloud = cloud_copy;
+  std::string structural_cloud_frame = globalCloudFrame();
+  if (!map_copy->header.frame_id.empty() &&
+    map_copy->header.frame_id != structural_cloud_frame)
+  {
+    try {
+      const auto tf_msg = tf_buffer_->lookupTransform(
+        map_copy->header.frame_id,
+        structural_cloud_frame,
+        rclcpp::Time(0, 0, this->get_clock()->get_clock_type()),
+        tf2::durationFromSec(tf_timeout_));
+      structural_cloud = transformCloud(cloud_copy, to_tf2_transform(tf_msg));
+      structural_cloud_frame = map_copy->header.frame_id;
+    } catch (const tf2::TransformException & ex) {
+      error_message = "Cannot transform global cloud from '" + structural_cloud_frame +
+        "' to SLAM map frame '" +
+        map_copy->header.frame_id + "' for structural export: " + ex.what();
+      return false;
+    }
   }
 
   std::ostringstream file_name;
@@ -2333,7 +2817,13 @@ bool VerticalLidarMapper::saveStructuralModelToGlb(
 
   StructuralMeshStats stats;
   if (!exportStructuralMeshGlb(
-      *cloud_copy, map_copy.value(), config, glb_file, target_frame_, stats, error_message))
+      *structural_cloud,
+      map_copy.value(),
+      config,
+      glb_file,
+      structural_cloud_frame,
+      stats,
+      error_message))
   {
     return false;
   }
@@ -2434,6 +2924,13 @@ void VerticalLidarMapper::publishStatus()
     status.level = diagnostic_msgs::msg::DiagnosticStatus::WARN;
     status.message = "running_with_deskew_warnings";
   }
+  if (enable_scan_matching_ &&
+    keyframes_.size() >= static_cast<std::size_t>(scan_matching_warmup_keyframes_) &&
+    !scan_matching_lock_valid_)
+  {
+    status.level = diagnostic_msgs::msg::DiagnosticStatus::WARN;
+    status.message = "running_with_scan_matching_unlocked";
+  }
 
   double tf_p95_ms = 0.0;
   if (!tf_lookup_samples_ms_.empty()) {
@@ -2480,6 +2977,7 @@ void VerticalLidarMapper::publishStatus()
   };
 
   add_kv("target_frame", target_frame_);
+  add_kv("global_cloud_frame", globalCloudFrame());
   add_kv("integration_mode", integration_mode_);
   add_kv("loop_closure_dedup_only", loop_closure_dedup_only_ ? "true" : "false");
   add_kv("vertical_scan_input_rate_hz", to_string_with_precision(input_rate_hz, 2));
@@ -2582,6 +3080,66 @@ void VerticalLidarMapper::publishStatus()
   add_kv(
     "relative_pose_map_step_yaw_deg",
     to_string_with_precision(last_relative_pose_map_step_yaw_rad_ * 57.2957795, 3));
+  double scan_matching_total_roll = 0.0;
+  double scan_matching_total_pitch = 0.0;
+  double scan_matching_total_yaw = 0.0;
+  tf2::Matrix3x3(scan_matching_correction_.getRotation()).getRPY(
+    scan_matching_total_roll,
+    scan_matching_total_pitch,
+    scan_matching_total_yaw);
+  add_kv("scan_matching_enabled", enable_scan_matching_ ? "true" : "false");
+  add_kv("scan_matching_status", last_scan_matching_status_);
+  add_kv("scan_matching_lock_valid", scan_matching_lock_valid_ ? "true" : "false");
+  add_kv("scan_matching_attempts", std::to_string(scan_matching_attempt_count_));
+  add_kv("scan_matching_accepted", std::to_string(scan_matching_accept_count_));
+  add_kv("scan_matching_rejected", std::to_string(scan_matching_reject_count_));
+  add_kv("scan_matching_dropped_keyframes", std::to_string(scan_matching_drop_count_));
+  add_kv(
+    "scan_matching_insufficient_submap",
+    std::to_string(scan_matching_insufficient_submap_count_));
+  add_kv(
+    "scan_matching_nonconverged",
+    std::to_string(scan_matching_nonconverged_count_));
+  add_kv(
+    "scan_matching_quality_rejections",
+    std::to_string(scan_matching_quality_reject_count_));
+  add_kv(
+    "scan_matching_bounds_rejections",
+    std::to_string(scan_matching_bounds_reject_count_));
+  add_kv(
+    "scan_matching_source_points",
+    std::to_string(last_scan_matching_source_points_));
+  add_kv(
+    "scan_matching_submap_points",
+    std::to_string(last_scan_matching_submap_points_));
+  add_kv(
+    "scan_matching_correspondences",
+    std::to_string(last_scan_matching_correspondences_));
+  add_kv(
+    "scan_matching_overlap_ratio",
+    to_string_with_precision(last_scan_matching_overlap_ratio_, 3));
+  add_kv(
+    "scan_matching_rmse_m",
+    to_string_with_precision(last_scan_matching_rmse_m_, 3));
+  add_kv(
+    "scan_matching_step_translation_m",
+    to_string_with_precision(last_scan_matching_correction_translation_m_, 3));
+  add_kv(
+    "scan_matching_step_yaw_deg",
+    to_string_with_precision(last_scan_matching_correction_yaw_rad_ * 57.2957795, 3));
+  add_kv(
+    "scan_matching_total_translation_m",
+    to_string_with_precision(
+      std::hypot(
+        scan_matching_correction_.getOrigin().x(),
+        scan_matching_correction_.getOrigin().y()),
+      3));
+  add_kv(
+    "scan_matching_total_yaw_deg",
+    to_string_with_precision(normalize_angle(scan_matching_total_yaw) * 57.2957795, 3));
+  add_kv(
+    "scan_matching_duration_ms",
+    to_string_with_precision(last_scan_matching_duration_ms_, 3));
   add_kv("map_rebase_cooldown_remaining_scans", std::to_string(map_rebase_cooldown_remaining_scans_));
   add_kv("map_rebase_cooldown_drops", std::to_string(map_rebase_cooldown_drop_count_));
   add_kv("pcd_export_count", std::to_string(pcd_export_count_));
@@ -2626,7 +3184,9 @@ void VerticalLidarMapper::publishStatus()
 
 void VerticalLidarMapper::onGlobalPublishTimer()
 {
-  publishGlobalMap(this->now());
+  const rclcpp::Time stamp = this->now();
+  publishScanMatchingFrame(stamp);
+  publishGlobalMap(stamp);
 }
 
 void VerticalLidarMapper::onStatusTimer()
@@ -2997,20 +3557,6 @@ void VerticalLidarMapper::processScan(
         std::max(rebuild_freeze_remaining_scans_, rebuild_freeze_scans_after_correction_);
     }
   }
-  geometry_msgs::msg::TransformStamped tf_target;
-  tf_target.header.stamp = scan_stamp;
-  tf_target.header.frame_id = target_frame_;
-  tf_target.child_frame_id = source_frame;
-  tf_target.transform.translation.x = pose_target_source.getOrigin().x();
-  tf_target.transform.translation.y = pose_target_source.getOrigin().y();
-  tf_target.transform.translation.z = pose_target_source.getOrigin().z();
-  const auto target_rotation = pose_target_source.getRotation();
-  tf_target.transform.rotation.x = target_rotation.x();
-  tf_target.transform.rotation.y = target_rotation.y();
-  tf_target.transform.rotation.z = target_rotation.z();
-  tf_target.transform.rotation.w = target_rotation.w();
-  recordTrajectoryPoint(scan_stamp, tf_target);
-
   if (exclude_floor_points_) {
     auto filtered_local = std::make_shared<pcl::PointCloud<pcl::PointXYZ>>();
     auto filtered_target = std::make_shared<pcl::PointCloud<pcl::PointXYZ>>();
@@ -3156,6 +3702,7 @@ void VerticalLidarMapper::processScan(
   } else {
     if (integration_mode_ == "continuous") {
       integrateGlobalCloud(scan_cloud);
+      recordTrajectoryPoint(scan_stamp, pose_target_source);
     } else {
       (void)maybeIntegrateAsKeyframe(
         cloud_local, scan_cloud, pose_odom_source, pose_target_source,
