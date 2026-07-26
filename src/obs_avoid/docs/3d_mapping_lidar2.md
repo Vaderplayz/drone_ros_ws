@@ -74,11 +74,11 @@ experiment is explicitly enabled, corrected keyframes use `vertical_map` and
 the TF chain becomes `map -> odom -> vertical_map`.
 
 Floor stabilization is flight-safe and non-blocking in the real profile.
-MAVROS odometry carries real altitude changes. The floor estimate only learns
-a filtered Z bias while vertical speed is low; during climbs, descents, or an
-unreliable floor observation, the current bias is held and scans continue to
-integrate. This prevents altitude motion from pausing mapping or removing a yaw
-sector.
+MAVROS odometry carries real altitude changes. A reliable floor observation is
+applied immediately so the persistent map does not preserve intermediate
+correction heights. When the floor is unavailable or rejected, the current
+correction is held and scans continue to integrate. This prevents altitude
+motion from pausing mapping or removing a yaw sector.
 
 When MAVROS and AprilTag already run at boot, start odom-only 3D accumulation
 without lidar1, RF2O, or 2D SLAM:

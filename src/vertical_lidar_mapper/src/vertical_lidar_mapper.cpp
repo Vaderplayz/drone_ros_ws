@@ -302,15 +302,12 @@ VerticalLidarMapper::VerticalLidarMapper(const rclcpp::NodeOptions & options)
     target_frame_.c_str());
   RCLCPP_INFO(
     this->get_logger(),
-    "Floor stabilization: %s (percentile=%.2f band=%.2fm min_points=%d max_residual=%.2fm alpha=%.3f max_step=%.3fm update_vertical_speed<=%.2fm/s drop_failure=%s).",
+    "Floor stabilization: %s (percentile=%.2f band=%.2fm min_points=%d max_correction=%.2fm drop_failure=%s).",
     enable_floor_stabilization_ ? "enabled" : "disabled",
     floor_stabilization_percentile_,
     floor_stabilization_band_m_,
     floor_stabilization_min_points_,
     floor_stabilization_max_correction_m_,
-    floor_stabilization_filter_alpha_,
-    floor_stabilization_max_step_m_,
-    floor_stabilization_max_vertical_speed_m_s_,
     drop_scan_on_floor_stabilization_failure_ ? "true" : "false");
   const std::string save_service_name = this->get_fully_qualified_name() + std::string("/save_pcd");
   const std::string rebuild_service_name = this->get_fully_qualified_name() + std::string("/rebuild_global");
@@ -400,12 +397,6 @@ void VerticalLidarMapper::loadParameters()
     this->declare_parameter<int>("floor_stabilization_min_points", 30);
   floor_stabilization_max_correction_m_ =
     this->declare_parameter<double>("floor_stabilization_max_correction_m", 0.25);
-  floor_stabilization_filter_alpha_ =
-    this->declare_parameter<double>("floor_stabilization_filter_alpha", 0.08);
-  floor_stabilization_max_step_m_ =
-    this->declare_parameter<double>("floor_stabilization_max_step_m", 0.02);
-  floor_stabilization_max_vertical_speed_m_s_ =
-    this->declare_parameter<double>("floor_stabilization_max_vertical_speed_m_s", 0.15);
   drop_scan_on_floor_stabilization_failure_ =
     this->declare_parameter<bool>("drop_scan_on_floor_stabilization_failure", true);
 
@@ -763,21 +754,6 @@ void VerticalLidarMapper::loadParameters()
       this->get_logger(),
       "Parameter 'floor_stabilization_max_correction_m' <= 0.0, defaulting to 0.25.");
   }
-  floor_stabilization_filter_alpha_ =
-    std::clamp(floor_stabilization_filter_alpha_, 0.001, 1.0);
-  if (floor_stabilization_max_step_m_ <= 0.0) {
-    floor_stabilization_max_step_m_ = 0.02;
-    RCLCPP_WARN(
-      this->get_logger(),
-      "Parameter 'floor_stabilization_max_step_m' <= 0.0, defaulting to 0.02.");
-  }
-  if (floor_stabilization_max_vertical_speed_m_s_ < 0.0) {
-    floor_stabilization_max_vertical_speed_m_s_ = 0.15;
-    RCLCPP_WARN(
-      this->get_logger(),
-      "Parameter 'floor_stabilization_max_vertical_speed_m_s' was negative, defaulting to 0.15.");
-  }
-
   if (map_rebase_translation_threshold_ < 0.0) {
     map_rebase_translation_threshold_ = 0.0;
     RCLCPP_WARN(
@@ -3100,15 +3076,6 @@ void VerticalLidarMapper::publishStatus()
   add_kv("floor_residual_m", to_string_with_precision(last_floor_residual_m_, 3));
   add_kv("floor_correction_m", to_string_with_precision(last_floor_correction_m_, 3));
   add_kv(
-    "floor_stabilization_filter_alpha",
-    to_string_with_precision(floor_stabilization_filter_alpha_, 3));
-  add_kv(
-    "floor_stabilization_max_step_m",
-    to_string_with_precision(floor_stabilization_max_step_m_, 3));
-  add_kv(
-    "floor_stabilization_max_vertical_speed_m_s",
-    to_string_with_precision(floor_stabilization_max_vertical_speed_m_s_, 3));
-  add_kv(
     "floor_stabilization_corrections",
     std::to_string(floor_stabilization_corrections_));
   add_kv(
@@ -3117,9 +3084,6 @@ void VerticalLidarMapper::publishStatus()
   add_kv(
     "floor_stabilization_rejections",
     std::to_string(floor_stabilization_rejections_));
-  add_kv(
-    "floor_stabilization_motion_freezes",
-    std::to_string(floor_stabilization_motion_freezes_));
   add_kv("tf_filter_drops", std::to_string(tf_filter_drop_count_));
   add_kv("tf_lookup_failures", std::to_string(tf_failures_));
   add_kv("tf_lookup_p95_ms", to_string_with_precision(tf_p95_ms, 3));
@@ -3539,14 +3503,6 @@ void VerticalLidarMapper::processScan(
 
   last_floor_residual_m_ = 0.0;
   if (enable_floor_stabilization_) {
-    bool floor_update_motion_stable = true;
-    if (motion_odom_.has_value()) {
-      const double vertical_speed = motion_odom_.value().twist.twist.linear.z;
-      floor_update_motion_stable =
-        std::isfinite(vertical_speed) &&
-        std::fabs(vertical_speed) <= floor_stabilization_max_vertical_speed_m_s_;
-    }
-
     double observed_floor_z = 0.0;
     if (!estimateFloorHeight(scan_cloud, observed_floor_z)) {
       ++floor_stabilization_estimate_failures_;
@@ -3562,16 +3518,12 @@ void VerticalLidarMapper::processScan(
     } else {
       last_observed_floor_z_ = observed_floor_z;
       if (!floor_reference_z_.has_value()) {
-        if (floor_update_motion_stable) {
-          floor_reference_z_ = observed_floor_z;
-          RCLCPP_INFO(
-            this->get_logger(),
-            "Initialized floor stabilization reference at z=%.3fm in frame '%s'.",
-            floor_reference_z_.value(),
-            target_frame_.c_str());
-        } else {
-          ++floor_stabilization_motion_freezes_;
-        }
+        floor_reference_z_ = observed_floor_z;
+        RCLCPP_INFO(
+          this->get_logger(),
+          "Initialized floor stabilization reference at z=%.3fm in frame '%s'.",
+          floor_reference_z_.value(),
+          target_frame_.c_str());
       }
 
       if (floor_reference_z_.has_value()) {
@@ -3592,17 +3544,9 @@ void VerticalLidarMapper::processScan(
             last_scan_drop_reason_ = "floor_correction_too_large";
             return;
           }
-        } else if (!floor_update_motion_stable) {
-          ++floor_stabilization_motion_freezes_;
         } else {
-          const double bias_error = desired_bias - floor_stabilization_bias_m_;
-          const double filtered_step = floor_stabilization_filter_alpha_ * bias_error;
-          const double bounded_step = std::clamp(
-            filtered_step,
-            -floor_stabilization_max_step_m_,
-            floor_stabilization_max_step_m_);
-          if (std::fabs(bounded_step) > 1e-4) {
-            floor_stabilization_bias_m_ += bounded_step;
+          if (std::fabs(desired_bias - floor_stabilization_bias_m_) > 1e-4) {
+            floor_stabilization_bias_m_ = desired_bias;
             ++floor_stabilization_corrections_;
           }
         }

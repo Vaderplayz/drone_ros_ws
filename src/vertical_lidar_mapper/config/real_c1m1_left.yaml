@@ -42,18 +42,17 @@ vertical_lidar_mapper:
     max_range: 10.0
     exclude_floor_points: false
     floor_z_max: 0.10
-    # Treat the floor as a slow odometry-Z bias observation. Real altitude
-    # changes remain driven by MAVROS odometry.
+    # Use the observed floor as an odometry-Z correction. Real altitude
+    # changes still come from MAVROS, while the correction keeps the mapped
+    # floor fixed in the target frame when that Z estimate drifts.
     enable_floor_stabilization: true
     floor_stabilization_percentile: 0.10
     floor_stabilization_band_m: 0.08
     floor_stabilization_min_points: 30
-    floor_stabilization_max_correction_m: 0.25
-    floor_stabilization_filter_alpha: 0.08
-    floor_stabilization_max_step_m: 0.02
-    # Freeze bias learning during a climb/descent, but continue integrating
-    # scans at their odometry-derived height.
-    floor_stabilization_max_vertical_speed_m_s: 0.15
+    # Indoor flight may require a large correction when MAVROS Z drifts. The
+    # 30-point floor-band check is the confidence gate; accepted corrections
+    # are applied immediately so intermediate Z layers are never accumulated.
+    floor_stabilization_max_correction_m: 2.0
     # Keep the odometry-height scan when no reliable floor observation exists.
     # Floor visibility depends on yaw and must not create angular blind sectors.
     drop_scan_on_floor_stabilization_failure: false

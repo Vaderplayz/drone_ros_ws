@@ -46,9 +46,9 @@ ROS 2 (Humble/Rolling) package for building a rolling 3D point cloud map from a 
 - Optionally anchors each complete vertical scan to a robust lower-percentile
   floor estimate so small altitude drift does not stack floor and wall layers
 - Uses flight-safe, non-blocking floor stabilization in the real profile:
-  MAVROS odometry carries real Z motion, while a filtered floor observation
-  corrects only slow Z bias. Bias learning freezes during climbs/descents, and
-  missing or rejected floor observations never pause scan integration.
+  a reliable floor observation is applied immediately so intermediate Z layers
+  are not accumulated, while a missing or rejected observation retains the
+  previous correction and never pauses scan integration.
 - Compares SLAM-relative motion vs odom-relative motion and drops inconsistent global integration (`enable_relative_pose_gate`)
 - Rebuilds accumulated points on `map->odom` corrections to reduce loop-closure double walls (`enable_map_rebase`)
 - Supports `integration_mode`:
@@ -195,7 +195,7 @@ If map appears doubled/shifted after revisit with `target_frame:=map`:
   - `integrated_pose_yaw_current_deg`, `integrated_pose_yaw_travel_deg`,
     `integrated_pose_yaw_coverage_deg`
   - `floor_residual_m`, `floor_correction_m`,
-    `floor_stabilization_motion_freezes`, `floor_stabilization_rejections`
+    `floor_stabilization_corrections`, `floor_stabilization_rejections`
   - `rebuild_count`, `rebuild_last_duration_ms`, `rebuild_freeze_remaining_scans`
   - `map_rebase_count`, `last_map_rebase_translation_m`
   - `relative_pose_gate_drops`, `relative_pose_translation_error_m`, `relative_pose_yaw_error_deg`
