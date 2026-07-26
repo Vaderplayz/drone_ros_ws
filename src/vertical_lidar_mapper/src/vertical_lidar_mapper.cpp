@@ -302,12 +302,15 @@ VerticalLidarMapper::VerticalLidarMapper(const rclcpp::NodeOptions & options)
     target_frame_.c_str());
   RCLCPP_INFO(
     this->get_logger(),
-    "Floor stabilization: %s (percentile=%.2f band=%.2fm min_points=%d max_correction=%.2fm drop_failure=%s).",
+    "Floor stabilization: %s (percentile=%.2f band=%.2fm min_points=%d max_residual=%.2fm alpha=%.3f max_step=%.3fm update_vertical_speed<=%.2fm/s drop_failure=%s).",
     enable_floor_stabilization_ ? "enabled" : "disabled",
     floor_stabilization_percentile_,
     floor_stabilization_band_m_,
     floor_stabilization_min_points_,
     floor_stabilization_max_correction_m_,
+    floor_stabilization_filter_alpha_,
+    floor_stabilization_max_step_m_,
+    floor_stabilization_max_vertical_speed_m_s_,
     drop_scan_on_floor_stabilization_failure_ ? "true" : "false");
   const std::string save_service_name = this->get_fully_qualified_name() + std::string("/save_pcd");
   const std::string rebuild_service_name = this->get_fully_qualified_name() + std::string("/rebuild_global");
@@ -397,6 +400,12 @@ void VerticalLidarMapper::loadParameters()
     this->declare_parameter<int>("floor_stabilization_min_points", 30);
   floor_stabilization_max_correction_m_ =
     this->declare_parameter<double>("floor_stabilization_max_correction_m", 0.25);
+  floor_stabilization_filter_alpha_ =
+    this->declare_parameter<double>("floor_stabilization_filter_alpha", 0.08);
+  floor_stabilization_max_step_m_ =
+    this->declare_parameter<double>("floor_stabilization_max_step_m", 0.02);
+  floor_stabilization_max_vertical_speed_m_s_ =
+    this->declare_parameter<double>("floor_stabilization_max_vertical_speed_m_s", 0.15);
   drop_scan_on_floor_stabilization_failure_ =
     this->declare_parameter<bool>("drop_scan_on_floor_stabilization_failure", true);
 
@@ -753,6 +762,20 @@ void VerticalLidarMapper::loadParameters()
     RCLCPP_WARN(
       this->get_logger(),
       "Parameter 'floor_stabilization_max_correction_m' <= 0.0, defaulting to 0.25.");
+  }
+  floor_stabilization_filter_alpha_ =
+    std::clamp(floor_stabilization_filter_alpha_, 0.001, 1.0);
+  if (floor_stabilization_max_step_m_ <= 0.0) {
+    floor_stabilization_max_step_m_ = 0.02;
+    RCLCPP_WARN(
+      this->get_logger(),
+      "Parameter 'floor_stabilization_max_step_m' <= 0.0, defaulting to 0.02.");
+  }
+  if (floor_stabilization_max_vertical_speed_m_s_ < 0.0) {
+    floor_stabilization_max_vertical_speed_m_s_ = 0.15;
+    RCLCPP_WARN(
+      this->get_logger(),
+      "Parameter 'floor_stabilization_max_vertical_speed_m_s' was negative, defaulting to 0.15.");
   }
 
   if (map_rebase_translation_threshold_ < 0.0) {
@@ -2960,11 +2983,41 @@ void VerticalLidarMapper::publishStatus()
   last_status_keyframes_ = total_scans_keyframe_integrated_;
 
   std::size_t raw_keyframe_points = 0;
+  std::array<bool, 72> integrated_yaw_bins{};
+  std::optional<double> previous_integrated_yaw;
+  double integrated_yaw_travel_rad = 0.0;
+  double current_integrated_yaw_rad = 0.0;
   for (const auto & keyframe : keyframes_) {
     if (keyframe.cloud_local) {
       raw_keyframe_points += keyframe.cloud_local->size();
     }
+
+    double roll = 0.0;
+    double pitch = 0.0;
+    double yaw = 0.0;
+    tf2::Matrix3x3(keyframe.pose_odom_source.getRotation()).getRPY(roll, pitch, yaw);
+    current_integrated_yaw_rad = normalize_angle(yaw);
+    if (previous_integrated_yaw.has_value()) {
+      integrated_yaw_travel_rad += std::fabs(
+        normalize_angle(current_integrated_yaw_rad - previous_integrated_yaw.value()));
+    }
+    previous_integrated_yaw = current_integrated_yaw_rad;
+
+    constexpr double two_pi = 6.28318530717958647692;
+    const double positive_yaw = std::fmod(current_integrated_yaw_rad + two_pi, two_pi);
+    const std::size_t yaw_bin = std::min(
+      integrated_yaw_bins.size() - 1U,
+      static_cast<std::size_t>(
+        std::floor(
+          positive_yaw / two_pi *
+          static_cast<double>(integrated_yaw_bins.size()))));
+    integrated_yaw_bins[yaw_bin] = true;
   }
+  const std::size_t occupied_yaw_bins = static_cast<std::size_t>(
+    std::count(integrated_yaw_bins.begin(), integrated_yaw_bins.end(), true));
+  const double integrated_yaw_coverage_deg =
+    360.0 * static_cast<double>(occupied_yaw_bins) /
+    static_cast<double>(integrated_yaw_bins.size());
   const double memory_estimate_mib = static_cast<double>(
     raw_points_total_ + global_points_total_ + raw_keyframe_points) *
     static_cast<double>(sizeof(pcl::PointXYZ)) / (1024.0 * 1024.0);
@@ -2996,6 +3049,15 @@ void VerticalLidarMapper::publishStatus()
   add_kv("total_scans_global_integrated", std::to_string(total_scans_global_integrated_));
   add_kv("total_scans_keyframe_integrated", std::to_string(total_scans_keyframe_integrated_));
   add_kv("keyframes_total", std::to_string(keyframes_.size()));
+  add_kv(
+    "integrated_pose_yaw_current_deg",
+    to_string_with_precision(current_integrated_yaw_rad * 57.2957795, 2));
+  add_kv(
+    "integrated_pose_yaw_travel_deg",
+    to_string_with_precision(integrated_yaw_travel_rad * 57.2957795, 2));
+  add_kv(
+    "integrated_pose_yaw_coverage_deg",
+    to_string_with_precision(integrated_yaw_coverage_deg, 1));
   add_kv("keyframe_drop_non_keyframe", std::to_string(keyframe_drop_non_keyframe_count_));
   add_kv("keyframe_evictions", std::to_string(keyframe_eviction_count_));
   add_kv("dropped_excess_motion", std::to_string(dropped_excess_motion_count_));
@@ -3035,7 +3097,17 @@ void VerticalLidarMapper::publishStatus()
     floor_reference_z_.has_value() ?
     to_string_with_precision(floor_reference_z_.value(), 3) : "unset");
   add_kv("observed_floor_z_m", to_string_with_precision(last_observed_floor_z_, 3));
+  add_kv("floor_residual_m", to_string_with_precision(last_floor_residual_m_, 3));
   add_kv("floor_correction_m", to_string_with_precision(last_floor_correction_m_, 3));
+  add_kv(
+    "floor_stabilization_filter_alpha",
+    to_string_with_precision(floor_stabilization_filter_alpha_, 3));
+  add_kv(
+    "floor_stabilization_max_step_m",
+    to_string_with_precision(floor_stabilization_max_step_m_, 3));
+  add_kv(
+    "floor_stabilization_max_vertical_speed_m_s",
+    to_string_with_precision(floor_stabilization_max_vertical_speed_m_s_, 3));
   add_kv(
     "floor_stabilization_corrections",
     std::to_string(floor_stabilization_corrections_));
@@ -3045,6 +3117,9 @@ void VerticalLidarMapper::publishStatus()
   add_kv(
     "floor_stabilization_rejections",
     std::to_string(floor_stabilization_rejections_));
+  add_kv(
+    "floor_stabilization_motion_freezes",
+    std::to_string(floor_stabilization_motion_freezes_));
   add_kv("tf_filter_drops", std::to_string(tf_filter_drop_count_));
   add_kv("tf_lookup_failures", std::to_string(tf_failures_));
   add_kv("tf_lookup_p95_ms", to_string_with_precision(tf_p95_ms, 3));
@@ -3462,8 +3537,16 @@ void VerticalLidarMapper::processScan(
     return;
   }
 
-  last_floor_correction_m_ = 0.0;
+  last_floor_residual_m_ = 0.0;
   if (enable_floor_stabilization_) {
+    bool floor_update_motion_stable = true;
+    if (motion_odom_.has_value()) {
+      const double vertical_speed = motion_odom_.value().twist.twist.linear.z;
+      floor_update_motion_stable =
+        std::isfinite(vertical_speed) &&
+        std::fabs(vertical_speed) <= floor_stabilization_max_vertical_speed_m_s_;
+    }
+
     double observed_floor_z = 0.0;
     if (!estimateFloorHeight(scan_cloud, observed_floor_z)) {
       ++floor_stabilization_estimate_failures_;
@@ -3479,44 +3562,67 @@ void VerticalLidarMapper::processScan(
     } else {
       last_observed_floor_z_ = observed_floor_z;
       if (!floor_reference_z_.has_value()) {
-        floor_reference_z_ = observed_floor_z;
-        RCLCPP_INFO(
-          this->get_logger(),
-          "Initialized floor stabilization reference at z=%.3fm in frame '%s'.",
-          floor_reference_z_.value(),
-          target_frame_.c_str());
-      }
-
-      const double floor_correction = floor_reference_z_.value() - observed_floor_z;
-      last_floor_correction_m_ = floor_correction;
-      if (std::fabs(floor_correction) > floor_stabilization_max_correction_m_) {
-        ++floor_stabilization_rejections_;
-        last_scan_drop_reason_ = "floor_correction_too_large";
-        RCLCPP_WARN_THROTTLE(
-          this->get_logger(),
-          *this->get_clock(),
-          1000,
-          "Dropping vertical scan: floor correction %.3fm exceeds %.3fm. Check MAVROS altitude continuity.",
-          floor_correction,
-          floor_stabilization_max_correction_m_);
-        return;
-      }
-
-      if (std::fabs(floor_correction) > 1e-4) {
-        const float correction = static_cast<float>(floor_correction);
-        for (auto & point : scan_cloud->points) {
-          point.z += correction;
+        if (floor_update_motion_stable) {
+          floor_reference_z_ = observed_floor_z;
+          RCLCPP_INFO(
+            this->get_logger(),
+            "Initialized floor stabilization reference at z=%.3fm in frame '%s'.",
+            floor_reference_z_.value(),
+            target_frame_.c_str());
+        } else {
+          ++floor_stabilization_motion_freezes_;
         }
-
-        tf2::Vector3 target_origin = pose_target_source.getOrigin();
-        target_origin.setZ(target_origin.z() + floor_correction);
-        pose_target_source.setOrigin(target_origin);
-
-        tf2::Vector3 odom_origin = pose_odom_source.getOrigin();
-        odom_origin.setZ(odom_origin.z() + floor_correction);
-        pose_odom_source.setOrigin(odom_origin);
-        ++floor_stabilization_corrections_;
       }
+
+      if (floor_reference_z_.has_value()) {
+        const double desired_bias = floor_reference_z_.value() - observed_floor_z;
+        last_floor_residual_m_ = desired_bias - floor_stabilization_bias_m_;
+        if (std::fabs(desired_bias) > floor_stabilization_max_correction_m_) {
+          ++floor_stabilization_rejections_;
+          RCLCPP_WARN_THROTTLE(
+            this->get_logger(),
+            *this->get_clock(),
+            1000,
+            "%s vertical scan floor residual %.3fm exceeds %.3fm; retaining filtered bias %.3fm.",
+            drop_scan_on_floor_stabilization_failure_ ? "Dropping" : "Ignoring",
+            desired_bias,
+            floor_stabilization_max_correction_m_,
+            floor_stabilization_bias_m_);
+          if (drop_scan_on_floor_stabilization_failure_) {
+            last_scan_drop_reason_ = "floor_correction_too_large";
+            return;
+          }
+        } else if (!floor_update_motion_stable) {
+          ++floor_stabilization_motion_freezes_;
+        } else {
+          const double bias_error = desired_bias - floor_stabilization_bias_m_;
+          const double filtered_step = floor_stabilization_filter_alpha_ * bias_error;
+          const double bounded_step = std::clamp(
+            filtered_step,
+            -floor_stabilization_max_step_m_,
+            floor_stabilization_max_step_m_);
+          if (std::fabs(bounded_step) > 1e-4) {
+            floor_stabilization_bias_m_ += bounded_step;
+            ++floor_stabilization_corrections_;
+          }
+        }
+      }
+    }
+
+    last_floor_correction_m_ = floor_stabilization_bias_m_;
+    if (std::fabs(floor_stabilization_bias_m_) > 1e-4) {
+      const float correction = static_cast<float>(floor_stabilization_bias_m_);
+      for (auto & point : scan_cloud->points) {
+        point.z += correction;
+      }
+
+      tf2::Vector3 target_origin = pose_target_source.getOrigin();
+      target_origin.setZ(target_origin.z() + floor_stabilization_bias_m_);
+      pose_target_source.setOrigin(target_origin);
+
+      tf2::Vector3 odom_origin = pose_odom_source.getOrigin();
+      odom_origin.setZ(odom_origin.z() + floor_stabilization_bias_m_);
+      pose_odom_source.setOrigin(odom_origin);
     }
   }
 

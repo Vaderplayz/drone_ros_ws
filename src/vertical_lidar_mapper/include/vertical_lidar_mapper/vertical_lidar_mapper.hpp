@@ -322,6 +322,9 @@ private:
   double floor_stabilization_band_m_{0.08};
   int floor_stabilization_min_points_{30};
   double floor_stabilization_max_correction_m_{0.25};
+  double floor_stabilization_filter_alpha_{0.08};
+  double floor_stabilization_max_step_m_{0.02};
+  double floor_stabilization_max_vertical_speed_m_s_{0.15};
   bool drop_scan_on_floor_stabilization_failure_{true};
 
   double keyframe_min_translation_m_{0.10};
@@ -430,8 +433,11 @@ private:
   std::size_t floor_stabilization_corrections_{0};
   std::size_t floor_stabilization_estimate_failures_{0};
   std::size_t floor_stabilization_rejections_{0};
+  std::size_t floor_stabilization_motion_freezes_{0};
   double last_observed_floor_z_{0.0};
+  double last_floor_residual_m_{0.0};
   double last_floor_correction_m_{0.0};
+  double floor_stabilization_bias_m_{0.0};
   std::size_t pcd_export_count_{0};
   bool autosave_completed_{false};
   std::string last_pcd_export_path_;
