@@ -22,6 +22,9 @@ ROS 2 (Humble/Rolling) package for building a rolling 3D point cloud map from a 
 - Skips the rolling-map rebuild when `/vertical_map` has no subscribers and
   rate-limits it with `local_map_publish_hz`
 - Publishes bounded global cloud map on `/mapping/global_cloud`
+- Publishes `/mapping/structural_cloud` from known `/map` cells: flat floor
+  and ceiling surfaces plus wall columns at occupied/free boundaries. Unknown
+  cells are omitted, so this visualization cannot extend beyond mapped space.
 - Publishes mapper diagnostics on `/mapping/status`
 - Publishes a bounded rolling local obstacle cloud on
   `/mapping/local_obstacle_cloud`, combining fresh horizontal and vertical
@@ -52,10 +55,14 @@ ROS 2 (Humble/Rolling) package for building a rolling 3D point cloud map from a 
   excessive corrections, and never feeds corrected poses back into MAVROS/PX4
 - Optionally anchors each complete vertical scan to a robust lower-percentile
   floor estimate so small altitude drift does not stack floor and wall layers
-- Uses flight-safe, non-blocking floor stabilization in the real profile:
-  a reliable floor observation is applied immediately so intermediate Z layers
-  are not accumulated, while a missing or rejected observation retains the
-  previous correction and never pauses scan integration.
+- The real profile requires a spatially broad, nearly level floor observation
+  before a scan enters the permanent global cloud. Missing or tilted floor
+  observations remain visible live but cannot create duplicate/tilted layers.
+- A trustworthy residual floor tilt rigidly rotates the complete scan slice
+  about the LiDAR origin before Z stabilization. Floor and wall returns keep
+  their shared corner instead of receiving independent height corrections.
+- Periodically removes isolated global returns with a bounded-radius filter;
+  experimental single-scan ICP remains disabled.
 - Anchors the real-profile floor to `z=0`, matching the 2D occupancy-map plane
   instead of retaining an arbitrary MAVROS odometry height.
 - Compares SLAM-relative motion vs odom-relative motion and drops inconsistent global integration (`enable_relative_pose_gate`)
@@ -169,6 +176,9 @@ rviz2 -d "$(ros2 pkg prefix vertical_lidar_mapper)/share/vertical_lidar_mapper/r
 - Add `PointCloud2` display for `/vertical_points_deskewed` to inspect the
   current corrected scan in `lidar_vert_link`
 - Add `PointCloud2` display for `/vertical_map`
+- `/mapping/structural_cloud` is already included in the supplied RViz config.
+  It is a visualization model derived from 2D occupancy, not synthetic sensor
+  evidence for collision handling or the raw PCD.
 
 For the real combined 2D + 3D profile, use `map` as RViz's Fixed Frame. With
 the default scan matcher disabled, `/mapping/global_cloud` is in `odom` and
@@ -213,7 +223,13 @@ If map appears doubled/shifted after revisit with `target_frame:=map`:
   - `integrated_pose_yaw_current_deg`, `integrated_pose_yaw_travel_deg`,
     `integrated_pose_yaw_coverage_deg`
   - `floor_stabilization_target_z_m`, `floor_residual_m`, `floor_correction_m`,
-    `floor_stabilization_corrections`, `floor_stabilization_rejections`
+    `floor_stabilization_corrections`, `floor_stabilization_rejections`,
+    `observed_floor_tilt_deg`, `floor_tilt_correction_deg`,
+    `floor_residual_tilt_deg`, `floor_tilt_corrections`,
+    `floor_tilt_correction_failures`, `dropped_floor_unstable`
+  - `motion_roll_deg`, `motion_pitch_deg` for the latest full-pose odometry
+  - `global_outlier_filter_runs`, `global_outlier_points_removed`
+  - `structural_cloud_points`, `structural_cloud_duration_ms`
   - `rebuild_count`, `rebuild_last_duration_ms`, `rebuild_freeze_remaining_scans`
   - `map_rebase_count`, `last_map_rebase_translation_m`
   - `relative_pose_gate_drops`, `relative_pose_translation_error_m`, `relative_pose_yaw_error_deg`

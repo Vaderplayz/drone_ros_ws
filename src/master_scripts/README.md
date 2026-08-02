@@ -47,6 +47,11 @@ The actual integration throughput is
 `keyframe_creation_rate_hz` in `/mapping/status`, which should remain close to
 the accepted scan rate.
 
+When the 2D map is part of the startup, the 3D launcher also waits for
+`/mapping/structural_cloud`. This bounded visualization uses known `/map` cells
+to show flat floor/ceiling surfaces and occupied/free wall boundaries while the
+raw LiDAR accumulation remains in `/mapping/global_cloud` and `odom`.
+
 Single-scan 3D ICP is experimental and is not part of the real stability-first
 profile. Keep `MAPPING_3D_ENABLE_SCAN_MATCHING=false`.
 

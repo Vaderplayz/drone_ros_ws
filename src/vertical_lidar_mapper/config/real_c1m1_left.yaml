@@ -37,6 +37,13 @@ vertical_lidar_mapper:
     max_global_points: 400000
     global_publish_hz: 3.0
     global_revoxelize_every_n_scans: 10
+    # Remove persistent isolated returns periodically, not in every scan
+    # callback. Dense wall/floor observations survive this neighborhood gate.
+    enable_global_radius_outlier_filter: true
+    global_outlier_radius_m: 0.20
+    global_outlier_min_neighbors: 3
+    global_outlier_min_points: 1000
+    global_outlier_filter_every_n_revoxelizations: 3
 
     min_range: 0.25
     max_range: 10.0
@@ -48,13 +55,23 @@ vertical_lidar_mapper:
     enable_floor_stabilization: true
     floor_stabilization_percentile: 0.10
     floor_stabilization_band_m: 0.08
-    floor_stabilization_min_points: 30
+    floor_stabilization_min_points: 20
+    floor_stabilization_min_xy_span_m: 0.50
+    # Rigidly level a trustworthy scan slice using its observed floor line.
+    # The same rotation is applied to its wall returns, preserving the corner.
+    enable_floor_tilt_correction: true
+    floor_tilt_correction_min_rad: 0.0087
+    floor_stabilization_max_tilt_rad: 0.1745
     # Match the physical floor to the z=0 plane used by the 2D occupancy map.
     floor_stabilization_target_z_m: 0.0
-    # Indoor flight may require a large correction when MAVROS Z drifts. The
-    # 30-point floor-band check is the confidence gate; accepted corrections
-    # are applied immediately so intermediate Z layers are never accumulated.
-    floor_stabilization_max_correction_m: 2.0
+    # Reject sudden altitude corrections and sloped low-return strips. A scan
+    # remains available live, but cannot contaminate the accumulated cloud
+    # unless its floor estimate passes all confidence checks.
+    # The first confidence-checked estimate may initialize a larger offset if
+    # mapping starts while the drone is already held above its odom origin.
+    floor_stabilization_max_correction_m: 1.50
+    floor_stabilization_max_step_m: 0.15
+    require_floor_for_global_integration: true
     # Keep the odometry-height scan when no reliable floor observation exists.
     # Floor visibility depends on yaw and must not create angular blind sectors.
     drop_scan_on_floor_stabilization_failure: false
@@ -157,7 +174,7 @@ vertical_lidar_mapper:
     structural_mesh_occupied_threshold: 65
     structural_mesh_free_threshold: 19
     structural_mesh_auto_height: true
-    structural_mesh_include_ceiling: false
+    structural_mesh_include_ceiling: true
     structural_mesh_use_obstacle_heights: false
     structural_mesh_default_floor_z: 0.0
     structural_mesh_default_ceiling_z: 2.5
@@ -172,6 +189,16 @@ vertical_lidar_mapper:
     structural_mesh_max_grid_cells: 2000000
     structural_mesh_max_height_samples: 200000
     structural_mesh_max_quads: 250000
+
+    # Bounded room visualization derived from known /map cells. This is kept
+    # separate from /mapping/global_cloud so synthetic surfaces are never used
+    # by obstacle processing or saved as raw LiDAR evidence.
+    enable_structural_cloud: true
+    structural_cloud_topic: "/mapping/structural_cloud"
+    structural_cloud_publish_hz: 1.0
+    structural_cloud_resolution_m: 0.15
+    structural_cloud_vertical_resolution_m: 0.15
+    structural_cloud_max_points: 200000
 
     debug: false
 

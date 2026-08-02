@@ -48,7 +48,9 @@ VERTICAL_CLOUD_TOPIC="${VERTICAL_CLOUD_TOPIC:-/vertical_cloud}"
 DESKEWED_CLOUD_TOPIC="${DESKEWED_CLOUD_TOPIC:-/vertical_points_deskewed}"
 VERTICAL_MAP_TOPIC="${VERTICAL_MAP_TOPIC:-/vertical_map}"
 GLOBAL_CLOUD_TOPIC="${GLOBAL_CLOUD_TOPIC:-/mapping/global_cloud}"
+STRUCTURAL_CLOUD_TOPIC="${STRUCTURAL_CLOUD_TOPIC:-/mapping/structural_cloud}"
 MAPPING_STATUS_TOPIC="${MAPPING_STATUS_TOPIC:-/mapping/status}"
+ENABLE_STRUCTURAL_CLOUD="${ENABLE_STRUCTURAL_CLOUD:-true}"
 ENABLE_SPATIAL_AWARENESS="${ENABLE_SPATIAL_AWARENESS:-1}"
 HORIZONTAL_SCAN_TOPIC="${HORIZONTAL_SCAN_TOPIC:-/scan_slam}"
 LOCAL_OBSTACLE_CLOUD_TOPIC="${LOCAL_OBSTACLE_CLOUD_TOPIC:-/mapping/local_obstacle_cloud}"
@@ -310,6 +312,7 @@ validate_settings() {
     "${ENABLE_MAP_REBASE}" \
     "${ENABLE_RELATIVE_POSE_GATE}" \
     "${ENABLE_SCAN_MATCHING}" \
+    "${ENABLE_STRUCTURAL_CLOUD}" \
     "${SCAN_MATCHING_DROP_ON_FAILURE}"; do
     case "${boolean_value}" in
       true|false) ;;
@@ -324,7 +327,7 @@ validate_settings() {
     return 1
   fi
   for topic in "${LIDAR2_SCAN_TOPIC}" "${DESKEWED_CLOUD_TOPIC}" "${VERTICAL_CLOUD_TOPIC}" "${VERTICAL_MAP_TOPIC}" \
-    "${GLOBAL_CLOUD_TOPIC}" "${MAPPING_STATUS_TOPIC}" "${PX4_ODOM_TOPIC}" "${HORIZONTAL_SCAN_TOPIC}" \
+    "${GLOBAL_CLOUD_TOPIC}" "${STRUCTURAL_CLOUD_TOPIC}" "${MAPPING_STATUS_TOPIC}" "${PX4_ODOM_TOPIC}" "${HORIZONTAL_SCAN_TOPIC}" \
     "${LOCAL_OBSTACLE_CLOUD_TOPIC}" "${SPATIAL_MARKER_TOPIC}" "${SPATIAL_STATUS_TOPIC}"; do
     if [[ ! "${topic}" =~ ^/[A-Za-z0-9_/]+$ || "${topic}" == *//* || "${topic}" == */ ]]; then
       log_error "invalid absolute ROS topic name '${topic}'"
@@ -563,6 +566,13 @@ require_mapper_namespace_free() {
       return 1
     fi
   done
+  if [[ "${ENABLE_STRUCTURAL_CLOUD}" == "true" ]]; then
+    count="$(publisher_count "${STRUCTURAL_CLOUD_TOPIC}")"
+    if [[ "${count}" != "0" ]]; then
+      log_error "${STRUCTURAL_CLOUD_TOPIC} already has ${count} publisher(s); refusing a duplicate mapper"
+      return 1
+    fi
+  fi
 }
 
 require_spatial_awareness_namespace_free() {
@@ -602,6 +612,8 @@ start_mapper() {
       -p enable_map_rebase:="${ENABLE_MAP_REBASE}" \
       -p enable_relative_pose_gate:="${ENABLE_RELATIVE_POSE_GATE}" \
       -p enable_floor_stabilization:="${ENABLE_FLOOR_STABILIZATION}" \
+      -p enable_structural_cloud:="${ENABLE_STRUCTURAL_CLOUD}" \
+      -p structural_cloud_topic:="${STRUCTURAL_CLOUD_TOPIC}" \
       -p enable_scan_matching:="${ENABLE_SCAN_MATCHING}" \
       -p scan_matching_drop_on_failure:="${SCAN_MATCHING_DROP_ON_FAILURE}" \
       -p pcd_export_dir:="${EXPORT_DIR}" \
@@ -612,6 +624,9 @@ start_mapper() {
   pid="${LAST_STARTED_PID}"
   wait_for_message "${VERTICAL_CLOUD_TOPIC}" "${POINTCLOUD_WAIT_SEC}" best_effort "${pid}" "${MAPPER_LOG}"
   wait_for_message "${GLOBAL_CLOUD_TOPIC}" "${POINTCLOUD_WAIT_SEC}" reliable "${pid}" "${MAPPER_LOG}"
+  if [[ "${ENABLE_STRUCTURAL_CLOUD}" == "true" && "${REQUIRE_2D_MAP}" == "1" ]]; then
+    wait_for_message "${STRUCTURAL_CLOUD_TOPIC}" "${POINTCLOUD_WAIT_SEC}" reliable "${pid}" "${MAPPER_LOG}"
+  fi
 }
 
 start_spatial_awareness() {
@@ -646,7 +661,7 @@ start_vertical_bag() {
   start_process vertical_mapping_bag "${ROSBAG_LOG}" \
     ros2 bag record -o "${LOG_DIR}/vertical_mapping_bag" \
       "${LIDAR2_SCAN_TOPIC}" "${DESKEWED_CLOUD_TOPIC}" "${VERTICAL_CLOUD_TOPIC}" "${VERTICAL_MAP_TOPIC}" \
-      "${GLOBAL_CLOUD_TOPIC}" "${MAPPING_STATUS_TOPIC}" "${PX4_ODOM_TOPIC}" \
+      "${GLOBAL_CLOUD_TOPIC}" "${STRUCTURAL_CLOUD_TOPIC}" "${MAPPING_STATUS_TOPIC}" "${PX4_ODOM_TOPIC}" \
       "${HORIZONTAL_SCAN_TOPIC}" "${LOCAL_OBSTACLE_CLOUD_TOPIC}" "${SPATIAL_MARKER_TOPIC}" "${SPATIAL_STATUS_TOPIC}" \
       /map /tf /tf_static
 }
@@ -662,7 +677,7 @@ write_snapshot() {
       "${LIDAR2_X}" "${LIDAR2_Y}" "${LIDAR2_Z}" "${LIDAR2_ROLL}" "${LIDAR2_PITCH}" "${LIDAR2_YAW}"
     printf 'mapper_params=%s\nexport_dir=%s\n' "${MAPPER_PARAMS_FILE}" "${EXPORT_DIR}"
     for topic in "${LIDAR2_SCAN_TOPIC}" "${DESKEWED_CLOUD_TOPIC}" "${VERTICAL_CLOUD_TOPIC}" "${VERTICAL_MAP_TOPIC}" \
-      "${GLOBAL_CLOUD_TOPIC}" "${MAPPING_STATUS_TOPIC}" "${LOCAL_OBSTACLE_CLOUD_TOPIC}" \
+      "${GLOBAL_CLOUD_TOPIC}" "${STRUCTURAL_CLOUD_TOPIC}" "${MAPPING_STATUS_TOPIC}" "${LOCAL_OBSTACLE_CLOUD_TOPIC}" \
       "${SPATIAL_MARKER_TOPIC}" "${SPATIAL_STATUS_TOPIC}"; do
       printf '\n-- %s --\n' "${topic}"
       ros2 topic info "${topic}" -v || true
@@ -750,6 +765,7 @@ main() {
 
   log "Export service: ros2 service call /vertical_lidar_mapper/save_pcd std_srvs/srv/Trigger '{}'"
   log "Spatial awareness: ${LOCAL_OBSTACLE_CLOUD_TOPIC}, ${SPATIAL_STATUS_TOPIC}, ${SPATIAL_MARKER_TOPIC}"
+  log "Room visualization: ${STRUCTURAL_CLOUD_TOPIC} (enabled=${ENABLE_STRUCTURAL_CLOUD})"
   log "On Ctrl+C, autosave requests one PCD/GLB asset set in ${EXPORT_DIR}"
   log "Runtime logs: ${LOG_DIR}"
   log "No PX4 parameter, arm, mode, movement, or setpoint command was sent"

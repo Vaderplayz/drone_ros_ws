@@ -26,6 +26,7 @@
 #include <diagnostic_msgs/msg/key_value.hpp>
 #include <pcl/common/transforms.h>
 #include <pcl/filters/filter.h>
+#include <pcl/filters/radius_outlier_removal.h>
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/io/pcd_io.h>
 #include <pcl/kdtree/kdtree_flann.h>
@@ -151,6 +152,11 @@ VerticalLidarMapper::VerticalLidarMapper(const rclcpp::NodeOptions & options)
     map_topic_, rclcpp::QoS(5).reliable());
   global_map_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(
     global_map_topic_, rclcpp::QoS(5).reliable());
+  if (enable_structural_cloud_) {
+    structural_cloud_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(
+      structural_cloud_topic_,
+      rclcpp::QoS(rclcpp::KeepLast(1)).transient_local().reliable());
+  }
   status_pub_ = this->create_publisher<diagnostic_msgs::msg::DiagnosticArray>(
     status_topic_, rclcpp::QoS(10).reliable());
   save_pcd_service_ = this->create_service<std_srvs::srv::Trigger>(
@@ -302,14 +308,27 @@ VerticalLidarMapper::VerticalLidarMapper(const rclcpp::NodeOptions & options)
     target_frame_.c_str());
   RCLCPP_INFO(
     this->get_logger(),
-    "Floor stabilization: %s (percentile=%.2f band=%.2fm min_points=%d target_z=%.2fm max_correction=%.2fm drop_failure=%s).",
+    "Floor stabilization: %s (percentile=%.2f band=%.2fm min_points=%d min_span=%.2fm "
+    "max_tilt=%.1fdeg target_z=%.2fm max_correction=%.2fm max_step=%.2fm "
+    "require_global=%s drop_failure=%s).",
     enable_floor_stabilization_ ? "enabled" : "disabled",
     floor_stabilization_percentile_,
     floor_stabilization_band_m_,
     floor_stabilization_min_points_,
+    floor_stabilization_min_xy_span_m_,
+    floor_stabilization_max_tilt_rad_ * 57.2957795,
     floor_stabilization_target_z_m_,
     floor_stabilization_max_correction_m_,
+    floor_stabilization_max_step_m_,
+    require_floor_for_global_integration_ ? "true" : "false",
     drop_scan_on_floor_stabilization_failure_ ? "true" : "false");
+  RCLCPP_INFO(
+    this->get_logger(),
+    "Rigid floor tilt correction: %s (deadband=%.2fdeg max=%.2fdeg); correction rotates "
+    "the complete scan slice about the lidar origin.",
+    enable_floor_tilt_correction_ ? "enabled" : "disabled",
+    floor_tilt_correction_min_rad_ * 57.2957795,
+    floor_stabilization_max_tilt_rad_ * 57.2957795);
   const std::string save_service_name = this->get_fully_qualified_name() + std::string("/save_pcd");
   const std::string rebuild_service_name = this->get_fully_qualified_name() + std::string("/rebuild_global");
   RCLCPP_INFO(
@@ -332,6 +351,15 @@ VerticalLidarMapper::VerticalLidarMapper(const rclcpp::NodeOptions & options)
     structural_mesh_auto_height_ ? "true" : "false",
     structural_mesh_include_ceiling_ ? "true" : "false",
     structural_mesh_max_grid_cells_);
+  RCLCPP_INFO(
+    this->get_logger(),
+    "Structural room cloud: %s (topic='%s' publish=%.1fHz resolution=%.2fm vertical=%.2fm cap=%d).",
+    enable_structural_cloud_ ? "enabled" : "disabled",
+    structural_cloud_topic_.c_str(),
+    structural_cloud_publish_hz_,
+    structural_cloud_resolution_m_,
+    structural_cloud_vertical_resolution_m_,
+    structural_cloud_max_points_);
   RCLCPP_INFO(
     this->get_logger(),
     "Loop-closure dedup-only mode: %s",
@@ -400,8 +428,20 @@ void VerticalLidarMapper::loadParameters()
     this->declare_parameter<double>("floor_stabilization_target_z_m", 0.0);
   floor_stabilization_max_correction_m_ =
     this->declare_parameter<double>("floor_stabilization_max_correction_m", 0.25);
+  floor_stabilization_max_step_m_ =
+    this->declare_parameter<double>("floor_stabilization_max_step_m", 0.15);
+  floor_stabilization_min_xy_span_m_ =
+    this->declare_parameter<double>("floor_stabilization_min_xy_span_m", 0.40);
+  floor_stabilization_max_tilt_rad_ =
+    this->declare_parameter<double>("floor_stabilization_max_tilt_rad", 0.14);
+  enable_floor_tilt_correction_ =
+    this->declare_parameter<bool>("enable_floor_tilt_correction", false);
+  floor_tilt_correction_min_rad_ =
+    this->declare_parameter<double>("floor_tilt_correction_min_rad", 0.0087);
   drop_scan_on_floor_stabilization_failure_ =
     this->declare_parameter<bool>("drop_scan_on_floor_stabilization_failure", true);
+  require_floor_for_global_integration_ =
+    this->declare_parameter<bool>("require_floor_for_global_integration", false);
 
   integration_mode_ = normalize_integration_mode(
     this->declare_parameter<std::string>("integration_mode", "keyframe"));
@@ -414,6 +454,16 @@ void VerticalLidarMapper::loadParameters()
   global_publish_hz_ = this->declare_parameter<double>("global_publish_hz", 2.0);
   global_revoxelize_every_n_scans_ =
     this->declare_parameter<int>("global_revoxelize_every_n_scans", 10);
+  enable_global_radius_outlier_filter_ =
+    this->declare_parameter<bool>("enable_global_radius_outlier_filter", false);
+  global_outlier_radius_m_ =
+    this->declare_parameter<double>("global_outlier_radius_m", 0.20);
+  global_outlier_min_neighbors_ =
+    this->declare_parameter<int>("global_outlier_min_neighbors", 3);
+  global_outlier_min_points_ =
+    this->declare_parameter<int>("global_outlier_min_points", 500);
+  global_outlier_filter_every_n_revoxelizations_ =
+    this->declare_parameter<int>("global_outlier_filter_every_n_revoxelizations", 3);
   drop_scan_on_excess_motion_ = this->declare_parameter<bool>("drop_scan_on_excess_motion", true);
   max_integration_yaw_rate_ = this->declare_parameter<double>("max_integration_yaw_rate", 0.5);
   max_integration_vertical_speed_ =
@@ -517,6 +567,18 @@ void VerticalLidarMapper::loadParameters()
     this->declare_parameter<bool>("structural_mesh_include_ceiling", false);
   structural_mesh_use_obstacle_heights_ =
     this->declare_parameter<bool>("structural_mesh_use_obstacle_heights", false);
+  enable_structural_cloud_ =
+    this->declare_parameter<bool>("enable_structural_cloud", false);
+  structural_cloud_topic_ = this->declare_parameter<std::string>(
+    "structural_cloud_topic", "/mapping/structural_cloud");
+  structural_cloud_publish_hz_ =
+    this->declare_parameter<double>("structural_cloud_publish_hz", 1.0);
+  structural_cloud_resolution_m_ =
+    this->declare_parameter<double>("structural_cloud_resolution_m", 0.15);
+  structural_cloud_vertical_resolution_m_ =
+    this->declare_parameter<double>("structural_cloud_vertical_resolution_m", 0.15);
+  structural_cloud_max_points_ =
+    this->declare_parameter<int>("structural_cloud_max_points", 200000);
   structural_mesh_default_floor_z_ =
     this->declare_parameter<double>("structural_mesh_default_floor_z", 0.0);
   structural_mesh_default_ceiling_z_ =
@@ -763,6 +825,39 @@ void VerticalLidarMapper::loadParameters()
       this->get_logger(),
       "Parameter 'floor_stabilization_max_correction_m' <= 0.0, defaulting to 0.25.");
   }
+  if (floor_stabilization_max_step_m_ <= 0.0) {
+    floor_stabilization_max_step_m_ = 0.15;
+    RCLCPP_WARN(
+      this->get_logger(),
+      "Parameter 'floor_stabilization_max_step_m' <= 0.0, defaulting to 0.15.");
+  }
+  if (floor_stabilization_min_xy_span_m_ < 0.0) {
+    floor_stabilization_min_xy_span_m_ = 0.0;
+    RCLCPP_WARN(
+      this->get_logger(),
+      "Parameter 'floor_stabilization_min_xy_span_m' was negative, clamped to 0.0.");
+  }
+  if (floor_stabilization_max_tilt_rad_ <= 0.0 ||
+    floor_stabilization_max_tilt_rad_ >= 1.57079632679)
+  {
+    floor_stabilization_max_tilt_rad_ = 0.14;
+    RCLCPP_WARN(
+      this->get_logger(),
+      "Parameter 'floor_stabilization_max_tilt_rad' invalid, defaulting to 0.14 rad.");
+  }
+  if (floor_tilt_correction_min_rad_ < 0.0) {
+    floor_tilt_correction_min_rad_ = 0.0;
+    RCLCPP_WARN(
+      this->get_logger(),
+      "Parameter 'floor_tilt_correction_min_rad' was negative, clamped to 0.0.");
+  }
+  if (global_outlier_radius_m_ <= 0.0) {
+    global_outlier_radius_m_ = 0.20;
+  }
+  global_outlier_min_neighbors_ = std::max(1, global_outlier_min_neighbors_);
+  global_outlier_min_points_ = std::max(1, global_outlier_min_points_);
+  global_outlier_filter_every_n_revoxelizations_ =
+    std::max(1, global_outlier_filter_every_n_revoxelizations_);
   if (map_rebase_translation_threshold_ < 0.0) {
     map_rebase_translation_threshold_ = 0.0;
     RCLCPP_WARN(
@@ -919,6 +1014,23 @@ void VerticalLidarMapper::loadParameters()
     RCLCPP_WARN(this->get_logger(), "Parameter 'slam_map_topic' was empty, defaulting to /map.");
   }
 
+  if (structural_cloud_topic_.empty()) {
+    structural_cloud_topic_ = "/mapping/structural_cloud";
+    RCLCPP_WARN(
+      this->get_logger(),
+      "Parameter 'structural_cloud_topic' was empty, defaulting to /mapping/structural_cloud.");
+  }
+  if (structural_cloud_publish_hz_ <= 0.0) {
+    structural_cloud_publish_hz_ = 1.0;
+  }
+  if (structural_cloud_resolution_m_ <= 0.0) {
+    structural_cloud_resolution_m_ = 0.15;
+  }
+  if (structural_cloud_vertical_resolution_m_ <= 0.0) {
+    structural_cloud_vertical_resolution_m_ = 0.15;
+  }
+  structural_cloud_max_points_ = std::max(1000, structural_cloud_max_points_);
+
   if (slam_map2d_export_prefix_.empty()) {
     slam_map2d_export_prefix_ = "slam2d_map";
     RCLCPP_WARN(
@@ -1015,6 +1127,13 @@ void VerticalLidarMapper::motionOdomCallback(const nav_msgs::msg::Odometry::Shar
     return;
   }
   rotation.normalize();
+
+  double roll = 0.0;
+  double pitch = 0.0;
+  double yaw = 0.0;
+  tf2::Matrix3x3(rotation).getRPY(roll, pitch, yaw);
+  last_motion_roll_rad_ = roll;
+  last_motion_pitch_rad_ = pitch;
 
   tf2::Transform pose;
   pose.setOrigin(tf2::Vector3(position.x, position.y, position.z));
@@ -1128,9 +1247,13 @@ pcl::PointCloud<pcl::PointXYZ>::Ptr VerticalLidarMapper::transformCloud(
 
 bool VerticalLidarMapper::estimateFloorHeight(
   const pcl::PointCloud<pcl::PointXYZ>::Ptr & cloud,
-  double & floor_z) const
+  double & floor_z,
+  double & floor_tilt_rad,
+  tf2::Quaternion & leveling_rotation) const
 {
   floor_z = 0.0;
+  floor_tilt_rad = 0.0;
+  leveling_rotation.setRPY(0.0, 0.0, 0.0);
   if (!cloud ||
     cloud->size() < static_cast<std::size_t>(floor_stabilization_min_points_))
   {
@@ -1161,13 +1284,84 @@ bool VerticalLidarMapper::estimateFloorHeight(
 
   std::vector<float> floor_band;
   floor_band.reserve(z_values.size() / 4U);
-  for (const float z : z_values) {
-    if (std::fabs(z - candidate_z) <= floor_stabilization_band_m_) {
-      floor_band.push_back(z);
+  std::vector<Eigen::Vector3d> floor_points;
+  floor_points.reserve(z_values.size() / 4U);
+  double min_x = std::numeric_limits<double>::infinity();
+  double min_y = std::numeric_limits<double>::infinity();
+  double max_x = -std::numeric_limits<double>::infinity();
+  double max_y = -std::numeric_limits<double>::infinity();
+  for (const auto & point : cloud->points) {
+    if (std::isfinite(point.x) && std::isfinite(point.y) && std::isfinite(point.z) &&
+      std::fabs(static_cast<double>(point.z) - candidate_z) <= floor_stabilization_band_m_)
+    {
+      floor_band.push_back(point.z);
+      floor_points.emplace_back(point.x, point.y, point.z);
+      min_x = std::min(min_x, static_cast<double>(point.x));
+      min_y = std::min(min_y, static_cast<double>(point.y));
+      max_x = std::max(max_x, static_cast<double>(point.x));
+      max_y = std::max(max_y, static_cast<double>(point.y));
     }
   }
   if (floor_band.size() < static_cast<std::size_t>(floor_stabilization_min_points_)) {
     return false;
+  }
+  if (floor_stabilization_min_xy_span_m_ > 0.0 &&
+    std::hypot(max_x - min_x, max_y - min_y) < floor_stabilization_min_xy_span_m_)
+  {
+    return false;
+  }
+
+  Eigen::Vector3d mean = Eigen::Vector3d::Zero();
+  for (const auto & point : floor_points) {
+    mean += point;
+  }
+  mean /= static_cast<double>(floor_points.size());
+  double covariance_xx = 0.0;
+  double covariance_xy = 0.0;
+  double covariance_yy = 0.0;
+  for (const auto & point : floor_points) {
+    const double dx = point.x() - mean.x();
+    const double dy = point.y() - mean.y();
+    covariance_xx += dx * dx;
+    covariance_xy += dx * dy;
+    covariance_yy += dy * dy;
+  }
+  const double principal_yaw = 0.5 * std::atan2(
+    2.0 * covariance_xy, covariance_xx - covariance_yy);
+  const double direction_x = std::cos(principal_yaw);
+  const double direction_y = std::sin(principal_yaw);
+  double variance_along_scan = 0.0;
+  double covariance_scan_z = 0.0;
+  for (const auto & point : floor_points) {
+    const double along_scan =
+      direction_x * (point.x() - mean.x()) + direction_y * (point.y() - mean.y());
+    variance_along_scan += along_scan * along_scan;
+    covariance_scan_z += along_scan * (point.z() - mean.z());
+  }
+  if (variance_along_scan <= 1e-8) {
+    return false;
+  }
+  const double floor_slope = covariance_scan_z / variance_along_scan;
+  floor_tilt_rad = std::atan(std::fabs(floor_slope));
+  if (!std::isfinite(floor_tilt_rad) ||
+    floor_tilt_rad > floor_stabilization_max_tilt_rad_)
+  {
+    return false;
+  }
+
+  tf2::Vector3 measured_direction(direction_x, direction_y, floor_slope);
+  tf2::Vector3 horizontal_direction(direction_x, direction_y, 0.0);
+  measured_direction.normalize();
+  horizontal_direction.normalize();
+  tf2::Vector3 correction_axis = measured_direction.cross(horizontal_direction);
+  const double correction_axis_length = correction_axis.length();
+  if (correction_axis_length > 1e-9) {
+    correction_axis /= correction_axis_length;
+    const double correction_angle = std::atan2(
+      correction_axis_length,
+      std::clamp(measured_direction.dot(horizontal_direction), -1.0, 1.0));
+    leveling_rotation.setRotation(correction_axis, correction_angle);
+    leveling_rotation.normalize();
   }
 
   const std::size_t median_index = floor_band.size() / 2U;
@@ -1177,6 +1371,43 @@ bool VerticalLidarMapper::estimateFloorHeight(
     floor_band.end());
   floor_z = static_cast<double>(floor_band[median_index]);
   return std::isfinite(floor_z);
+}
+
+void VerticalLidarMapper::applyFloorLevelingRotation(
+  const tf2::Quaternion & leveling_rotation,
+  pcl::PointCloud<pcl::PointXYZ>::Ptr & scan_cloud,
+  tf2::Transform & pose_target_source,
+  tf2::Transform & pose_odom_source) const
+{
+  if (!scan_cloud || scan_cloud->empty()) {
+    return;
+  }
+
+  const tf2::Vector3 sensor_origin = pose_target_source.getOrigin();
+  const tf2::Matrix3x3 correction_matrix(leveling_rotation);
+  for (auto & point : scan_cloud->points) {
+    const tf2::Vector3 original(point.x, point.y, point.z);
+    const tf2::Vector3 corrected =
+      sensor_origin + correction_matrix * (original - sensor_origin);
+    point.x = static_cast<float>(corrected.x());
+    point.y = static_cast<float>(corrected.y());
+    point.z = static_cast<float>(corrected.z());
+  }
+
+  const tf2::Quaternion target_from_odom_rotation =
+    (pose_target_source * pose_odom_source.inverse()).getRotation();
+  tf2::Quaternion corrected_target_rotation =
+    leveling_rotation * pose_target_source.getRotation();
+  corrected_target_rotation.normalize();
+  pose_target_source.setRotation(corrected_target_rotation);
+
+  tf2::Quaternion odom_leveling_rotation =
+    target_from_odom_rotation.inverse() * leveling_rotation * target_from_odom_rotation;
+  odom_leveling_rotation.normalize();
+  tf2::Quaternion corrected_odom_rotation =
+    odom_leveling_rotation * pose_odom_source.getRotation();
+  corrected_odom_rotation.normalize();
+  pose_odom_source.setRotation(corrected_odom_rotation);
 }
 
 bool VerticalLidarMapper::buildDeskewedLocalCloud(
@@ -1732,6 +1963,24 @@ pcl::PointCloud<pcl::PointXYZ>::Ptr VerticalLidarMapper::voxelDownsample(
   return filtered_cloud;
 }
 
+pcl::PointCloud<pcl::PointXYZ>::Ptr VerticalLidarMapper::radiusOutlierFilter(
+  const pcl::PointCloud<pcl::PointXYZ>::Ptr & input_cloud) const
+{
+  if (!input_cloud || input_cloud->empty() || !enable_global_radius_outlier_filter_ ||
+    input_cloud->size() < static_cast<std::size_t>(global_outlier_min_points_))
+  {
+    return input_cloud;
+  }
+
+  auto filtered_cloud = std::make_shared<pcl::PointCloud<pcl::PointXYZ>>();
+  pcl::RadiusOutlierRemoval<pcl::PointXYZ> filter;
+  filter.setInputCloud(input_cloud);
+  filter.setRadiusSearch(global_outlier_radius_m_);
+  filter.setMinNeighborsInRadius(global_outlier_min_neighbors_);
+  filter.filter(*filtered_cloud);
+  return filtered_cloud;
+}
+
 void VerticalLidarMapper::integrateGlobalCloud(const pcl::PointCloud<pcl::PointXYZ>::Ptr & scan_cloud)
 {
   if (!scan_cloud || scan_cloud->empty()) {
@@ -1767,6 +2016,17 @@ void VerticalLidarMapper::enforceGlobalCloudLimits()
   ++global_revoxelization_count_;
   if (global_voxel_leaf_size_ > 0.0) {
     global_cloud_ = voxelDownsample(global_cloud_, global_voxel_leaf_size_);
+  }
+  const bool outlier_filter_due =
+    global_revoxelization_count_ %
+    static_cast<std::size_t>(global_outlier_filter_every_n_revoxelizations_) == 0U;
+  if (enable_global_radius_outlier_filter_ && outlier_filter_due && global_cloud_ &&
+    global_cloud_->size() >= static_cast<std::size_t>(global_outlier_min_points_))
+  {
+    const std::size_t before = global_cloud_->size();
+    global_cloud_ = radiusOutlierFilter(global_cloud_);
+    ++global_outlier_filter_runs_;
+    global_outlier_points_removed_ += before - global_cloud_->size();
   }
 
   if (max_global_points_ > 0) {
@@ -2341,6 +2601,152 @@ void VerticalLidarMapper::publishGlobalMap(const rclcpp::Time & stamp)
   map_msg.header.frame_id = globalCloudFrame();
   map_msg.header.stamp = stamp;
   global_map_pub_->publish(map_msg);
+}
+
+void VerticalLidarMapper::publishStructuralCloud(const rclcpp::Time & stamp)
+{
+  if (!enable_structural_cloud_ || !structural_cloud_pub_) {
+    return;
+  }
+  if (last_structural_cloud_publish_stamp_.has_value() &&
+    (stamp - last_structural_cloud_publish_stamp_.value()).seconds() <
+    1.0 / structural_cloud_publish_hz_)
+  {
+    return;
+  }
+
+  std::optional<nav_msgs::msg::OccupancyGrid> map_copy;
+  {
+    std::lock_guard<std::mutex> lock(slam_map_mutex_);
+    map_copy = latest_slam_map_;
+  }
+  if (!map_copy.has_value()) {
+    return;
+  }
+
+  const auto started_at = std::chrono::steady_clock::now();
+  const auto & map = map_copy.value();
+  const std::size_t width = map.info.width;
+  const std::size_t height = map.info.height;
+  const double map_resolution = map.info.resolution;
+  if (width == 0U || height == 0U || map_resolution <= 0.0 ||
+    map.data.size() != width * height || map.header.frame_id.empty())
+  {
+    return;
+  }
+
+  tf2::Quaternion q(
+    map.info.origin.orientation.x,
+    map.info.origin.orientation.y,
+    map.info.origin.orientation.z,
+    map.info.origin.orientation.w);
+  if (q.length2() <= 1e-12) {
+    q.setRPY(0.0, 0.0, 0.0);
+  } else {
+    q.normalize();
+  }
+  double roll = 0.0;
+  double pitch = 0.0;
+  double yaw = 0.0;
+  tf2::Matrix3x3(q).getRPY(roll, pitch, yaw);
+  const double cos_yaw = std::cos(yaw);
+  const double sin_yaw = std::sin(yaw);
+  const double origin_x = map.info.origin.position.x;
+  const double origin_y = map.info.origin.position.y;
+  const double origin_z = map.info.origin.position.z;
+  const double floor_z = origin_z + structural_mesh_default_floor_z_;
+  const double ceiling_z = origin_z + structural_mesh_default_ceiling_z_;
+  const std::size_t horizontal_stride = static_cast<std::size_t>(std::max(
+      1.0, std::ceil(structural_cloud_resolution_m_ / map_resolution)));
+  const int vertical_steps = std::max(
+    1,
+    static_cast<int>(std::ceil(
+        (ceiling_z - floor_z) / structural_cloud_vertical_resolution_m_)));
+  const std::size_t point_cap = static_cast<std::size_t>(structural_cloud_max_points_);
+
+  auto cloud = std::make_shared<pcl::PointCloud<pcl::PointXYZ>>();
+  cloud->points.reserve(std::min(point_cap, width * height));
+  const auto is_free = [this, &map](std::size_t x, std::size_t y) {
+      const int value = static_cast<int>(map.data[y * map.info.width + x]);
+      return value >= 0 && value <= structural_mesh_free_threshold_;
+    };
+  const auto is_occupied = [this, &map](std::size_t x, std::size_t y) {
+      return static_cast<int>(map.data[y * map.info.width + x]) >=
+             structural_mesh_occupied_threshold_;
+    };
+  const auto append_point = [
+    &cloud, point_cap, cos_yaw, sin_yaw, origin_x, origin_y, map_resolution](
+    std::size_t x, std::size_t y, double z)
+    {
+      if (cloud->size() >= point_cap) {
+        return false;
+      }
+      const double grid_x = (static_cast<double>(x) + 0.5) * map_resolution;
+      const double grid_y = (static_cast<double>(y) + 0.5) * map_resolution;
+      pcl::PointXYZ point;
+      point.x = static_cast<float>(origin_x + cos_yaw * grid_x - sin_yaw * grid_y);
+      point.y = static_cast<float>(origin_y + sin_yaw * grid_x + cos_yaw * grid_y);
+      point.z = static_cast<float>(z);
+      cloud->push_back(point);
+      return true;
+    };
+
+  // Known free cells define bounded, flat floor and ceiling surfaces.
+  for (std::size_t y = 0U; y < height && cloud->size() < point_cap;
+    y += horizontal_stride)
+  {
+    for (std::size_t x = 0U; x < width && cloud->size() < point_cap;
+      x += horizontal_stride)
+    {
+      if (!is_free(x, y)) {
+        continue;
+      }
+      append_point(x, y, floor_z);
+      append_point(x, y, ceiling_z);
+    }
+  }
+
+  // Only occupied cells bordering known free space become wall columns.
+  for (std::size_t y = 0U; y < height && cloud->size() < point_cap; ++y) {
+    for (std::size_t x = 0U; x < width && cloud->size() < point_cap; ++x) {
+      if (!is_occupied(x, y) ||
+        (x % horizontal_stride != 0U && y % horizontal_stride != 0U))
+      {
+        continue;
+      }
+      const bool borders_free =
+        (x > 0U && is_free(x - 1U, y)) ||
+        (x + 1U < width && is_free(x + 1U, y)) ||
+        (y > 0U && is_free(x, y - 1U)) ||
+        (y + 1U < height && is_free(x, y + 1U));
+      if (!borders_free) {
+        continue;
+      }
+      for (int step = 0; step <= vertical_steps && cloud->size() < point_cap; ++step) {
+        const double ratio = static_cast<double>(step) / static_cast<double>(vertical_steps);
+        append_point(x, y, floor_z + ratio * (ceiling_z - floor_z));
+      }
+    }
+  }
+
+  if (cloud->empty()) {
+    return;
+  }
+  cloud->width = static_cast<std::uint32_t>(cloud->size());
+  cloud->height = 1U;
+  cloud->is_dense = true;
+
+  sensor_msgs::msg::PointCloud2 cloud_msg;
+  pcl::toROSMsg(*cloud, cloud_msg);
+  cloud_msg.header.frame_id = map.header.frame_id;
+  cloud_msg.header.stamp = stamp;
+  structural_cloud_pub_->publish(cloud_msg);
+
+  last_structural_cloud_publish_stamp_ = stamp;
+  ++structural_cloud_publish_count_;
+  last_structural_cloud_points_ = cloud->size();
+  last_structural_cloud_duration_ms_ = std::chrono::duration<double, std::milli>(
+    std::chrono::steady_clock::now() - started_at).count();
 }
 
 bool VerticalLidarMapper::saveGlobalCloudToPcd(std::string & output_path, std::string & error_message)
@@ -3054,6 +3460,8 @@ void VerticalLidarMapper::publishStatus()
   add_kv("motion_yaw_rate_rad_s", to_string_with_precision(last_motion_yaw_rate_, 3));
   add_kv("motion_vertical_speed_m_s", to_string_with_precision(last_motion_vertical_speed_, 3));
   add_kv("motion_tilt_rate_rad_s", to_string_with_precision(last_motion_tilt_rate_, 3));
+  add_kv("motion_roll_deg", to_string_with_precision(last_motion_roll_rad_ * 57.2957795, 2));
+  add_kv("motion_pitch_deg", to_string_with_precision(last_motion_pitch_rad_ * 57.2957795, 2));
   add_kv("full_pose_deskew_enabled", enable_full_pose_deskew_ ? "true" : "false");
   add_kv("deskewed_scans", std::to_string(deskewed_scan_count_));
   add_kv("deskew_failures", std::to_string(deskew_failure_count_));
@@ -3091,11 +3499,43 @@ void VerticalLidarMapper::publishStatus()
     "floor_stabilization_corrections",
     std::to_string(floor_stabilization_corrections_));
   add_kv(
+    "floor_stabilization_initialized",
+    floor_stabilization_initialized_ ? "true" : "false");
+  add_kv(
     "floor_stabilization_estimate_failures",
     std::to_string(floor_stabilization_estimate_failures_));
   add_kv(
     "floor_stabilization_rejections",
     std::to_string(floor_stabilization_rejections_));
+  add_kv("dropped_floor_unstable", std::to_string(dropped_floor_unstable_count_));
+  add_kv(
+    "floor_stabilization_max_step_m",
+    to_string_with_precision(floor_stabilization_max_step_m_, 3));
+  add_kv(
+    "floor_stabilization_min_xy_span_m",
+    to_string_with_precision(floor_stabilization_min_xy_span_m_, 3));
+  add_kv(
+    "floor_stabilization_max_tilt_deg",
+    to_string_with_precision(floor_stabilization_max_tilt_rad_ * 57.2957795, 2));
+  add_kv(
+    "observed_floor_tilt_deg",
+    to_string_with_precision(last_floor_tilt_rad_ * 57.2957795, 2));
+  add_kv(
+    "floor_tilt_correction_enabled",
+    enable_floor_tilt_correction_ ? "true" : "false");
+  add_kv(
+    "floor_tilt_correction_deg",
+    to_string_with_precision(last_floor_tilt_correction_rad_ * 57.2957795, 2));
+  add_kv(
+    "floor_residual_tilt_deg",
+    to_string_with_precision(last_floor_residual_tilt_rad_ * 57.2957795, 2));
+  add_kv("floor_tilt_corrections", std::to_string(floor_tilt_corrections_));
+  add_kv(
+    "floor_tilt_correction_failures",
+    std::to_string(floor_tilt_correction_failures_));
+  add_kv(
+    "require_floor_for_global_integration",
+    require_floor_for_global_integration_ ? "true" : "false");
   add_kv("tf_filter_drops", std::to_string(tf_filter_drop_count_));
   add_kv("tf_lookup_failures", std::to_string(tf_failures_));
   add_kv("tf_lookup_p95_ms", to_string_with_precision(tf_p95_ms, 3));
@@ -3107,8 +3547,24 @@ void VerticalLidarMapper::publishStatus()
   add_kv("memory_estimate_mib", to_string_with_precision(memory_estimate_mib, 1));
   add_kv("global_revoxelizations", std::to_string(global_revoxelization_count_));
   add_kv(
+    "global_outlier_filter_enabled",
+    enable_global_radius_outlier_filter_ ? "true" : "false");
+  add_kv("global_outlier_filter_runs", std::to_string(global_outlier_filter_runs_));
+  add_kv(
+    "global_outlier_points_removed",
+    std::to_string(global_outlier_points_removed_));
+  add_kv("global_outlier_radius_m", to_string_with_precision(global_outlier_radius_m_, 3));
+  add_kv("global_outlier_min_neighbors", std::to_string(global_outlier_min_neighbors_));
+  add_kv(
     "global_integrations_since_revoxel",
     std::to_string(global_integrations_since_revoxel_));
+  add_kv("structural_cloud_enabled", enable_structural_cloud_ ? "true" : "false");
+  add_kv("structural_cloud_topic", structural_cloud_topic_);
+  add_kv("structural_cloud_publish_count", std::to_string(structural_cloud_publish_count_));
+  add_kv("structural_cloud_points", std::to_string(last_structural_cloud_points_));
+  add_kv(
+    "structural_cloud_duration_ms",
+    to_string_with_precision(last_structural_cloud_duration_ms_, 3));
   add_kv("map_rebase_enabled", enable_map_rebase_ ? "true" : "false");
   add_kv("map_rebase_count", std::to_string(map_rebase_count_));
   add_kv("last_map_rebase_translation_m", to_string_with_precision(last_map_rebase_translation_m_, 3));
@@ -3238,6 +3694,7 @@ void VerticalLidarMapper::onGlobalPublishTimer()
   const rclcpp::Time stamp = this->now();
   publishScanMatchingFrame(stamp);
   publishGlobalMap(stamp);
+  publishStructuralCloud(stamp);
 }
 
 void VerticalLidarMapper::onStatusTimer()
@@ -3514,9 +3971,40 @@ void VerticalLidarMapper::processScan(
   }
 
   last_floor_residual_m_ = 0.0;
+  bool floor_stable_for_global = !enable_floor_stabilization_;
   if (enable_floor_stabilization_) {
     double observed_floor_z = 0.0;
-    if (!estimateFloorHeight(scan_cloud, observed_floor_z)) {
+    double observed_floor_tilt_rad = 0.0;
+    tf2::Quaternion floor_leveling_rotation;
+    bool floor_estimate_valid = estimateFloorHeight(
+      scan_cloud, observed_floor_z, observed_floor_tilt_rad, floor_leveling_rotation);
+    last_floor_tilt_rad_ = observed_floor_tilt_rad;
+    last_floor_tilt_correction_rad_ = 0.0;
+    last_floor_residual_tilt_rad_ = observed_floor_tilt_rad;
+    if (floor_estimate_valid && enable_floor_tilt_correction_ &&
+      observed_floor_tilt_rad >= floor_tilt_correction_min_rad_)
+    {
+      applyFloorLevelingRotation(
+        floor_leveling_rotation, scan_cloud, pose_target_source, pose_odom_source);
+      ++floor_tilt_corrections_;
+      last_floor_tilt_correction_rad_ = observed_floor_tilt_rad;
+
+      double corrected_floor_z = 0.0;
+      double residual_floor_tilt_rad = 0.0;
+      tf2::Quaternion residual_leveling_rotation;
+      floor_estimate_valid = estimateFloorHeight(
+        scan_cloud,
+        corrected_floor_z,
+        residual_floor_tilt_rad,
+        residual_leveling_rotation);
+      if (floor_estimate_valid) {
+        observed_floor_z = corrected_floor_z;
+        last_floor_residual_tilt_rad_ = residual_floor_tilt_rad;
+      } else {
+        ++floor_tilt_correction_failures_;
+      }
+    }
+    if (!floor_estimate_valid) {
       ++floor_stabilization_estimate_failures_;
       if (drop_scan_on_floor_stabilization_failure_) {
         last_scan_drop_reason_ = "floor_estimate_unavailable";
@@ -3542,27 +4030,37 @@ void VerticalLidarMapper::processScan(
 
       if (floor_reference_z_.has_value()) {
         const double desired_bias = floor_reference_z_.value() - observed_floor_z;
-        last_floor_residual_m_ = desired_bias - floor_stabilization_bias_m_;
-        if (std::fabs(desired_bias) > floor_stabilization_max_correction_m_) {
+        const double correction_step = desired_bias - floor_stabilization_bias_m_;
+        last_floor_residual_m_ = correction_step;
+        const bool step_too_large =
+          floor_stabilization_initialized_ &&
+          std::fabs(correction_step) > floor_stabilization_max_step_m_;
+        if (std::fabs(desired_bias) > floor_stabilization_max_correction_m_ || step_too_large)
+        {
           ++floor_stabilization_rejections_;
           RCLCPP_WARN_THROTTLE(
             this->get_logger(),
             *this->get_clock(),
             1000,
-            "%s vertical scan floor residual %.3fm exceeds %.3fm; retaining current bias %.3fm.",
+            "%s vertical scan floor correction: absolute=%.3fm (max %.3fm), step=%.3fm "
+            "(max %.3fm); retaining current bias %.3fm.",
             drop_scan_on_floor_stabilization_failure_ ? "Dropping" : "Ignoring",
             desired_bias,
             floor_stabilization_max_correction_m_,
+            correction_step,
+            floor_stabilization_max_step_m_,
             floor_stabilization_bias_m_);
           if (drop_scan_on_floor_stabilization_failure_) {
             last_scan_drop_reason_ = "floor_correction_too_large";
             return;
           }
         } else {
-          if (std::fabs(desired_bias - floor_stabilization_bias_m_) > 1e-4) {
+          if (std::fabs(correction_step) > 1e-4) {
             floor_stabilization_bias_m_ = desired_bias;
             ++floor_stabilization_corrections_;
           }
+          floor_stabilization_initialized_ = true;
+          floor_stable_for_global = true;
         }
       }
     }
@@ -3689,8 +4187,12 @@ void VerticalLidarMapper::processScan(
     ++rebuild_freeze_drop_count_;
   }
 
+  const bool drop_floor_unstable =
+    require_floor_for_global_integration_ && !floor_stable_for_global;
+
   const bool drop_global =
-    drop_excess_motion || drop_relative_pose || drop_rebase_cooldown || drop_rebuild_freeze;
+    drop_excess_motion || drop_relative_pose || drop_rebase_cooldown || drop_rebuild_freeze ||
+    drop_floor_unstable;
   if (drop_global) {
     if (drop_excess_motion) {
       ++dropped_excess_motion_count_;
@@ -3762,6 +4264,17 @@ void VerticalLidarMapper::processScan(
         1000,
         "Dropped scan during rebuild-freeze: remaining_scans=%d.",
         rebuild_freeze_remaining_scans_);
+    }
+
+    if (drop_floor_unstable) {
+      ++dropped_floor_unstable_count_;
+      last_scan_drop_reason_ = "global_floor_unstable";
+      RCLCPP_WARN_THROTTLE(
+        this->get_logger(),
+        *this->get_clock(),
+        1000,
+        "Skipped global integration because this scan had no trustworthy floor correction; "
+        "the live cloud remains available.");
     }
   } else {
     if (integration_mode_ == "continuous") {

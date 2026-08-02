@@ -136,7 +136,14 @@ private:
     const tf2::Transform & transform) const;
   bool estimateFloorHeight(
     const pcl::PointCloud<pcl::PointXYZ>::Ptr & cloud,
-    double & floor_z) const;
+    double & floor_z,
+    double & floor_tilt_rad,
+    tf2::Quaternion & leveling_rotation) const;
+  void applyFloorLevelingRotation(
+    const tf2::Quaternion & leveling_rotation,
+    pcl::PointCloud<pcl::PointXYZ>::Ptr & scan_cloud,
+    tf2::Transform & pose_target_source,
+    tf2::Transform & pose_odom_source) const;
   bool shouldDropGlobalIntegration(
     double & yaw_rate,
     double & vertical_speed,
@@ -182,6 +189,7 @@ private:
   std::string globalCloudFrame() const;
   void publishScanMatchingFrame(const rclcpp::Time & stamp);
   void publishGlobalMap(const rclcpp::Time & stamp);
+  void publishStructuralCloud(const rclcpp::Time & stamp);
   void publishStatus();
   void onGlobalPublishTimer();
   void onStatusTimer();
@@ -224,6 +232,8 @@ private:
   pcl::PointCloud<pcl::PointXYZ>::Ptr voxelDownsample(
     const pcl::PointCloud<pcl::PointXYZ>::Ptr & input_cloud,
     double leaf_size) const;
+  pcl::PointCloud<pcl::PointXYZ>::Ptr radiusOutlierFilter(
+    const pcl::PointCloud<pcl::PointXYZ>::Ptr & input_cloud) const;
 
   pcl::PointCloud<pcl::PointXYZ>::Ptr buildVoxelizedMapCloud() const;
   void publishMap(const rclcpp::Time & stamp);
@@ -241,6 +251,7 @@ private:
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr deskewed_cloud_pub_;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr map_pub_;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr global_map_pub_;
+  rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr structural_cloud_pub_;
   rclcpp::Publisher<diagnostic_msgs::msg::DiagnosticArray>::SharedPtr status_pub_;
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr save_pcd_service_;
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr rebuild_global_service_;
@@ -266,6 +277,7 @@ private:
   std::optional<nav_msgs::msg::OccupancyGrid> latest_slam_map_;
   std::optional<rclcpp::Time> last_scan_stamp_;
   std::optional<rclcpp::Time> last_local_map_publish_stamp_;
+  std::optional<rclcpp::Time> last_structural_cloud_publish_stamp_;
   std::optional<geometry_msgs::msg::TransformStamped> last_applied_map_to_odom_tf_;
   std::optional<geometry_msgs::msg::TransformStamped> last_relative_pose_map_base_tf_;
   std::optional<geometry_msgs::msg::TransformStamped> last_relative_pose_odom_base_tf_;
@@ -286,6 +298,7 @@ private:
   std::string cloud_topic_;
   std::string deskewed_cloud_topic_;
   std::string global_map_topic_;
+  std::string structural_cloud_topic_{"/mapping/structural_cloud"};
   std::string status_topic_;
   std::string motion_odom_topic_;
   std::string pcd_export_dir_;
@@ -323,7 +336,13 @@ private:
   int floor_stabilization_min_points_{30};
   double floor_stabilization_target_z_m_{0.0};
   double floor_stabilization_max_correction_m_{0.25};
+  double floor_stabilization_max_step_m_{0.15};
+  double floor_stabilization_min_xy_span_m_{0.40};
+  double floor_stabilization_max_tilt_rad_{0.14};
+  bool enable_floor_tilt_correction_{false};
+  double floor_tilt_correction_min_rad_{0.0087};
   bool drop_scan_on_floor_stabilization_failure_{true};
+  bool require_floor_for_global_integration_{false};
 
   double keyframe_min_translation_m_{0.10};
   double keyframe_min_yaw_rad_{0.06};
@@ -333,6 +352,11 @@ private:
   int max_global_points_{1500000};
   double global_publish_hz_{2.0};
   int global_revoxelize_every_n_scans_{10};
+  bool enable_global_radius_outlier_filter_{false};
+  double global_outlier_radius_m_{0.20};
+  int global_outlier_min_neighbors_{3};
+  int global_outlier_min_points_{500};
+  int global_outlier_filter_every_n_revoxelizations_{3};
   bool drop_scan_on_excess_motion_{true};
   double max_integration_yaw_rate_{0.5};
   double max_integration_vertical_speed_{0.5};
@@ -358,6 +382,11 @@ private:
   bool structural_mesh_auto_height_{true};
   bool structural_mesh_include_ceiling_{false};
   bool structural_mesh_use_obstacle_heights_{false};
+  bool enable_structural_cloud_{false};
+  double structural_cloud_publish_hz_{1.0};
+  double structural_cloud_resolution_m_{0.15};
+  double structural_cloud_vertical_resolution_m_{0.15};
+  int structural_cloud_max_points_{200000};
   bool loop_closure_dedup_only_{false};
   double map2d_resolution_{0.10};
   double map2d_padding_m_{1.0};
@@ -431,10 +460,22 @@ private:
   std::size_t floor_stabilization_corrections_{0};
   std::size_t floor_stabilization_estimate_failures_{0};
   std::size_t floor_stabilization_rejections_{0};
+  std::size_t floor_tilt_corrections_{0};
+  std::size_t floor_tilt_correction_failures_{0};
+  std::size_t dropped_floor_unstable_count_{0};
+  std::size_t global_outlier_filter_runs_{0};
+  std::size_t global_outlier_points_removed_{0};
+  std::size_t structural_cloud_publish_count_{0};
+  std::size_t last_structural_cloud_points_{0};
+  double last_structural_cloud_duration_ms_{0.0};
   double last_observed_floor_z_{0.0};
   double last_floor_residual_m_{0.0};
   double last_floor_correction_m_{0.0};
+  double last_floor_tilt_rad_{0.0};
+  double last_floor_residual_tilt_rad_{0.0};
+  double last_floor_tilt_correction_rad_{0.0};
   double floor_stabilization_bias_m_{0.0};
+  bool floor_stabilization_initialized_{false};
   std::size_t pcd_export_count_{0};
   bool autosave_completed_{false};
   std::string last_pcd_export_path_;
@@ -510,6 +551,8 @@ private:
   double last_motion_vertical_speed_{0.0};
   double last_motion_tilt_rate_{0.0};
   double last_motion_odom_age_sec_{0.0};
+  double last_motion_roll_rad_{0.0};
+  double last_motion_pitch_rad_{0.0};
   std::string last_scan_drop_reason_{"none"};
   std::optional<rclcpp::Time> last_status_stamp_;
   std::size_t last_status_scans_seen_{0};

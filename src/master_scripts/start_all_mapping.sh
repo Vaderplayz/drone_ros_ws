@@ -24,6 +24,7 @@ SUBMAP_PARAMS_FILE="${SUBMAP_PARAMS_FILE:-${ROS_WS}/src/submap_slam_2d/config/re
 SUBMAP_MAP_TOPIC="${SUBMAP_MAP_TOPIC:-/submap_slam/map}"
 SUBMAP_DIAGNOSTICS_TOPIC="${SUBMAP_DIAGNOSTICS_TOPIC:-/submap_slam/diagnostics}"
 GLOBAL_CLOUD_TOPIC="${GLOBAL_CLOUD_TOPIC:-/mapping/global_cloud}"
+STRUCTURAL_CLOUD_TOPIC="${STRUCTURAL_CLOUD_TOPIC:-/mapping/structural_cloud}"
 LOCAL_OBSTACLE_CLOUD_TOPIC="${LOCAL_OBSTACLE_CLOUD_TOPIC:-/mapping/local_obstacle_cloud}"
 HORIZONTAL_SCAN_TOPIC="${HORIZONTAL_SCAN_TOPIC:-/scan_slam}"
 ENABLE_SPATIAL_AWARENESS="${ENABLE_SPATIAL_AWARENESS:-1}"
@@ -45,6 +46,7 @@ MAPPING_3D_REQUIRE_2D_MAP="${MAPPING_3D_REQUIRE_2D_MAP:-1}"
 MAPPING_3D_ENABLE_MAP_REBASE="${MAPPING_3D_ENABLE_MAP_REBASE:-false}"
 MAPPING_3D_ENABLE_RELATIVE_POSE_GATE="${MAPPING_3D_ENABLE_RELATIVE_POSE_GATE:-false}"
 MAPPING_3D_ENABLE_SCAN_MATCHING="${MAPPING_3D_ENABLE_SCAN_MATCHING:-false}"
+MAPPING_3D_ENABLE_STRUCTURAL_CLOUD="${MAPPING_3D_ENABLE_STRUCTURAL_CLOUD:-true}"
 MAPPING_3D_SCAN_MATCHING_DROP_ON_FAILURE="${MAPPING_3D_SCAN_MATCHING_DROP_ON_FAILURE:-true}"
 
 RUN_STAMP="$(date +%Y%m%d_%H%M%S)"
@@ -306,6 +308,8 @@ main() {
     LOCAL_OBSTACLE_CLOUD_TOPIC="${LOCAL_OBSTACLE_CLOUD_TOPIC}" \
     ENABLE_SPATIAL_AWARENESS="${ENABLE_SPATIAL_AWARENESS}" \
     GLOBAL_CLOUD_TOPIC="${GLOBAL_CLOUD_TOPIC}" \
+    STRUCTURAL_CLOUD_TOPIC="${STRUCTURAL_CLOUD_TOPIC}" \
+    ENABLE_STRUCTURAL_CLOUD="${MAPPING_3D_ENABLE_STRUCTURAL_CLOUD}" \
     ENABLE_MAP_REBASE="${MAPPING_3D_ENABLE_MAP_REBASE}" \
     ENABLE_RELATIVE_POSE_GATE="${MAPPING_3D_ENABLE_RELATIVE_POSE_GATE}" \
     ENABLE_SCAN_MATCHING="${MAPPING_3D_ENABLE_SCAN_MATCHING}" \
@@ -314,14 +318,17 @@ main() {
     AUTO_SAVE_3D_MAP_ON_EXIT=1
   MAPPING_3D_PID="${LAST_STARTED_PID}"
   wait_for_message "${GLOBAL_CLOUD_TOPIC}" "${MAPPING_3D_WAIT_SEC}" reliable "${MAPPING_3D_PID}"
+  if [[ "${MAPPING_3D_ENABLE_STRUCTURAL_CLOUD}" == "true" ]]; then
+    wait_for_message "${STRUCTURAL_CLOUD_TOPIC}" "${MAPPING_3D_WAIT_SEC}" reliable "${MAPPING_3D_PID}"
+  fi
   if [[ "${ENABLE_SPATIAL_AWARENESS}" == "1" ]]; then
     wait_for_message "${LOCAL_OBSTACLE_CLOUD_TOPIC}" "${MAPPING_3D_WAIT_SEC}" best_effort "${MAPPING_3D_PID}"
   fi
 
   if [[ "${ENABLE_SUBMAP_SLAM}" == "1" ]]; then
-    log "ALL READY: fusion + 2D SLAM + enhanced submap SLAM + odom-frame 3D mapping + local spatial awareness"
+    log "ALL READY: fusion + 2D SLAM + enhanced submap SLAM + odom-frame 3D mapping + structural room cloud + local spatial awareness"
   else
-    log "ALL READY: fusion + 2D SLAM + odom-frame 3D mapping + local spatial awareness"
+    log "ALL READY: fusion + 2D SLAM + odom-frame 3D mapping + structural room cloud + local spatial awareness"
   fi
   log "Ctrl+C saves 3D PCD/GLB first, then 2D YAML/PGM/PNG"
   log "Runtime logs: ${LOG_DIR} and each child launcher's runtime_logs directory"
