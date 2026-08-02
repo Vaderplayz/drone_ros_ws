@@ -1,0 +1,83 @@
+submap_slam_2d:
+  ros__parameters:
+    use_sim_time: false
+    scan_topic: /scan_slam
+    full_odom_topic: /mavros/local_position/odom
+    odom_frame: odom
+    base_frame: base_footprint
+    map_frame: submap_map
+    publish_map_to_odom_tf: false
+
+    min_range_m: 0.20
+    max_range_m: 8.0
+    global_map_publish_hz: 1.0
+    diagnostics_publish_hz: 1.0
+
+    submap:
+      resolution: 0.05
+      size_x_m: 20.0
+      size_y_m: 20.0
+      max_scans: 60
+      max_duration_sec: 6.0
+      max_translation_m: 2.0
+      max_yaw_rad: 1.0472
+      overlap_ratio: 0.50
+      max_completed_submaps: 200
+      occupied_log_odds: 0.85
+      free_log_odds: -0.40
+      occupied_threshold: 0.50
+
+    local_match:
+      min_points: 60
+      point_stride: 3
+      coarse_xy_window_m: 0.15
+      coarse_xy_step_m: 0.05
+      coarse_yaw_window_rad: 0.12
+      coarse_yaw_step_rad: 0.03
+      distance_sigma_m: 0.10
+      min_score: 0.30
+      max_rmse_m: 0.25
+      max_translation_correction_m: 0.35
+      max_yaw_correction_rad: 0.25
+      huber_scale_m: 0.10
+      odom_translation_weight: 2.0
+      odom_yaw_weight: 2.0
+      max_iterations: 20
+
+    registration:
+      point_stride: 2
+      min_points: 100
+      max_rmse_m: 0.20
+      min_inlier_ratio: 0.30
+      max_translation_correction_m: 0.75
+      max_yaw_correction_rad: 0.35
+      coarse_xy_window_m: 0.75
+      coarse_xy_step_m: 0.10
+      coarse_yaw_window_rad: 0.35
+      coarse_yaw_step_rad: 0.05
+
+    loop:
+      angular_bins: 60
+      radial_bins: 20
+      search_radius_m: 8.0
+      descriptor_min_similarity: 0.65
+      min_points: 150
+      max_rmse_m: 0.15
+      min_inlier_ratio: 0.40
+      max_translation_correction_m: 3.0
+      max_yaw_correction_rad: 1.2
+      min_index_separation: 5
+      max_closures_per_submap: 1
+      coarse_xy_window_m: 3.0
+      coarse_xy_step_m: 0.20
+      coarse_yaw_window_rad: 1.2
+      coarse_yaw_step_rad: 0.10
+
+    graph:
+      optimize_every_submap: true
+      max_iterations: 40
+      odom_translation_stddev_m: 0.20
+      odom_yaw_stddev_rad: 0.15
+      registration_translation_stddev_m: 0.10
+      registration_yaw_stddev_rad: 0.08
+      loop_huber_scale: 1.0

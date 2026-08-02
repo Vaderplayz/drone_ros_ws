@@ -17,10 +17,13 @@ find_package(diagnostic_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(std_msgs REQUIRED)
+find_package(visualization_msgs REQUIRED)
 find_package(message_filters REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2_sensor_msgs REQUIRED)
+find_package(tf2_geometry_msgs REQUIRED)
 find_package(laser_geometry REQUIRED)
 find_package(pcl_conversions REQUIRED)
 find_package(PCL REQUIRED COMPONENTS common filters io kdtree registration)
@@ -74,10 +77,28 @@ target_link_libraries(scan_frame_override_node PUBLIC
   sensor_msgs::sensor_msgs_library
 )
 
+add_executable(spatial_awareness_node
+  src/spatial_awareness_node.cpp
+)
+target_link_libraries(spatial_awareness_node PUBLIC
+  rclcpp::rclcpp
+  ${diagnostic_msgs_TARGETS}
+  ${sensor_msgs_TARGETS}
+  sensor_msgs::sensor_msgs_library
+  ${nav_msgs_TARGETS}
+  ${geometry_msgs_TARGETS}
+  ${std_msgs_TARGETS}
+  ${visualization_msgs_TARGETS}
+  tf2::tf2
+  ${tf2_ros_TARGETS}
+  ${tf2_geometry_msgs_TARGETS}
+)
+
 install(TARGETS
   vertical_lidar_mapper_node
   odom_to_tf_bridge_node
   scan_frame_override_node
+  spatial_awareness_node
   DESTINATION lib/${PROJECT_NAME}
 )
 
@@ -85,7 +106,7 @@ install(DIRECTORY include/
   DESTINATION include
 )
 
-install(DIRECTORY launch config
+install(DIRECTORY launch config rviz docs
   DESTINATION share/${PROJECT_NAME}
 )
 
@@ -97,12 +118,23 @@ ament_export_dependencies(
   sensor_msgs
   nav_msgs
   geometry_msgs
+  std_msgs
+  visualization_msgs
   message_filters
   tf2
   tf2_ros
   tf2_sensor_msgs
+  tf2_geometry_msgs
   laser_geometry
   pcl_conversions
 )
+
+if(BUILD_TESTING)
+  find_package(ament_cmake_gtest REQUIRED)
+  ament_add_gtest(spatial_awareness_geometry_test
+    test/spatial_awareness_geometry_test.cpp
+  )
+  target_include_directories(spatial_awareness_geometry_test PUBLIC include)
+endif()
 
 ament_package()

@@ -67,18 +67,20 @@ Then start lidar2 3D mapping:
 ./src/master_scripts/start_real_3d_mapping_lidar2.sh
 ```
 
-The real launcher seeds poses from `odom`; single-scan ICP is experimental and
-disabled by default because a vertical 2D scan is planar-degenerate. Use RViz
-Fixed Frame `map` to display the default cloud through `map -> odom`. When the
-experiment is explicitly enabled, corrected keyframes use `vertical_map` and
-the TF chain becomes `map -> odom -> vertical_map`.
+Both real launchers accumulate in `odom`. Single-scan ICP remains disabled
+because a vertical 2D scan is planar-degenerate, and global cloud rebasing
+remains disabled so ordinary 2D SLAM corrections do not move stored 3D points.
+RViz can still display the odom-frame cloud together with the occupancy map by
+using the available `map -> odom` transform.
 
 Floor stabilization is flight-safe and non-blocking in the real profile.
 MAVROS odometry carries real altitude changes. A reliable floor observation is
 applied immediately so the persistent map does not preserve intermediate
 correction heights. When the floor is unavailable or rejected, the current
 correction is held and scans continue to integrate. This prevents altitude
-motion from pausing mapping or removing a yaw sector.
+motion from pausing mapping or removing a yaw sector. The real profile anchors
+the corrected floor at `z=0`, so it coincides with the 2D occupancy-map plane
+in RViz.
 
 When MAVROS and AprilTag already run at boot, start odom-only 3D accumulation
 without lidar1, RF2O, or 2D SLAM:
@@ -221,8 +223,16 @@ Use `map` as the fixed frame for the default flow. Add:
 - PointCloud2: `/vertical_points_deskewed` (current deskewed scan in lidar frame)
 - PointCloud2: `/vertical_map`
 - PointCloud2: `/mapping/global_cloud`
+- PointCloud2: `/mapping/local_obstacle_cloud`
+- MarkerArray: `/mapping/spatial_awareness/markers`
 - LaserScan: `/scan_vertical`
 - TF: `/tf` and `/tf_static`
+
+The supplied `spatial_awareness.rviz` config includes the global cloud, local
+cloud, physical/propeller collision volume, safety volume, six direction
+states, and nearest obstacle markers. See
+`vertical_lidar_mapper/docs/spatial_awareness_validation.md` for the room and
+doorway acceptance test.
 
 The real C1 profile currently favors stability over detail: `voxel_leaf=0.10`,
 `global_voxel_leaf_size=0.05`, keyframes at `0.05 m` or `0.04 rad` motion (or

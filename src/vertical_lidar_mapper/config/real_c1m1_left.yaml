@@ -49,6 +49,8 @@ vertical_lidar_mapper:
     floor_stabilization_percentile: 0.10
     floor_stabilization_band_m: 0.08
     floor_stabilization_min_points: 30
+    # Match the physical floor to the z=0 plane used by the 2D occupancy map.
+    floor_stabilization_target_z_m: 0.0
     # Indoor flight may require a large correction when MAVROS Z drifts. The
     # 30-point floor-band check is the confidence gate; accepted corrections
     # are applied immediately so intermediate Z layers are never accumulated.
@@ -172,3 +174,69 @@ vertical_lidar_mapper:
     structural_mesh_max_quads: 250000
 
     debug: false
+
+spatial_awareness:
+  ros__parameters:
+    use_sim_time: false
+
+    # The vertical mapper publishes full-pose deskewed scans in odom on
+    # /vertical_cloud. The horizontal scan is optional and may disappear
+    # without stopping this node.
+    horizontal_scan_topic: "/scan_slam"
+    vertical_scan_topic: "/scan_vertical"
+    vertical_cloud_topic: "/vertical_cloud"
+    odom_topic: "/mavros/local_position/odom"
+    horizontal_scan_stamp_reference: "end"
+    fixed_frame: "odom"
+    base_frame: "base_footprint"
+
+    local_cloud_topic: "/mapping/local_obstacle_cloud"
+    marker_topic: "/mapping/spatial_awareness/markers"
+    diagnostics_topic: "/mapping/spatial_awareness/status"
+
+    # Recent observations remain in odom internally, then are transformed to
+    # the current base_footprint pose. All queues and clouds have hard caps.
+    local_radius_m: 5.0
+    rolling_window_sec: 0.8
+    sensor_stale_timeout_sec: 0.6
+    odom_stale_timeout_sec: 0.35
+    pending_message_timeout_sec: 0.5
+    odom_interpolation_max_gap_sec: 0.12
+    odom_nearest_sample_tolerance_sec: 0.06
+    input_processing_hz: 50.0
+    local_cloud_publish_hz: 10.0
+    diagnostics_publish_hz: 2.0
+    local_voxel_size_m: 0.05
+    min_obstacle_range_m: 0.08
+    max_obstacle_range_m: 12.0
+    max_pending_messages: 8
+    max_messages_per_cycle: 4
+    max_observations: 32
+    max_points_per_observation: 5000
+    max_buffered_points: 80000
+    max_local_points: 30000
+    marker_lifetime_sec: 0.35
+
+    # Measure these values on the aircraft before flight testing. The physical
+    # X/Y collision span is the larger of the body and propeller-tip spans.
+    collision_center_x_m: 0.0
+    collision_center_y_m: 0.0
+    collision_center_z_offset_m: 0.0
+    drone_body_length_m: 0.45
+    drone_body_width_m: 0.35
+    drone_body_height_m: 0.22
+    propeller_tip_to_tip_length_m: 0.75
+    propeller_tip_to_tip_width_m: 0.75
+    self_filter_padding_m: 0.04
+
+    # Safety margins are also the WARNING thresholds. DANGER uses the smaller
+    # margins below. Distances are measured from the physical collision box.
+    horizontal_safety_margin_m: 0.40
+    vertical_safety_margin_m: 0.30
+    horizontal_danger_margin_m: 0.15
+    vertical_danger_margin_m: 0.12
+
+    # Lidar1 covers the horizontal plane. With the measured lidar2 mounting,
+    # its vertical scan plane covers left/right and top/bottom.
+    horizontal_sensor_directions: ["front", "rear", "left", "right"]
+    vertical_sensor_directions: ["left", "right", "top", "bottom"]

@@ -19,7 +19,14 @@ FUSION_BRIDGE_DIAGNOSTICS_TOPIC="${FUSION_BRIDGE_DIAGNOSTICS_TOPIC:-/lidar_odom_
 PX4_ODOMETRY_OUT_TOPIC="${PX4_ODOMETRY_OUT_TOPIC:-/mavros/odometry/out}"
 PX4_ODOM_TOPIC="${PX4_ODOM_TOPIC:-/mavros/local_position/odom}"
 MAP_TOPIC="${MAP_TOPIC:-/map}"
+ENABLE_SUBMAP_SLAM="${ENABLE_SUBMAP_SLAM:-1}"
+SUBMAP_PARAMS_FILE="${SUBMAP_PARAMS_FILE:-${ROS_WS}/src/submap_slam_2d/config/real_rf2o_submap.yaml}"
+SUBMAP_MAP_TOPIC="${SUBMAP_MAP_TOPIC:-/submap_slam/map}"
+SUBMAP_DIAGNOSTICS_TOPIC="${SUBMAP_DIAGNOSTICS_TOPIC:-/submap_slam/diagnostics}"
 GLOBAL_CLOUD_TOPIC="${GLOBAL_CLOUD_TOPIC:-/mapping/global_cloud}"
+LOCAL_OBSTACLE_CLOUD_TOPIC="${LOCAL_OBSTACLE_CLOUD_TOPIC:-/mapping/local_obstacle_cloud}"
+HORIZONTAL_SCAN_TOPIC="${HORIZONTAL_SCAN_TOPIC:-/scan_slam}"
+ENABLE_SPATIAL_AWARENESS="${ENABLE_SPATIAL_AWARENESS:-1}"
 ODOM_FRAME="${ODOM_FRAME:-odom}"
 BASE_FRAME="${BASE_FRAME:-base_footprint}"
 MAP_FRAME="${MAP_FRAME:-map}"
@@ -30,8 +37,11 @@ MAPPING_2D_WAIT_SEC="${MAPPING_2D_WAIT_SEC:-180}"
 MAPPING_3D_WAIT_SEC="${MAPPING_3D_WAIT_SEC:-120}"
 CHILD_STOP_TIMEOUT_SEC="${CHILD_STOP_TIMEOUT_SEC:-50}"
 REQUIRE_PX4_BRIDGE_OUTPUT="${REQUIRE_PX4_BRIDGE_OUTPUT:-0}"
+# Stability-first architecture: the vertical mapper always accumulates in the
+# continuous odom frame. RViz may transform the result through map->odom, but
+# ordinary SLAM corrections never move already integrated 3D points.
 MAPPING_3D_TARGET_FRAME="${MAPPING_3D_TARGET_FRAME:-${ODOM_FRAME}}"
-MAPPING_3D_REQUIRE_2D_MAP="${MAPPING_3D_REQUIRE_2D_MAP:-0}"
+MAPPING_3D_REQUIRE_2D_MAP="${MAPPING_3D_REQUIRE_2D_MAP:-1}"
 MAPPING_3D_ENABLE_MAP_REBASE="${MAPPING_3D_ENABLE_MAP_REBASE:-false}"
 MAPPING_3D_ENABLE_RELATIVE_POSE_GATE="${MAPPING_3D_ENABLE_RELATIVE_POSE_GATE:-false}"
 MAPPING_3D_ENABLE_SCAN_MATCHING="${MAPPING_3D_ENABLE_SCAN_MATCHING:-false}"
@@ -196,6 +206,13 @@ validate_environment() {
     "${MAPPING_3D_REQUIRE_2D_MAP}" != "1" ]]; then
     fail "MAPPING_3D_REQUIRE_2D_MAP must be 0 or 1"
   fi
+  if [[ "${ENABLE_SPATIAL_AWARENESS}" != "0" &&
+    "${ENABLE_SPATIAL_AWARENESS}" != "1" ]]; then
+    fail "ENABLE_SPATIAL_AWARENESS must be 0 or 1"
+  fi
+  if [[ "${ENABLE_SUBMAP_SLAM}" != "0" && "${ENABLE_SUBMAP_SLAM}" != "1" ]]; then
+    fail "ENABLE_SUBMAP_SLAM must be 0 or 1"
+  fi
   if [[ "${MAPPING_3D_ENABLE_MAP_REBASE}" != "true" &&
     "${MAPPING_3D_ENABLE_MAP_REBASE}" != "false" ]]; then
     fail "MAPPING_3D_ENABLE_MAP_REBASE must be true or false"
@@ -262,12 +279,21 @@ main() {
     SOURCE_SCAN_TOPIC="${FUSION_SCAN_TOPIC}" \
     ODOM_TOPIC="${PX4_ODOM_TOPIC}" \
     MAP_TOPIC="${MAP_TOPIC}" \
+    ENABLE_SUBMAP_SLAM="${ENABLE_SUBMAP_SLAM}" \
+    SUBMAP_PARAMS_FILE="${SUBMAP_PARAMS_FILE}" \
+    SUBMAP_MAP_TOPIC="${SUBMAP_MAP_TOPIC}" \
+    SUBMAP_DIAGNOSTICS_TOPIC="${SUBMAP_DIAGNOSTICS_TOPIC}" \
     MAP_FRAME="${MAP_FRAME}" \
     ODOM_FRAME="${ODOM_FRAME}" \
     BASE_FRAME="${BASE_FRAME}"
   MAPPING_2D_PID="${LAST_STARTED_PID}"
   wait_for_message "${MAP_TOPIC}" "${MAPPING_2D_WAIT_SEC}" reliable "${MAPPING_2D_PID}"
   wait_for_transform "${MAP_FRAME}" "${ODOM_FRAME}" "${MAPPING_2D_WAIT_SEC}" "${MAPPING_2D_PID}"
+  if [[ "${ENABLE_SUBMAP_SLAM}" == "1" ]]; then
+    wait_for_message "${SUBMAP_DIAGNOSTICS_TOPIC}" "${MAPPING_2D_WAIT_SEC}" reliable "${MAPPING_2D_PID}"
+    wait_for_message "${SUBMAP_MAP_TOPIC}" "${MAPPING_2D_WAIT_SEC}" reliable "${MAPPING_2D_PID}"
+    log "Enhanced 2D submap mapper ready on ${SUBMAP_MAP_TOPIC}"
+  fi
 
   log "Starting 3D accumulation in ${MAPPING_3D_TARGET_FRAME}; RViz can transform it into ${MAP_FRAME}"
   start_launcher "3D mapping" "${MAPPING_3D_SCRIPT}" \
@@ -276,6 +302,9 @@ main() {
     MAP_FRAME="${MAP_FRAME}" \
     ODOM_FRAME="${ODOM_FRAME}" \
     BASE_FRAME="${BASE_FRAME}" \
+    HORIZONTAL_SCAN_TOPIC="${HORIZONTAL_SCAN_TOPIC}" \
+    LOCAL_OBSTACLE_CLOUD_TOPIC="${LOCAL_OBSTACLE_CLOUD_TOPIC}" \
+    ENABLE_SPATIAL_AWARENESS="${ENABLE_SPATIAL_AWARENESS}" \
     GLOBAL_CLOUD_TOPIC="${GLOBAL_CLOUD_TOPIC}" \
     ENABLE_MAP_REBASE="${MAPPING_3D_ENABLE_MAP_REBASE}" \
     ENABLE_RELATIVE_POSE_GATE="${MAPPING_3D_ENABLE_RELATIVE_POSE_GATE}" \
@@ -285,8 +314,15 @@ main() {
     AUTO_SAVE_3D_MAP_ON_EXIT=1
   MAPPING_3D_PID="${LAST_STARTED_PID}"
   wait_for_message "${GLOBAL_CLOUD_TOPIC}" "${MAPPING_3D_WAIT_SEC}" reliable "${MAPPING_3D_PID}"
+  if [[ "${ENABLE_SPATIAL_AWARENESS}" == "1" ]]; then
+    wait_for_message "${LOCAL_OBSTACLE_CLOUD_TOPIC}" "${MAPPING_3D_WAIT_SEC}" best_effort "${MAPPING_3D_PID}"
+  fi
 
-  log "ALL READY: fusion + 2D SLAM + vertical-lidar 3D mapping"
+  if [[ "${ENABLE_SUBMAP_SLAM}" == "1" ]]; then
+    log "ALL READY: fusion + 2D SLAM + enhanced submap SLAM + odom-frame 3D mapping + local spatial awareness"
+  else
+    log "ALL READY: fusion + 2D SLAM + odom-frame 3D mapping + local spatial awareness"
+  fi
   log "Ctrl+C saves 3D PCD/GLB first, then 2D YAML/PGM/PNG"
   log "Runtime logs: ${LOG_DIR} and each child launcher's runtime_logs directory"
 

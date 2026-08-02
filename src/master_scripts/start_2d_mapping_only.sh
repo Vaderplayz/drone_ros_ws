@@ -10,9 +10,13 @@ ROS_SETUP="${ROS_SETUP:-${ROS_WS}/install/setup.bash}"
 USE_SIM_TIME="${USE_SIM_TIME:-false}"
 
 SLAM_PARAMS_FILE="${SLAM_PARAMS_FILE:-${ROS_WS}/src/obs_avoid/config/slam2d_real_1lidar.yaml}"
+ENABLE_SUBMAP_SLAM="${ENABLE_SUBMAP_SLAM:-1}"
+SUBMAP_PARAMS_FILE="${SUBMAP_PARAMS_FILE:-${ROS_WS}/src/submap_slam_2d/config/real_rf2o_submap.yaml}"
 SOURCE_SCAN_TOPIC="${SOURCE_SCAN_TOPIC:-/scan_rf2o}"
 SCAN_TOPIC="${SCAN_TOPIC:-/scan_slam}"
 SCAN_DIAGNOSTICS_TOPIC="${SCAN_DIAGNOSTICS_TOPIC:-/scan_slam/diagnostics}"
+SUBMAP_MAP_TOPIC="${SUBMAP_MAP_TOPIC:-/submap_slam/map}"
+SUBMAP_DIAGNOSTICS_TOPIC="${SUBMAP_DIAGNOSTICS_TOPIC:-/submap_slam/diagnostics}"
 ODOM_TOPIC="${ODOM_TOPIC:-/mavros/local_position/odom}"
 MAP_TOPIC="${MAP_TOPIC:-/map}"
 MAP_FRAME="${MAP_FRAME:-map}"
@@ -33,6 +37,7 @@ MASTER_LOG="${LOG_DIR}/master.log"
 DESKEW_LOG="${LOG_DIR}/scan_deskew.log"
 DESKEW_HEALTH_CSV="${LOG_DIR}/scan_deskew_health.csv"
 SLAM_LOG="${LOG_DIR}/slam_toolbox.log"
+SUBMAP_SLAM_LOG="${LOG_DIR}/submap_slam_2d.log"
 SNAPSHOT_FILE="${LOG_DIR}/system_snapshot.txt"
 MAP_SAVE_DIR="${MAP_SAVE_DIR:-${ROS_WS}/maps}"
 AUTO_SAVE_2D_MAP_ON_EXIT="${AUTO_SAVE_2D_MAP_ON_EXIT:-1}"
@@ -49,6 +54,7 @@ PIDS=()
 NAMES=()
 DESKEW_PID=""
 SLAM_PID=""
+SUBMAP_SLAM_PID=""
 LAST_STARTED_PID=""
 LOCK_ACQUIRED=0
 SHUTDOWN_REASON="normal exit"
@@ -107,6 +113,12 @@ validate_launcher_settings() {
       log_error "USE_SIM_TIME must be exactly true or false, got '${USE_SIM_TIME}'"
       return 1 ;;
   esac
+  case "${ENABLE_SUBMAP_SLAM}" in
+    0|1) ;;
+    *)
+      log_error "ENABLE_SUBMAP_SLAM must be 0 or 1, got '${ENABLE_SUBMAP_SLAM}'"
+      return 1 ;;
+  esac
   for value in "${INPUT_WAIT_SEC}" "${MAP_WAIT_SEC}" "${PROCESS_STOP_TIMEOUT_SEC}" \
     "${MAX_INPUT_AGE_SEC}" "${MAX_INPUT_STAMP_DELTA_SEC}"; do
     if [[ ! "${value}" =~ ^[1-9][0-9]*$ ]]; then
@@ -115,7 +127,7 @@ validate_launcher_settings() {
     fi
   done
   for topic in "${SOURCE_SCAN_TOPIC}" "${SCAN_TOPIC}" "${SCAN_DIAGNOSTICS_TOPIC}" \
-    "${ODOM_TOPIC}" "${MAP_TOPIC}"; do
+    "${ODOM_TOPIC}" "${MAP_TOPIC}" "${SUBMAP_MAP_TOPIC}" "${SUBMAP_DIAGNOSTICS_TOPIC}"; do
     if [[ ! "${topic}" =~ ^/[A-Za-z0-9_/]+$ || "${topic}" == *//* ||
       "${topic}" == */ ]]; then
       log_error "invalid absolute ROS topic name '${topic}'"
@@ -167,6 +179,17 @@ validate_launcher_settings() {
   fi
   if ! ros2 pkg prefix nav2_map_server >/dev/null 2>&1; then
     log_warning "nav2_map_server is unavailable; live mapping works but map_saver_cli will not"
+  fi
+  if [[ "${ENABLE_SUBMAP_SLAM}" == "1" ]]; then
+    if [[ ! -f "${SUBMAP_PARAMS_FILE}" ]]; then
+      log_error "submap SLAM configuration is missing: ${SUBMAP_PARAMS_FILE}"
+      return 1
+    fi
+    if ! ros2 pkg executables submap_slam_2d 2>/dev/null | \
+      grep -q '^submap_slam_2d submap_slam_2d_node$'; then
+      log_error "submap_slam_2d is enabled but its node is unavailable; rebuild the workspace"
+      return 1
+    fi
   fi
   log_started "launcher inputs and installed ROS interfaces validated"
 }
@@ -516,7 +539,7 @@ verify_no_control_publishers_added() {
   if (( changed == 0 )); then
     log_started "no flight-control or planner publishers added"
   else
-    log_warning "mapping launcher still owns only slam_toolbox; inspect independently changed control publishers"
+    log_warning "mapping launcher owns only mapping observers; inspect independently changed control publishers"
   fi
 }
 
@@ -531,6 +554,10 @@ require_clean_mapping_namespace() {
     log_error "an unowned /mapping_scan_deskew node is already running"
     return 1
   fi
+  if [[ "${ENABLE_SUBMAP_SLAM}" == "1" ]] && grep -qx '/submap_slam_2d' <<<"${nodes}"; then
+    log_error "an unowned /submap_slam_2d node is already running"
+    return 1
+  fi
   if [[ "$(publisher_count "${SCAN_TOPIC}")" != "0" ]]; then
     log_error "${SCAN_TOPIC} already has a publisher; refusing a second deskew source"
     ros2 topic info "${SCAN_TOPIC}" -v 2>/dev/null || true
@@ -539,6 +566,12 @@ require_clean_mapping_namespace() {
   if [[ "$(publisher_count "${MAP_TOPIC}")" != "0" ]]; then
     log_error "${MAP_TOPIC} already has a publisher; refusing a second map source"
     ros2 topic info "${MAP_TOPIC}" -v 2>/dev/null || true
+    return 1
+  fi
+  if [[ "${ENABLE_SUBMAP_SLAM}" == "1" ]] && \
+    [[ "$(publisher_count "${SUBMAP_MAP_TOPIC}")" != "0" ]]; then
+    log_error "${SUBMAP_MAP_TOPIC} already has a publisher; refusing a second submap mapper"
+    ros2 topic info "${SUBMAP_MAP_TOPIC}" -v 2>/dev/null || true
     return 1
   fi
   existing_map_tf="$(timeout 3 ros2 run tf2_ros tf2_echo \
@@ -646,6 +679,26 @@ start_slam() {
   SLAM_PID="${LAST_STARTED_PID}"
 }
 
+start_submap_slam() {
+  [[ "${ENABLE_SUBMAP_SLAM}" == "1" ]] || return 0
+  start_process submap_slam_2d "${SUBMAP_SLAM_LOG}" \
+    ros2 launch submap_slam_2d submap_slam_2d.launch.py \
+      params_file:="${SUBMAP_PARAMS_FILE}" use_sim_time:="${USE_SIM_TIME}" \
+      scan_topic:="${SCAN_TOPIC}" full_odom_topic:="${ODOM_TOPIC}" \
+      odom_frame:="${ODOM_FRAME}" base_frame:="${BASE_FRAME}" \
+      map_topic:="${SUBMAP_MAP_TOPIC}" diagnostics_topic:="${SUBMAP_DIAGNOSTICS_TOPIC}"
+  SUBMAP_SLAM_PID="${LAST_STARTED_PID}"
+}
+
+wait_for_submap_map() {
+  [[ "${ENABLE_SUBMAP_SLAM}" == "1" ]] || return 0
+  wait_for_message "${SUBMAP_DIAGNOSTICS_TOPIC}" "${MAP_WAIT_SEC}" reliable \
+    "${SUBMAP_SLAM_PID}" "${SUBMAP_SLAM_LOG}"
+  wait_for_message "${SUBMAP_MAP_TOPIC}" "${MAP_WAIT_SEC}" reliable \
+    "${SUBMAP_SLAM_PID}" "${SUBMAP_SLAM_LOG}"
+  log_started "enhanced 2D submap occupancy map ${SUBMAP_MAP_TOPIC}"
+}
+
 wait_for_map() {
   local start elapsed last_progress=-1
   start="$(date +%s)"
@@ -695,6 +748,14 @@ write_snapshot() {
     timeout 5 ros2 topic echo "${SCAN_DIAGNOSTICS_TOPIC}" --once || true
     printf '\n-- slam node --\n'
     timeout 5 ros2 node info /slam_toolbox || true
+    if [[ "${ENABLE_SUBMAP_SLAM}" == "1" ]]; then
+      printf '\n-- enhanced submap SLAM node --\n'
+      timeout 5 ros2 node info /submap_slam_2d || true
+      printf '\n-- enhanced submap diagnostics --\n'
+      timeout 5 ros2 topic echo "${SUBMAP_DIAGNOSTICS_TOPIC}" --once || true
+      printf '\n-- enhanced submap map topic --\n'
+      timeout 5 ros2 topic info "${SUBMAP_MAP_TOPIC}" -v || true
+    fi
     printf '\n-- map topic --\n'
     timeout 5 ros2 topic info "${MAP_TOPIC}" -v || true
     printf '\n-- scan topic --\n'
@@ -748,7 +809,7 @@ main() {
   validate_launcher_settings
 
   log "Independent observer-only 2D mapping startup"
-  log "This launcher will only start mapping scan deskew and slam_toolbox"
+  log "This launcher starts mapping scan deskew, slam_toolbox, and enhanced submap SLAM"
   log "It will not manage RF2O/PX4 fusion, MAVROS, LiDAR, camera, AprilTag, planner, or flight control"
 
   acquire_mapping_lock
@@ -772,7 +833,9 @@ main() {
   start_deskew
   verify_live_timestamp_domain "${SCAN_TOPIC}"
   start_slam
+  start_submap_slam
   wait_for_map
+  wait_for_submap_map
   wait_for_transform "${MAP_FRAME}" "${ODOM_FRAME}" "${INPUT_WAIT_SEC}"
   wait_for_transform "${MAP_FRAME}" "${LIDAR_FRAME}" "${INPUT_WAIT_SEC}"
   validate_slam_node
@@ -784,15 +847,19 @@ main() {
   log "On Ctrl+C, autosave writes ${MAP_SAVE_DIR}/${MAP_SAVE_PREFIX}_${RUN_STAMP}.yaml/.pgm/.png"
   log "Runtime logs: ${LOG_DIR}"
 
-  while process_group_alive "${SLAM_PID}" && process_group_alive "${DESKEW_PID}"; do
+  while process_group_alive "${SLAM_PID}" && process_group_alive "${DESKEW_PID}" && \
+    { [[ "${ENABLE_SUBMAP_SLAM}" == "0" ]] || process_group_alive "${SUBMAP_SLAM_PID}"; }; do
     sleep 2
   done
   if ! process_group_alive "${DESKEW_PID}"; then
     SHUTDOWN_REASON="mapping scan deskew exited unexpectedly"
     tail -n 40 "${DESKEW_LOG}" 2>/dev/null || true
-  else
+  elif ! process_group_alive "${SLAM_PID}"; then
     SHUTDOWN_REASON="slam_toolbox exited unexpectedly"
     tail -n 40 "${SLAM_LOG}" 2>/dev/null || true
+  else
+    SHUTDOWN_REASON="enhanced submap SLAM exited unexpectedly"
+    tail -n 60 "${SUBMAP_SLAM_LOG}" 2>/dev/null || true
   fi
   log_error "${SHUTDOWN_REASON}"
   return 1

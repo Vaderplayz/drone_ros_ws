@@ -321,6 +321,7 @@ private:
   double floor_stabilization_percentile_{0.10};
   double floor_stabilization_band_m_{0.08};
   int floor_stabilization_min_points_{30};
+  double floor_stabilization_target_z_m_{0.0};
   double floor_stabilization_max_correction_m_{0.25};
   bool drop_scan_on_floor_stabilization_failure_{true};
 

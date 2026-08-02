@@ -11,8 +11,9 @@ The RF2O/PX4 fusion launcher must already provide:
 - `odom -> base_footprint`;
 - `base_footprint -> laser_frame`.
 
-The mapping-only launcher starts and owns a scan deskew node and `slam_toolbox`. The deskew
-node uses the existing timestamped TF history and publishes:
+The mapping-only launcher starts and owns a scan deskew node, `slam_toolbox`,
+and the enhanced submap mapper. The deskew node uses the existing timestamped
+TF history and publishes:
 
 - `/scan_slam`, a motion-corrected mapping scan;
 - `/scan_slam/diagnostics`;
@@ -22,6 +23,15 @@ node uses the existing timestamped TF history and publishes:
 - `/map`;
 - `map -> odom`;
 - standard `slam_toolbox` mapping services and diagnostics.
+
+The enhanced mapper consumes the same `/scan_slam` stream and publishes:
+
+- `/submap_slam/map`, the self-aligned submap occupancy map;
+- `/submap_slam/local_map` and `/submap_slam/trajectory`;
+- `/submap_slam/diagnostics`.
+
+It runs by default but does not replace slam_toolbox as the `map -> odom` TF
+authority. Set `ENABLE_SUBMAP_SLAM=0` only for a comparison or diagnostic run.
 
 It does not start or stop RF2O, the PX4 odometry bridge, MAVROS, RPLIDAR,
 the camera, AprilTag nodes, a planner, obstacle avoidance, or any flight-control
@@ -68,6 +78,9 @@ Use `map` as the fixed frame and add:
 - Odometry: `/mavros/local_position/odom` (`nav_msgs/msg/Odometry`)
 - TF: `/tf` and `/tf_static`
 
+To inspect the enhanced result independently, use `submap_map` as the fixed
+frame and add Map topic `/submap_slam/map`.
+
 ## Save
 
 On `Ctrl+C`, the launcher automatically saves the current `/map` occupancy
@@ -99,6 +112,6 @@ AUTO_SAVE_2D_MAP_ON_EXIT=0 ./src/master_scripts/start_2d_mapping_only.sh
 
 ## Stop
 
-Press `Ctrl+C` in the mapping terminal. Only the mapping-owned deskew and `slam_toolbox`
-process groups are stopped after autosave. The RF2O/PX4 fusion pipeline
-continues running.
+Press `Ctrl+C` in the mapping terminal. Only the mapping-owned deskew,
+`slam_toolbox`, and submap mapper process groups are stopped after autosave.
+The RF2O/PX4 fusion pipeline continues running.

@@ -49,6 +49,11 @@ DESKEWED_CLOUD_TOPIC="${DESKEWED_CLOUD_TOPIC:-/vertical_points_deskewed}"
 VERTICAL_MAP_TOPIC="${VERTICAL_MAP_TOPIC:-/vertical_map}"
 GLOBAL_CLOUD_TOPIC="${GLOBAL_CLOUD_TOPIC:-/mapping/global_cloud}"
 MAPPING_STATUS_TOPIC="${MAPPING_STATUS_TOPIC:-/mapping/status}"
+ENABLE_SPATIAL_AWARENESS="${ENABLE_SPATIAL_AWARENESS:-1}"
+HORIZONTAL_SCAN_TOPIC="${HORIZONTAL_SCAN_TOPIC:-/scan_slam}"
+LOCAL_OBSTACLE_CLOUD_TOPIC="${LOCAL_OBSTACLE_CLOUD_TOPIC:-/mapping/local_obstacle_cloud}"
+SPATIAL_MARKER_TOPIC="${SPATIAL_MARKER_TOPIC:-/mapping/spatial_awareness/markers}"
+SPATIAL_STATUS_TOPIC="${SPATIAL_STATUS_TOPIC:-/mapping/spatial_awareness/status}"
 EXPORT_DIR="${EXPORT_DIR:-${ROS_WS}/maps/vertical_3d}"
 RECORD_VERTICAL_BAG="${RECORD_VERTICAL_BAG:-0}"
 AUTO_SAVE_3D_MAP_ON_EXIT="${AUTO_SAVE_3D_MAP_ON_EXIT:-1}"
@@ -69,6 +74,7 @@ MASTER_LOG="${LOG_DIR}/master.log"
 LIDAR2_LOG="${LOG_DIR}/sllidar2.log"
 STATIC_TF_LOG="${LOG_DIR}/lidar2_static_tf.log"
 MAPPER_LOG="${LOG_DIR}/vertical_lidar_mapper.log"
+SPATIAL_AWARENESS_LOG="${LOG_DIR}/spatial_awareness.log"
 ROSBAG_LOG="${LOG_DIR}/vertical_mapping_bag.log"
 SNAPSHOT_FILE="${LOG_DIR}/system_snapshot.txt"
 
@@ -313,8 +319,13 @@ validate_settings() {
         ;;
     esac
   done
+  if [[ "${ENABLE_SPATIAL_AWARENESS}" != "0" && "${ENABLE_SPATIAL_AWARENESS}" != "1" ]]; then
+    log_error "ENABLE_SPATIAL_AWARENESS must be 0 or 1"
+    return 1
+  fi
   for topic in "${LIDAR2_SCAN_TOPIC}" "${DESKEWED_CLOUD_TOPIC}" "${VERTICAL_CLOUD_TOPIC}" "${VERTICAL_MAP_TOPIC}" \
-    "${GLOBAL_CLOUD_TOPIC}" "${MAPPING_STATUS_TOPIC}" "${PX4_ODOM_TOPIC}"; do
+    "${GLOBAL_CLOUD_TOPIC}" "${MAPPING_STATUS_TOPIC}" "${PX4_ODOM_TOPIC}" "${HORIZONTAL_SCAN_TOPIC}" \
+    "${LOCAL_OBSTACLE_CLOUD_TOPIC}" "${SPATIAL_MARKER_TOPIC}" "${SPATIAL_STATUS_TOPIC}"; do
     if [[ ! "${topic}" =~ ^/[A-Za-z0-9_/]+$ || "${topic}" == *//* || "${topic}" == */ ]]; then
       log_error "invalid absolute ROS topic name '${topic}'"
       return 1
@@ -554,6 +565,22 @@ require_mapper_namespace_free() {
   done
 }
 
+require_spatial_awareness_namespace_free() {
+  local nodes topic count
+  nodes="$(ros2 node list 2>/dev/null || true)"
+  if grep -qx '/spatial_awareness' <<<"${nodes}"; then
+    log_error "/spatial_awareness is already running"
+    return 1
+  fi
+  for topic in "${LOCAL_OBSTACLE_CLOUD_TOPIC}" "${SPATIAL_MARKER_TOPIC}" "${SPATIAL_STATUS_TOPIC}"; do
+    count="$(publisher_count "${topic}")"
+    if [[ "${count}" != "0" ]]; then
+      log_error "${topic} already has ${count} publisher(s); refusing a duplicate spatial-awareness node"
+      return 1
+    fi
+  done
+}
+
 start_mapper() {
   local pid
   mkdir -p "${EXPORT_DIR}"
@@ -587,6 +614,31 @@ start_mapper() {
   wait_for_message "${GLOBAL_CLOUD_TOPIC}" "${POINTCLOUD_WAIT_SEC}" reliable "${pid}" "${MAPPER_LOG}"
 }
 
+start_spatial_awareness() {
+  local pid
+  if [[ "${ENABLE_SPATIAL_AWARENESS}" != "1" ]]; then
+    log_warning "spatial-awareness layer disabled by ENABLE_SPATIAL_AWARENESS=${ENABLE_SPATIAL_AWARENESS}"
+    return 0
+  fi
+  require_spatial_awareness_namespace_free
+  start_process spatial_awareness "${SPATIAL_AWARENESS_LOG}" \
+    ros2 run vertical_lidar_mapper spatial_awareness_node --ros-args \
+      --params-file "${MAPPER_PARAMS_FILE}" \
+      -p use_sim_time:="${USE_SIM_TIME}" \
+      -p horizontal_scan_topic:="${HORIZONTAL_SCAN_TOPIC}" \
+      -p vertical_scan_topic:="${LIDAR2_SCAN_TOPIC}" \
+      -p vertical_cloud_topic:="${VERTICAL_CLOUD_TOPIC}" \
+      -p odom_topic:="${PX4_ODOM_TOPIC}" \
+      -p fixed_frame:="${ODOM_FRAME}" \
+      -p base_frame:="${BASE_FRAME}" \
+      -p local_cloud_topic:="${LOCAL_OBSTACLE_CLOUD_TOPIC}" \
+      -p marker_topic:="${SPATIAL_MARKER_TOPIC}" \
+      -p diagnostics_topic:="${SPATIAL_STATUS_TOPIC}"
+  pid="${LAST_STARTED_PID}"
+  wait_for_message "${LOCAL_OBSTACLE_CLOUD_TOPIC}" "${POINTCLOUD_WAIT_SEC}" best_effort "${pid}" "${SPATIAL_AWARENESS_LOG}"
+  wait_for_message "${SPATIAL_STATUS_TOPIC}" "${POINTCLOUD_WAIT_SEC}" reliable "${pid}" "${SPATIAL_AWARENESS_LOG}"
+}
+
 start_vertical_bag() {
   if [[ "${RECORD_VERTICAL_BAG}" != "1" ]]; then
     return 0
@@ -595,6 +647,7 @@ start_vertical_bag() {
     ros2 bag record -o "${LOG_DIR}/vertical_mapping_bag" \
       "${LIDAR2_SCAN_TOPIC}" "${DESKEWED_CLOUD_TOPIC}" "${VERTICAL_CLOUD_TOPIC}" "${VERTICAL_MAP_TOPIC}" \
       "${GLOBAL_CLOUD_TOPIC}" "${MAPPING_STATUS_TOPIC}" "${PX4_ODOM_TOPIC}" \
+      "${HORIZONTAL_SCAN_TOPIC}" "${LOCAL_OBSTACLE_CLOUD_TOPIC}" "${SPATIAL_MARKER_TOPIC}" "${SPATIAL_STATUS_TOPIC}" \
       /map /tf /tf_static
 }
 
@@ -609,7 +662,8 @@ write_snapshot() {
       "${LIDAR2_X}" "${LIDAR2_Y}" "${LIDAR2_Z}" "${LIDAR2_ROLL}" "${LIDAR2_PITCH}" "${LIDAR2_YAW}"
     printf 'mapper_params=%s\nexport_dir=%s\n' "${MAPPER_PARAMS_FILE}" "${EXPORT_DIR}"
     for topic in "${LIDAR2_SCAN_TOPIC}" "${DESKEWED_CLOUD_TOPIC}" "${VERTICAL_CLOUD_TOPIC}" "${VERTICAL_MAP_TOPIC}" \
-      "${GLOBAL_CLOUD_TOPIC}" "${MAPPING_STATUS_TOPIC}"; do
+      "${GLOBAL_CLOUD_TOPIC}" "${MAPPING_STATUS_TOPIC}" "${LOCAL_OBSTACLE_CLOUD_TOPIC}" \
+      "${SPATIAL_MARKER_TOPIC}" "${SPATIAL_STATUS_TOPIC}"; do
       printf '\n-- %s --\n' "${topic}"
       ros2 topic info "${topic}" -v || true
     done
@@ -617,6 +671,12 @@ write_snapshot() {
     timeout 5 ros2 topic echo "${MAPPING_STATUS_TOPIC}" --once || true
     printf '\n-- mapper node --\n'
     timeout 5 ros2 node info /vertical_lidar_mapper || true
+    if [[ "${ENABLE_SPATIAL_AWARENESS}" == "1" ]]; then
+      printf '\n-- spatial awareness status --\n'
+      timeout 5 ros2 topic echo "${SPATIAL_STATUS_TOPIC}" --once || true
+      printf '\n-- spatial awareness node --\n'
+      timeout 5 ros2 node info /spatial_awareness || true
+    fi
     printf '\n-- TF checks --\n'
     timeout 5 ros2 run tf2_ros tf2_echo "${BASE_FRAME}" "${LIDAR2_FRAME_ID}" || true
     timeout 5 ros2 run tf2_ros tf2_echo "${TARGET_FRAME}" "${LIDAR2_FRAME_ID}" || true
@@ -684,10 +744,12 @@ main() {
   wait_for_transform "${TARGET_FRAME}" "${LIDAR2_FRAME_ID}" "${WAIT_TIMEOUT_SEC}"
   start_vertical_bag
   start_mapper
+  start_spatial_awareness
   write_snapshot
   ready_banner
 
   log "Export service: ros2 service call /vertical_lidar_mapper/save_pcd std_srvs/srv/Trigger '{}'"
+  log "Spatial awareness: ${LOCAL_OBSTACLE_CLOUD_TOPIC}, ${SPATIAL_STATUS_TOPIC}, ${SPATIAL_MARKER_TOPIC}"
   log "On Ctrl+C, autosave requests one PCD/GLB asset set in ${EXPORT_DIR}"
   log "Runtime logs: ${LOG_DIR}"
   log "No PX4 parameter, arm, mode, movement, or setpoint command was sent"
@@ -701,12 +763,6 @@ main() {
         return 1
       fi
     done
-    if [[ "${EXTERNAL_LIDAR2}" == "1" ]]; then
-      wait_for_message "${LIDAR2_SCAN_TOPIC}" 5 best_effort >/dev/null || {
-        SHUTDOWN_REASON="external lidar2 scan stream stopped"
-        return 1
-      }
-    fi
     sleep 2
   done
 }

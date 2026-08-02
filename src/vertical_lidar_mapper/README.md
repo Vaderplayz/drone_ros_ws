@@ -23,6 +23,13 @@ ROS 2 (Humble/Rolling) package for building a rolling 3D point cloud map from a 
   rate-limits it with `local_map_publish_hz`
 - Publishes bounded global cloud map on `/mapping/global_cloud`
 - Publishes mapper diagnostics on `/mapping/status`
+- Publishes a bounded rolling local obstacle cloud on
+  `/mapping/local_obstacle_cloud`, combining fresh horizontal and vertical
+  observations in `base_footprint`
+- Publishes physical/propeller collision volume, safety volume, six direction
+  states, and nearest-obstacle RViz markers
+- Reports CLEAR/WARNING/DANGER/UNKNOWN surface-relative clearances and sensor
+  ages on `/mapping/spatial_awareness/status`
 - Provides on-demand export service on `/vertical_lidar_mapper/save_pcd` for:
   - global 3D cloud (`.pcd`)
   - compact height-aware structural model (`.glb`)
@@ -49,6 +56,8 @@ ROS 2 (Humble/Rolling) package for building a rolling 3D point cloud map from a 
   a reliable floor observation is applied immediately so intermediate Z layers
   are not accumulated, while a missing or rejected observation retains the
   previous correction and never pauses scan integration.
+- Anchors the real-profile floor to `z=0`, matching the 2D occupancy-map plane
+  instead of retaining an arbitrary MAVROS odometry height.
 - Compares SLAM-relative motion vs odom-relative motion and drops inconsistent global integration (`enable_relative_pose_gate`)
 - Rebuilds accumulated points on `map->odom` corrections to reduce loop-closure double walls (`enable_map_rebase`)
 - Supports `integration_mode`:
@@ -149,6 +158,12 @@ ros2 run tf2_ros tf2_echo base_link lidar_vert_link
 
 ## RViz2
 
+For the complete global/local/collision view:
+
+```bash
+rviz2 -d "$(ros2 pkg prefix vertical_lidar_mapper)/share/vertical_lidar_mapper/rviz/spatial_awareness.rviz"
+```
+
 - Fixed Frame: `odom` (or `map` if you set `target_frame:=map`)
 - Add `PointCloud2` display for `/vertical_cloud`
 - Add `PointCloud2` display for `/vertical_points_deskewed` to inspect the
@@ -161,6 +176,9 @@ RViz transforms it through `map -> odom`. The experimental scan matcher instead
 publishes the cloud in `vertical_map` and adds `odom -> vertical_map`.
 `/mapping/global_cloud` publishing at 3 Hz is only the display refresh rate;
 check `keyframe_creation_rate_hz` for actual integration throughput.
+
+See `docs/spatial_awareness_validation.md` for collision dimensions, live
+diagnostics, stale-sensor behavior, and the stationary room/doorway test.
 
 If messages drop:
 - Missing TF in chain `target_frame -> base_link -> lidar frame`
@@ -194,7 +212,7 @@ If map appears doubled/shifted after revisit with `target_frame:=map`:
   - `integration_mode`, `keyframes_total`
   - `integrated_pose_yaw_current_deg`, `integrated_pose_yaw_travel_deg`,
     `integrated_pose_yaw_coverage_deg`
-  - `floor_residual_m`, `floor_correction_m`,
+  - `floor_stabilization_target_z_m`, `floor_residual_m`, `floor_correction_m`,
     `floor_stabilization_corrections`, `floor_stabilization_rejections`
   - `rebuild_count`, `rebuild_last_duration_ms`, `rebuild_freeze_remaining_scans`
   - `map_rebase_count`, `last_map_rebase_translation_m`

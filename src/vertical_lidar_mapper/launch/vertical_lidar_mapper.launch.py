@@ -16,6 +16,9 @@ def generate_launch_description():
     params_file = LaunchConfiguration('params_file')
     scan_topic = LaunchConfiguration('scan_topic')
     target_frame = LaunchConfiguration('target_frame')
+    enable_spatial_awareness = LaunchConfiguration('enable_spatial_awareness')
+    horizontal_scan_topic = LaunchConfiguration('horizontal_scan_topic')
+    local_obstacle_cloud_topic = LaunchConfiguration('local_obstacle_cloud_topic')
 
     # Vertical scan frame override
     enable_scan_frame_override = LaunchConfiguration('enable_scan_frame_override')
@@ -95,6 +98,26 @@ def generate_launch_description():
         ],
     )
 
+    spatial_awareness_node = Node(
+        package='vertical_lidar_mapper',
+        executable='spatial_awareness_node',
+        name='spatial_awareness',
+        output='screen',
+        condition=IfCondition(enable_spatial_awareness),
+        parameters=[
+            params_file,
+            {
+                'use_sim_time': use_sim_time,
+                'horizontal_scan_topic': horizontal_scan_topic,
+                'vertical_scan_topic': scan_topic,
+                'fixed_frame': target_frame,
+                'base_frame': lidar_parent_frame,
+                'local_cloud_topic': local_obstacle_cloud_topic,
+                'odom_topic': odom_topic,
+            },
+        ],
+    )
+
     odom_tf_bridge_node = Node(
         package='vertical_lidar_mapper',
         executable='odom_to_tf_bridge_node',
@@ -133,7 +156,13 @@ def generate_launch_description():
         DeclareLaunchArgument('use_sim_time', default_value='true'),
 
         DeclareLaunchArgument('scan_topic', default_value='/scan_vertical'),
-        DeclareLaunchArgument('target_frame', default_value='map'),
+        DeclareLaunchArgument('target_frame', default_value='odom'),
+        DeclareLaunchArgument('enable_spatial_awareness', default_value='true'),
+        DeclareLaunchArgument('horizontal_scan_topic', default_value='/scan_slam'),
+        DeclareLaunchArgument(
+            'local_obstacle_cloud_topic',
+            default_value='/mapping/local_obstacle_cloud',
+        ),
 
         DeclareLaunchArgument('enable_scan_frame_override', default_value='false'),
         DeclareLaunchArgument('scan_raw_topic', default_value='/scan_vertical_raw'),
@@ -166,6 +195,7 @@ def generate_launch_description():
         scan_override_node,
         horizontal_scan_override_node,
         mapper_node,
+        spatial_awareness_node,
         odom_tf_bridge_node,
         static_lidar_tf_node,
     ])

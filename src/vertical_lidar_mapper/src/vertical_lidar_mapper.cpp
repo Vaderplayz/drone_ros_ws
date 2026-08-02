@@ -302,11 +302,12 @@ VerticalLidarMapper::VerticalLidarMapper(const rclcpp::NodeOptions & options)
     target_frame_.c_str());
   RCLCPP_INFO(
     this->get_logger(),
-    "Floor stabilization: %s (percentile=%.2f band=%.2fm min_points=%d max_correction=%.2fm drop_failure=%s).",
+    "Floor stabilization: %s (percentile=%.2f band=%.2fm min_points=%d target_z=%.2fm max_correction=%.2fm drop_failure=%s).",
     enable_floor_stabilization_ ? "enabled" : "disabled",
     floor_stabilization_percentile_,
     floor_stabilization_band_m_,
     floor_stabilization_min_points_,
+    floor_stabilization_target_z_m_,
     floor_stabilization_max_correction_m_,
     drop_scan_on_floor_stabilization_failure_ ? "true" : "false");
   const std::string save_service_name = this->get_fully_qualified_name() + std::string("/save_pcd");
@@ -395,6 +396,8 @@ void VerticalLidarMapper::loadParameters()
     this->declare_parameter<double>("floor_stabilization_band_m", 0.08);
   floor_stabilization_min_points_ =
     this->declare_parameter<int>("floor_stabilization_min_points", 30);
+  floor_stabilization_target_z_m_ =
+    this->declare_parameter<double>("floor_stabilization_target_z_m", 0.0);
   floor_stabilization_max_correction_m_ =
     this->declare_parameter<double>("floor_stabilization_max_correction_m", 0.25);
   drop_scan_on_floor_stabilization_failure_ =
@@ -747,6 +750,12 @@ void VerticalLidarMapper::loadParameters()
     RCLCPP_WARN(
       this->get_logger(),
       "Parameter 'floor_stabilization_min_points' <= 0, defaulting to 30.");
+  }
+  if (!std::isfinite(floor_stabilization_target_z_m_)) {
+    floor_stabilization_target_z_m_ = 0.0;
+    RCLCPP_WARN(
+      this->get_logger(),
+      "Parameter 'floor_stabilization_target_z_m' is not finite, defaulting to 0.0.");
   }
   if (floor_stabilization_max_correction_m_ <= 0.0) {
     floor_stabilization_max_correction_m_ = 0.25;
@@ -3069,6 +3078,9 @@ void VerticalLidarMapper::publishStatus()
   add_kv("floor_points_dropped", std::to_string(floor_points_dropped_));
   add_kv("floor_stabilization_enabled", enable_floor_stabilization_ ? "true" : "false");
   add_kv(
+    "floor_stabilization_target_z_m",
+    to_string_with_precision(floor_stabilization_target_z_m_, 3));
+  add_kv(
     "floor_reference_z_m",
     floor_reference_z_.has_value() ?
     to_string_with_precision(floor_reference_z_.value(), 3) : "unset");
@@ -3518,12 +3530,14 @@ void VerticalLidarMapper::processScan(
     } else {
       last_observed_floor_z_ = observed_floor_z;
       if (!floor_reference_z_.has_value()) {
-        floor_reference_z_ = observed_floor_z;
+        floor_reference_z_ = floor_stabilization_target_z_m_;
         RCLCPP_INFO(
           this->get_logger(),
-          "Initialized floor stabilization reference at z=%.3fm in frame '%s'.",
+          "Initialized floor stabilization target at z=%.3fm in frame '%s' "
+          "(first observed floor z=%.3fm).",
           floor_reference_z_.value(),
-          target_frame_.c_str());
+          target_frame_.c_str(),
+          observed_floor_z);
       }
 
       if (floor_reference_z_.has_value()) {
@@ -3535,7 +3549,7 @@ void VerticalLidarMapper::processScan(
             this->get_logger(),
             *this->get_clock(),
             1000,
-            "%s vertical scan floor residual %.3fm exceeds %.3fm; retaining filtered bias %.3fm.",
+            "%s vertical scan floor residual %.3fm exceeds %.3fm; retaining current bias %.3fm.",
             drop_scan_on_floor_stabilization_failure_ ? "Dropping" : "Ignoring",
             desired_bias,
             floor_stabilization_max_correction_m_,

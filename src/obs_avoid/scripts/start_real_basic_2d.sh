@@ -11,6 +11,7 @@ LIDAR_MODE="${LIDAR_MODE:-px4_fusion}"
 START_LIDAR_PX4_BRIDGE="${START_LIDAR_PX4_BRIDGE:-1}"
 START_RF2O_OBSERVER="${START_RF2O_OBSERVER:-0}"
 START_SLAM_IN_RF2O_VALIDATION="${START_SLAM_IN_RF2O_VALIDATION:-1}"
+ENABLE_SUBMAP_SLAM="${ENABLE_SUBMAP_SLAM:-1}"
 RECORD_LIDAR_DIAGNOSTIC_BAG="${RECORD_LIDAR_DIAGNOSTIC_BAG:-${RECORD_BAG:-1}}"
 
 WAIT_TIMEOUT_SEC="${WAIT_TIMEOUT_SEC:-60}"
@@ -57,6 +58,7 @@ DESKEW_STAMP_POLICY="${DESKEW_STAMP_POLICY:-end}"
 DESKEW_TIMEOUT_SEC="${DESKEW_TIMEOUT_SEC:-0.35}"
 
 SLAM_PARAMS_FILE="${SLAM_PARAMS_FILE:-${ROS_WS}/src/obs_avoid/config/slam2d_real_1lidar.yaml}"
+SUBMAP_PARAMS_FILE="${SUBMAP_PARAMS_FILE:-${ROS_WS}/src/submap_slam_2d/config/real_rf2o_submap.yaml}"
 PLANNER_PARAMS_FILE="${PLANNER_PARAMS_FILE:-${ROS_WS}/src/obs_avoid/config/local_planner_mode_a_real_safe.yaml}"
 LIDAR_MONITOR_PARAMS_FILE="${LIDAR_MONITOR_PARAMS_FILE:-${ROS_WS}/src/obs_avoid/config/lidar_odom_px4_bridge.yaml}"
 RF2O_PARAMS_FILE="${RF2O_PARAMS_FILE:-${ROS_WS}/src/obs_avoid/config/rf2o_real_a1m8.yaml}"
@@ -80,6 +82,7 @@ RF2O_LOG="${LOG_DIR}/rf2o.log"
 LIDAR_ODOM_MONITOR_LOG="${LOG_DIR}/lidar_odom_monitor.log"
 LIDAR_ODOM_HEALTH_CSV="${LOG_DIR}/lidar_odom_health.csv"
 SLAM_LOG="${LOG_DIR}/slam_toolbox.log"
+SUBMAP_SLAM_LOG="${LOG_DIR}/submap_slam_2d.log"
 ODOM_FLATTEN_LOG="${LOG_DIR}/odom_flatten.log"
 STATIC_TF_LOG="${LOG_DIR}/static_tf.log"
 PLANNER_LOG="${LOG_DIR}/planner.log"
@@ -92,7 +95,7 @@ TF_HEALTH_CSV="${LOG_DIR}/tf_health.csv"
 
 COMPONENTS=(
   MAVROS RPLIDAR RAW_SCAN ODOM_FLATTEN STATIC_TF SCAN_AUDIT CANONICALIZER
-  CANONICAL_SCAN RF2O RF2O_MONITOR SLAM MAP PLANNER PX4_BRIDGE
+  CANONICAL_SCAN RF2O RF2O_MONITOR SLAM MAP SUBMAP_SLAM PLANNER PX4_BRIDGE
 )
 PIDS=()
 NAMES=()
@@ -122,6 +125,9 @@ startup_ready_components() {
     MAVROS RPLIDAR RAW_SCAN ODOM_FLATTEN STATIC_TF SCAN_AUDIT
     CANONICALIZER CANONICAL_SCAN SLAM MAP PLANNER
   )
+  if [[ "${ENABLE_SUBMAP_SLAM}" == "1" ]]; then
+    required+=(SUBMAP_SLAM)
+  fi
   if [[ "${LIDAR_MODE}" == "px4_fusion" ]]; then
     required+=(RF2O RF2O_MONITOR PX4_BRIDGE)
   elif [[ "${START_RF2O_OBSERVER}" == "1" ]]; then
@@ -249,7 +255,7 @@ require_no_duplicate_processes() {
   local patterns=(
     '[l]aser_scan_stream_audit' '[l]aser_scan_canonicalizer'
     '[r]f2o_laser_odometry_node' '[l]idar_odom_monitor' '[a]sync_slam_toolbox_node'
-    '[p]x4_odom_flatten_node' '[l]idar_odom_px4_bridge'
+    '[s]ubmap_slam_2d_node' '[p]x4_odom_flatten_node' '[l]idar_odom_px4_bridge'
   )
   for pattern in "${patterns[@]}"; do
     output="$(pgrep -af "${pattern}" 2>/dev/null || true)"
@@ -879,6 +885,32 @@ start_slam() {
   fi
 }
 
+start_submap_slam() {
+  if [[ "${ENABLE_SUBMAP_SLAM}" != "1" ]]; then
+    set_component_state SUBMAP_SLAM STOPPED "disabled_by_environment"
+    return 0
+  fi
+
+  set_component_state SUBMAP_SLAM STARTING "scan=${RF2O_SCAN_TOPIC}"
+  start_process submap_slam_2d "${SUBMAP_SLAM_LOG}" \
+    ros2 launch submap_slam_2d submap_slam_2d.launch.py \
+      params_file:="${SUBMAP_PARAMS_FILE}" use_sim_time:="${USE_SIM_TIME}" \
+      scan_topic:="${RF2O_SCAN_TOPIC}" full_odom_topic:="${ODOM_TOPIC}" \
+      odom_frame:="${ODOM_PARENT_FRAME}" base_frame:="${BASE_FRAME}"
+  SUBMAP_SLAM_PID="${LAST_STARTED_PID}"
+  if wait_for_map_message_alive /submap_slam/map "${SUBMAP_SLAM_PID}" \
+    "${WAIT_TIMEOUT_SEC}" "${SUBMAP_SLAM_LOG}"; then
+    set_component_state SUBMAP_SLAM READY "map=/submap_slam/map"
+  else
+    if kill -0 "${SUBMAP_SLAM_PID}" 2>/dev/null; then
+      set_component_state SUBMAP_SLAM DEGRADED "alive_without_map"
+    else
+      set_component_state SUBMAP_SLAM FAILED "process_exited"
+    fi
+    return 1
+  fi
+}
+
 start_planner() {
   if [[ "${COMPONENT_STATE[MAP]}" != "READY" ]]; then
     set_component_state PLANNER STOPPED "map_not_ready"
@@ -1107,7 +1139,8 @@ main() {
     "${RAW_SCAN_AUDIT_CSV}" "${CANONICALIZER_LOG}" "${CANONICAL_SCAN_HEALTH_CSV}" \
     "${RF2O_LOG}" "${LIDAR_ODOM_MONITOR_LOG}" "${LIDAR_ODOM_HEALTH_CSV}" \
     "${SLAM_LOG}" "${ODOM_FLATTEN_LOG}" "${STATIC_TF_LOG}" "${PLANNER_LOG}" \
-    "${CONSOLE_LOG}" "${PX4_BRIDGE_LOG}" "${PX4_BRIDGE_HEALTH_CSV}" "${ROSBAG_LOG}"
+    "${SUBMAP_SLAM_LOG}" "${CONSOLE_LOG}" "${PX4_BRIDGE_LOG}" \
+    "${PX4_BRIDGE_HEALTH_CSV}" "${ROSBAG_LOG}"
   printf 'timestamp,process,pid,cpu_percent,memory_percent,rss_kb,alive\n' >"${PROCESS_HEALTH_CSV}"
   printf 'timestamp,odom_to_base_available,base_to_laser_available,map_to_odom_available,base_x,base_y,base_yaw_deg\n' \
     >"${TF_HEALTH_CSV}"
@@ -1127,6 +1160,10 @@ main() {
     mapping_only|rf2o_validation|px4_fusion) ;;
     *) log "ERROR unsupported LIDAR_MODE=${LIDAR_MODE}"; exit 1 ;;
   esac
+  if [[ "${ENABLE_SUBMAP_SLAM}" != "0" && "${ENABLE_SUBMAP_SLAM}" != "1" ]]; then
+    log "ERROR ENABLE_SUBMAP_SLAM must be 0 or 1"
+    exit 1
+  fi
   if [[ "${LIDAR_MODE}" == "px4_fusion" && "${START_LIDAR_PX4_BRIDGE}" != "1" ]]; then
     log "WARNING LIDAR_MODE=px4_fusion forces START_LIDAR_PX4_BRIDGE=1"
     START_LIDAR_PX4_BRIDGE="1"
@@ -1149,6 +1186,13 @@ main() {
   source /opt/ros/jazzy/setup.bash
   source "${ROS_SETUP}"
   set -u
+  if [[ "${ENABLE_SUBMAP_SLAM}" == "1" ]]; then
+    if [[ ! -f "${SUBMAP_PARAMS_FILE}" ]] || \
+      ! ros2 pkg prefix submap_slam_2d >/dev/null 2>&1; then
+      log "ERROR enhanced submap SLAM is enabled but its config/package is unavailable"
+      exit 1
+    fi
+  fi
   {
     printf '[%s] independent LiDAR mapping/RF2O run\n' "$(timestamp)"
     printf 'workspace=%s\nlidar_mode=%s\ngit_branch=%s\ngit_commit=%s\n' \
@@ -1184,6 +1228,7 @@ main() {
 
   if [[ "${LIDAR_MODE}" == "mapping_only" ]]; then
     if start_slam; then
+      start_submap_slam || true
       start_planner || true
     fi
     if [[ "${START_RF2O_OBSERVER}" == "1" ]]; then
@@ -1195,15 +1240,20 @@ main() {
   elif [[ "${LIDAR_MODE}" == "rf2o_validation" ]]; then
     start_rf2o_stack || log "DEGRADED_RF2O: validation nodes remain available for diagnostics"
     if [[ "${START_SLAM_IN_RF2O_VALIDATION}" == "1" ]]; then
-      start_slam || true
+      if start_slam; then
+        start_submap_slam || true
+      fi
     else
       set_component_state SLAM STOPPED "disabled_in_rf2o_validation"
       set_component_state MAP STOPPED "disabled_in_rf2o_validation"
+      set_component_state SUBMAP_SLAM STOPPED "slam_disabled_in_rf2o_validation"
     fi
     set_component_state PLANNER STOPPED "not_used_in_rf2o_validation"
   else
     start_rf2o_stack || log "DEGRADED_RF2O: PX4 bridge will remain gated"
-    start_slam || true
+    if start_slam; then
+      start_submap_slam || true
+    fi
     start_planner || true
   fi
   if [[ "${LIDAR_MODE}" == "px4_fusion" ]]; then
