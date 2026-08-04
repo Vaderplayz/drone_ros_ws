@@ -1,0 +1,8 @@
+[1;32m[2026-07-26T20:58:30+0700] STARTED launcher inputs and installed ROS interfaces validated[0m
+[2026-07-26T20:58:30+0700] Independent observer-only 2D mapping startup
+[2026-07-26T20:58:30+0700] This launcher will only start mapping scan deskew and slam_toolbox
+[2026-07-26T20:58:30+0700] It will not manage RF2O/PX4 fusion, MAVROS, LiDAR, camera, AprilTag, planner, or flight control
+[1;31m[2026-07-26T20:58:31+0700] ERROR an unowned /slam_toolbox node is already running[0m
+[2026-07-26T20:58:31+0700] Shutdown reason: normal exit; launcher_exit=1
+[1;33m[2026-07-26T20:58:31+0700] WARNING 2D map autosave skipped because slam_toolbox is not running[0m
+[2026-07-26T20:58:31+0700] RF2O/PX4 fusion, MAVROS, LiDAR, camera, AprilTag, and flight control were not stopped

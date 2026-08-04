@@ -184,6 +184,11 @@ public:
     publish_world_cmd_ = declare_parameter<bool>("publish_world_cmd", true);
     publish_rollout_path_ = declare_parameter<bool>("publish_rollout_path", true);
     rollout_path_frame_ = declare_parameter<std::string>("rollout_path_frame", "base_link");
+    input_timeout_sec_ = declare_parameter<double>("input_timeout_sec", 0.35);
+    allow_collision_radius_relaxation_ =
+        declare_parameter<bool>("allow_collision_radius_relaxation", true);
+    enable_wall_follow_fallback_ =
+        declare_parameter<bool>("enable_wall_follow_fallback", true);
 
     // -------- ROS I/O --------
     auto qos_sensor = rclcpp::SensorDataQoS();
@@ -193,11 +198,17 @@ public:
 
     sub_odom_ = create_subscription<nav_msgs::msg::Odometry>(
         "/mavros/local_position/odom", qos_sensor,
-        [this](nav_msgs::msg::Odometry::SharedPtr msg){ odom_ = *msg; });
+        [this](nav_msgs::msg::Odometry::SharedPtr msg){
+          odom_ = *msg;
+          last_odom_receive_ = now();
+        });
 
     sub_scan_ = create_subscription<sensor_msgs::msg::LaserScan>(
         "/scan_horizontal", qos_sensor,
-        [this](sensor_msgs::msg::LaserScan::SharedPtr msg){ scan_ = *msg; });
+        [this](sensor_msgs::msg::LaserScan::SharedPtr msg){
+          scan_ = *msg;
+          last_scan_receive_ = now();
+        });
 
     sub_goal_ = create_subscription<geometry_msgs::msg::Point>(
         "/drone_goal", qos_goal,
@@ -301,7 +312,7 @@ private:
     Candidate best = evaluate_window(vx_lo, vx_hi, vy_lo, vy_hi, wz_lo, wz_hi,
                                      x0, y0, yaw0, gx_plan, gy_plan, d_goal_plan, strict_collision_radius);
 
-    if (!best.valid) {
+    if (!best.valid && allow_collision_radius_relaxation_) {
       // If strict envelope finds no candidate, retry with a smaller hard-collision radius.
       const double relaxed_collision_radius = std::max(0.18, 0.80 * strict_collision_radius);
       best = evaluate_window(vx_lo, vx_hi, vy_lo, vy_hi, wz_lo, wz_hi,
@@ -332,7 +343,15 @@ private:
 
     // 4) Fallback if no valid plan: LiDAR-aware wall-follow sidestep
     if (!best.valid) {
-      run_wall_follow_fallback(scan, x0, y0, yaw0, gx_plan, gy_plan, ez);
+      if (enable_wall_follow_fallback_) {
+        run_wall_follow_fallback(scan, x0, y0, yaw0, gx_plan, gy_plan, ez);
+      } else {
+        publish_cmd(0.0, 0.0, 0.0, 0.0);
+        publish_rollout_path(x0, y0, yaw0, 0.0, 0.0, 0.0);
+        publish_debug_state(
+          "NO_SAFE_TRAJECTORY", d_goal, front.dist, left.dist, right.dist, 0.0,
+          std::numeric_limits<double>::infinity(), 0.0, 0.0, 0.0);
+      }
       return;
     }
 
@@ -360,9 +379,28 @@ private:
   }
 
   bool has_required_inputs() {
-    if (odom_ && scan_ && goal_) return true;
-    RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 2000, "Waiting for odom/scan/goal...");
-    publish_debug_state("WAIT", 0.0, 0.0, 0.0, 0.0, 0.0, std::numeric_limits<double>::infinity(),
+    const rclcpp::Time current_time = now();
+    const bool have_inputs = odom_ && scan_ && goal_ &&
+      last_odom_receive_.has_value() && last_scan_receive_.has_value();
+    const double odom_age = last_odom_receive_.has_value() ?
+      (current_time - last_odom_receive_.value()).seconds() :
+      std::numeric_limits<double>::infinity();
+    const double scan_age = last_scan_receive_.has_value() ?
+      (current_time - last_scan_receive_.value()).seconds() :
+      std::numeric_limits<double>::infinity();
+    if (have_inputs && odom_age <= input_timeout_sec_ && scan_age <= input_timeout_sec_) {
+      return true;
+    }
+
+    if (cmd_inited_) {
+      publish_cmd(0.0, 0.0, 0.0, 0.0);
+    }
+    RCLCPP_WARN_THROTTLE(
+      get_logger(), *get_clock(), 2000,
+      "Planner hold: waiting for fresh odom/scan/goal (odom_age=%.3f scan_age=%.3f timeout=%.3f).",
+      odom_age, scan_age, input_timeout_sec_);
+    publish_debug_state("WAIT_STALE", 0.0, 0.0, 0.0, 0.0, 0.0,
+                        std::numeric_limits<double>::infinity(),
                         0.0, 0.0, 0.0);
     return false;
   }
@@ -1390,12 +1428,17 @@ private:
   bool publish_world_cmd_{true};
   bool publish_rollout_path_{true};
   std::string rollout_path_frame_{"base_link"};
+  double input_timeout_sec_{0.35};
+  bool allow_collision_radius_relaxation_{true};
+  bool enable_wall_follow_fallback_{true};
 
   // state
   std::optional<nav_msgs::msg::Odometry> odom_;
   std::optional<sensor_msgs::msg::LaserScan> scan_;
   std::optional<geometry_msgs::msg::Point> goal_;
   std::optional<nav_msgs::msg::OccupancyGrid> map_;
+  std::optional<rclcpp::Time> last_odom_receive_;
+  std::optional<rclcpp::Time> last_scan_receive_;
 
   std::vector<ObPoint> obstacles_;
 

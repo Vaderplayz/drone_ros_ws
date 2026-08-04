@@ -1,0 +1,2 @@
+[INFO] [1785679331.392465778] [px4_odom_flatten_node]: Subscribed to: /mavros/local_position/odom | Publishing TF: odom -> base_footprint
+[INFO] [1785680976.169730946] [rclcpp]: signal_handler(SIGINT/SIGTERM)

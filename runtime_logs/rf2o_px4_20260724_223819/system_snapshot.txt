@@ -1,0 +1,298 @@
+timestamp=2026-07-24T22:40:18+0700
+workspace=/home/pi5drone/drone_ros_ws
+use_sim_time=false
+rplidar_port=/dev/ttyUSB0
+deskew_enabled=false
+deskew_stamp_policy=end
+
+-- /scan --
+Type: sensor_msgs/msg/LaserScan
+
+Publisher count: 1
+
+Node name: rplidar_node
+Node namespace: /
+Topic type: sensor_msgs/msg/LaserScan
+Topic type hash: RIHS01_64c191398013af96509d518dac71d5164f9382553fce5c1f8cca5be7924bd828
+Endpoint type: PUBLISHER
+GID: 01.0f.45.d4.73.17.07.57.00.00.00.00.00.00.14.03
+QoS profile:
+  Reliability: RELIABLE
+  History (Depth): UNKNOWN
+  Durability: VOLATILE
+  Lifespan: Infinite
+  Deadline: Infinite
+  Liveliness: AUTOMATIC
+  Liveliness lease duration: Infinite
+
+Subscription count: 2
+
+Node name: laser_scan_stream_audit
+Node namespace: /
+Topic type: sensor_msgs/msg/LaserScan
+Topic type hash: RIHS01_64c191398013af96509d518dac71d5164f9382553fce5c1f8cca5be7924bd828
+Endpoint type: SUBSCRIPTION
+GID: 01.0f.45.d4.7e.1b.7d.b7.00.00.00.00.00.00.15.04
+QoS profile:
+  Reliability: BEST_EFFORT
+  History (Depth): UNKNOWN
+  Durability: VOLATILE
+  Lifespan: Infinite
+  Deadline: Infinite
+  Liveliness: AUTOMATIC
+  Liveliness lease duration: Infinite
+
+Node name: laser_scan_canonicalizer
+Node namespace: /
+Topic type: sensor_msgs/msg/LaserScan
+Topic type hash: RIHS01_64c191398013af96509d518dac71d5164f9382553fce5c1f8cca5be7924bd828
+Endpoint type: SUBSCRIPTION
+GID: 01.0f.45.d4.e1.1b.18.ee.00.00.00.00.00.00.1c.04
+QoS profile:
+  Reliability: BEST_EFFORT
+  History (Depth): UNKNOWN
+  Durability: VOLATILE
+  Lifespan: Infinite
+  Deadline: Infinite
+  Liveliness: AUTOMATIC
+  Liveliness lease duration: Infinite
+
+
+-- /scan_rf2o --
+Type: sensor_msgs/msg/LaserScan
+
+Publisher count: 1
+
+Node name: laser_scan_canonicalizer
+Node namespace: /
+Topic type: sensor_msgs/msg/LaserScan
+Topic type hash: RIHS01_64c191398013af96509d518dac71d5164f9382553fce5c1f8cca5be7924bd828
+Endpoint type: PUBLISHER
+GID: 01.0f.45.d4.e1.1b.18.ee.00.00.00.00.00.00.1a.03
+QoS profile:
+  Reliability: BEST_EFFORT
+  History (Depth): UNKNOWN
+  Durability: VOLATILE
+  Lifespan: Infinite
+  Deadline: Infinite
+  Liveliness: AUTOMATIC
+  Liveliness lease duration: Infinite
+
+Subscription count: 3
+
+Node name: lidar_odom_monitor
+Node namespace: /
+Topic type: sensor_msgs/msg/LaserScan
+Topic type hash: RIHS01_64c191398013af96509d518dac71d5164f9382553fce5c1f8cca5be7924bd828
+Endpoint type: SUBSCRIPTION
+GID: 01.0f.45.d4.98.1c.8a.49.00.00.00.00.00.00.16.04
+QoS profile:
+  Reliability: BEST_EFFORT
+  History (Depth): UNKNOWN
+  Durability: VOLATILE
+  Lifespan: Infinite
+  Deadline: Infinite
+  Liveliness: AUTOMATIC
+  Liveliness lease duration: Infinite
+
+Node name: lidar_odom_px4_bridge
+Node namespace: /
+Topic type: sensor_msgs/msg/LaserScan
+Topic type hash: RIHS01_64c191398013af96509d518dac71d5164f9382553fce5c1f8cca5be7924bd828
+Endpoint type: SUBSCRIPTION
+GID: 01.0f.45.d4.9d.1d.d1.0a.00.00.00.00.00.00.1a.04
+QoS profile:
+  Reliability: BEST_EFFORT
+  History (Depth): UNKNOWN
+  Durability: VOLATILE
+  Lifespan: Infinite
+  Deadline: Infinite
+  Liveliness: AUTOMATIC
+  Liveliness lease duration: Infinite
+
+Node name: rf2o_laser_odometry
+Node namespace: /
+Topic type: sensor_msgs/msg/LaserScan
+Topic type hash: RIHS01_64c191398013af96509d518dac71d5164f9382553fce5c1f8cca5be7924bd828
+Endpoint type: SUBSCRIPTION
+GID: 01.0f.45.d4.c9.1c.95.cd.00.00.00.00.00.00.2c.04
+QoS profile:
+  Reliability: BEST_EFFORT
+  History (Depth): UNKNOWN
+  Durability: VOLATILE
+  Lifespan: Infinite
+  Deadline: Infinite
+  Liveliness: AUTOMATIC
+  Liveliness lease duration: Infinite
+
+
+-- /lidar/odom_raw --
+Type: nav_msgs/msg/Odometry
+
+Publisher count: 1
+
+Node name: rf2o_laser_odometry
+Node namespace: /
+Topic type: nav_msgs/msg/Odometry
+Topic type hash: RIHS01_3cc97dc7fb7502f8714462c526d369e35b603cfc34d946e3f2eda2766dfec6e0
+Endpoint type: PUBLISHER
+GID: 01.0f.45.d4.c9.1c.95.cd.00.00.00.00.00.00.2b.03
+QoS profile:
+  Reliability: RELIABLE
+  History (Depth): UNKNOWN
+  Durability: VOLATILE
+  Lifespan: Infinite
+  Deadline: Infinite
+  Liveliness: AUTOMATIC
+  Liveliness lease duration: Infinite
+
+Subscription count: 1
+
+Node name: lidar_odom_monitor
+Node namespace: /
+Topic type: nav_msgs/msg/Odometry
+Topic type hash: RIHS01_3cc97dc7fb7502f8714462c526d369e35b603cfc34d946e3f2eda2766dfec6e0
+Endpoint type: SUBSCRIPTION
+GID: 01.0f.45.d4.98.1c.8a.49.00.00.00.00.00.00.18.04
+QoS profile:
+  Reliability: BEST_EFFORT
+  History (Depth): UNKNOWN
+  Durability: VOLATILE
+  Lifespan: Infinite
+  Deadline: Infinite
+  Liveliness: AUTOMATIC
+  Liveliness lease duration: Infinite
+
+
+-- /lidar/odom --
+Type: nav_msgs/msg/Odometry
+
+Publisher count: 1
+
+Node name: lidar_odom_monitor
+Node namespace: /
+Topic type: nav_msgs/msg/Odometry
+Topic type hash: RIHS01_3cc97dc7fb7502f8714462c526d369e35b603cfc34d946e3f2eda2766dfec6e0
+Endpoint type: PUBLISHER
+GID: 01.0f.45.d4.98.1c.8a.49.00.00.00.00.00.00.14.03
+QoS profile:
+  Reliability: RELIABLE
+  History (Depth): UNKNOWN
+  Durability: VOLATILE
+  Lifespan: Infinite
+  Deadline: Infinite
+  Liveliness: AUTOMATIC
+  Liveliness lease duration: Infinite
+
+Subscription count: 1
+
+Node name: lidar_odom_px4_bridge
+Node namespace: /
+Topic type: nav_msgs/msg/Odometry
+Topic type hash: RIHS01_3cc97dc7fb7502f8714462c526d369e35b603cfc34d946e3f2eda2766dfec6e0
+Endpoint type: SUBSCRIPTION
+GID: 01.0f.45.d4.9d.1d.d1.0a.00.00.00.00.00.00.16.04
+QoS profile:
+  Reliability: BEST_EFFORT
+  History (Depth): UNKNOWN
+  Durability: VOLATILE
+  Lifespan: Infinite
+  Deadline: Infinite
+  Liveliness: AUTOMATIC
+  Liveliness lease duration: Infinite
+
+
+-- /mavros/odometry/out --
+Type: nav_msgs/msg/Odometry
+
+Publisher count: 1
+
+Node name: lidar_odom_px4_bridge
+Node namespace: /
+Topic type: nav_msgs/msg/Odometry
+Topic type hash: RIHS01_3cc97dc7fb7502f8714462c526d369e35b603cfc34d946e3f2eda2766dfec6e0
+Endpoint type: PUBLISHER
+GID: 01.0f.45.d4.9d.1d.d1.0a.00.00.00.00.00.00.14.03
+QoS profile:
+  Reliability: RELIABLE
+  History (Depth): UNKNOWN
+  Durability: VOLATILE
+  Lifespan: Infinite
+  Deadline: Infinite
+  Liveliness: AUTOMATIC
+  Liveliness lease duration: Infinite
+
+Subscription count: 1
+
+Node name: odometry
+Node namespace: /mavros
+Topic type: nav_msgs/msg/Odometry
+Topic type hash: RIHS01_3cc97dc7fb7502f8714462c526d369e35b603cfc34d946e3f2eda2766dfec6e0
+Endpoint type: SUBSCRIPTION
+GID: 01.0f.45.d4.d2.05.f2.71.00.00.00.00.00.03.2d.04
+QoS profile:
+  Reliability: RELIABLE
+  History (Depth): UNKNOWN
+  Durability: VOLATILE
+  Lifespan: Infinite
+  Deadline: Infinite
+  Liveliness: AUTOMATIC
+  Liveliness lease duration: Infinite
+
+
+-- LiDAR odometry diagnostics --
+header:
+  stamp:
+    sec: 1784907629
+    nanosec: 540948802
+  frame_id: ''
+status:
+- level: "\0"
+  name: lidar_odom_monitor
+  message: OK
+  hardware_id: rf2o_laser_odometry
+  values:
+  - key: valid
+    value: 'true'
+  - key: state
+    value: OK
+  - key: scan_age_sec
+    value: '0.057508'
+  - key: odom_age_sec
+    value: '0.062399'
+  - key: scan_rate_hz
+    value: '7.476583'
+  - key: rf2o_rate_hz
+    value: '8.194747'
+  - key: scan_length
+    value: '720'
+  - key: angular_coverage_ratio
+    value: '0.997222'
+  - key: finite_return_ratio
+    value: '0.920833'
+  - key: consecutive_valid_odom
+    value: '385'
+  - key: delta_translation_m
+    value: '0.000229'
+  - key: delta_yaw_deg
+    value: '0.159490'
+  - key: translation_speed_mps
+    value: '0.001696'
+  - key: yaw_rate_degps
+    value: '1.180087'
+  - key: roll_deg
+    value: '0.177653'
+  - key: pitch_deg
+    value: '1.311395'
+---
+[2026-07-24T22:40:30+0700] Shutdown reason: received signal TERM; launcher_exit=130
+[2026-07-24T22:40:30+0700] Stopping launcher-owned process group: lidar_odom_px4_bridge pgid=7559
+[2026-07-24T22:40:30+0700] Stopping launcher-owned process group: rf2o pgid=7352
+[2026-07-24T22:40:30+0700] Stopping launcher-owned process group: lidar_odom_monitor pgid=7315
+[2026-07-24T22:40:30+0700] Stopping launcher-owned process group: canonicalizer pgid=7127
+[2026-07-24T22:40:30+0700] Stopping launcher-owned process group: scan_audit pgid=7015
+[2026-07-24T22:40:30+0700] Stopping launcher-owned process group: static_lidar_tf pgid=6493
+[2026-07-24T22:40:30+0700] Stopping launcher-owned process group: odom_flatten pgid=6491
+[2026-07-24T22:40:30+0700] Stopping launcher-owned process group: rplidar pgid=5994
+[2026-07-24T22:40:35+0700] WARNING forcing stopped process group: rplidar pgid=5994
+[2026-07-24T22:40:35+0700] MAVROS, flight controller, camera, and AprilTag processes were not stopped

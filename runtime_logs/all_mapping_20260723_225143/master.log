@@ -1,0 +1,63 @@
+[2026-07-23 22:51:44] [all-mapping] Starting complete real-drone mapping stack
+[2026-07-23 22:51:44] [all-mapping] MAVROS and the boot AprilTag pipeline remain externally managed
+[2026-07-23 22:51:44] [all-mapping] Starting RF2O/PX4 fusion: /home/pi5drone/drone_ros_ws/src/master_scripts/start_rf2o_px4_fusion.sh
+[2026-07-23T22:51:45+0700] Independent RF2O/PX4 odometry startup
+[2026-07-23T22:51:45+0700] Workspace=/home/pi5drone/drone_ros_ws; LiDAR=/dev/ttyUSB0; use_sim_time=false
+[2026-07-23T22:51:45+0700] This launcher will not manage MAVROS, the flight controller, camera, or AprilTag nodes
+[2026-07-23T22:51:49+0700] STARTED existing MAVROS connected; vehicle disarmed
+[2026-07-23T22:51:55+0700] STARTED rplidar pid=3965
+[2026-07-23 22:51:55] [all-mapping] Waiting for /scan_rf2o; elapsed=10s deadline=120s
+[2026-07-23T22:51:56+0700] Waiting for /scan; elapsed=1s deadline=60s
+[2026-07-23T22:52:01+0700] Waiting for /scan; elapsed=6s deadline=60s
+[2026-07-23T22:52:04+0700] STARTED message stream /scan
+[2026-07-23 22:52:05] [all-mapping] Waiting for /scan_rf2o; elapsed=20s deadline=120s
+[2026-07-23T22:52:05+0700] STARTED odom_flatten pid=4206
+[2026-07-23T22:52:05+0700] STARTED static_lidar_tf pid=4208
+[2026-07-23T22:52:07+0700] STARTED TF odom -> base_footprint
+[2026-07-23T22:52:09+0700] Waiting for TF base_footprint -> laser_frame; elapsed=2s deadline=60s
+[2026-07-23T22:52:12+0700] STARTED TF base_footprint -> laser_frame
+[2026-07-23T22:52:12+0700] STARTED scan_audit pid=4430
+[2026-07-23 22:52:15] [all-mapping] Waiting for /scan_rf2o; elapsed=30s deadline=120s
+[2026-07-23T22:52:15+0700] Waiting for /scan_stream_audit/diagnostics classification_ready=true; elapsed=3s deadline=30s
+[2026-07-23T22:52:20+0700] Waiting for /scan_stream_audit/diagnostics classification_ready=true; elapsed=8s deadline=30s
+[2026-07-23T22:52:23+0700] STARTED diagnostic /scan_stream_audit/diagnostics classification_ready=true
+[2026-07-23T22:52:23+0700] STARTED canonicalizer pid=4690
+waiting for /scan_rf2o: 0/5
+[2026-07-23 22:52:25] [all-mapping] Waiting for /scan_rf2o; elapsed=40s deadline=120s
+[2026-07-23 22:52:29] [all-mapping] Ready: message stream /scan_rf2o
+[2026-07-23 22:52:32] [all-mapping] Ready: message stream /mavros/local_position/odom
+[2026-07-23T22:52:34+0700] Waiting for /scan_rf2o/diagnostics timestamp_monotonic=true; elapsed=3s deadline=15s
+[2026-07-23 22:52:35] [all-mapping] Ready: TF odom -> base_footprint
+[2026-07-23 22:52:35] [all-mapping] Starting 2D mapping: /home/pi5drone/drone_ros_ws/src/master_scripts/start_2d_mapping_only.sh
+[2026-07-23T22:52:38+0700] STARTED diagnostic /scan_rf2o/diagnostics timestamp_monotonic=true
+[2026-07-23T22:52:38+0700] STARTED five coherent canonical scans
+[2026-07-23T22:52:38+0700] STARTED lidar_odom_monitor pid=5067
+[2026-07-23T22:52:39+0700] STARTED rf2o pid=5104
+waiting for /lidar/odom_raw: 0/5
+waiting for /lidar/odom_raw: 0/5
+[2026-07-23T22:52:51+0700] STARTED RF2O raw odometry /lidar/odom_raw
+waiting for /lidar/odom: 2/5
+[2026-07-23 22:52:56] [all-mapping] Waiting for /map; elapsed=20s deadline=180s
+[2026-07-23T22:52:58+0700] STARTED health-gated LiDAR odometry /lidar/odom
+[2026-07-23T22:53:01+0700] Waiting for existing MAVROS connection; elapsed=3s deadline=60s
+[2026-07-23T22:53:06+0700] Waiting for existing MAVROS connection; elapsed=8s deadline=60s
+[2026-07-23T22:53:11+0700] Waiting for existing MAVROS connection; elapsed=13s deadline=60s
+[2026-07-23T22:53:13+0700] ERROR obs_avoid laser_scan_canonicalizer executable is unavailable
+[2026-07-23T22:53:13+0700] Shutdown reason: normal exit; launcher_exit=1
+[2026-07-23T22:53:13+0700] WARNING 2D map autosave skipped because slam_toolbox is not running
+[2026-07-23T22:53:13+0700] RF2O/PX4 fusion, MAVROS, LiDAR, camera, AprilTag, and flight control were not stopped
+[2026-07-23T22:53:15+0700] Waiting for existing MAVROS connection; elapsed=17s deadline=60s
+[2026-07-23 22:53:15] [all-mapping] ERROR: launcher pid=4953 exited while waiting for /map
+[2026-07-23 22:53:15] [all-mapping] Shutdown reason: normal exit; launcher_exit=1
+[2026-07-23 22:53:15] [all-mapping] Stopping RF2O/PX4 fusion launcher pid=2615
+[2026-07-23T22:53:16+0700] Shutdown reason: received signal TERM; launcher_exit=130
+[2026-07-23T22:53:16+0700] Stopping launcher-owned process group: rf2o pgid=5104
+[2026-07-23T22:53:16+0700] Stopping launcher-owned process group: lidar_odom_monitor pgid=5067
+[2026-07-23T22:53:16+0700] Stopping launcher-owned process group: canonicalizer pgid=4690
+[2026-07-23T22:53:16+0700] Stopping launcher-owned process group: scan_audit pgid=4430
+[2026-07-23T22:53:16+0700] Stopping launcher-owned process group: static_lidar_tf pgid=4208
+[2026-07-23T22:53:16+0700] Stopping launcher-owned process group: odom_flatten pgid=4206
+[2026-07-23T22:53:16+0700] Stopping launcher-owned process group: rplidar pgid=3965
+[2026-07-23T22:53:21+0700] WARNING forcing stopped process group: rplidar pgid=3965
+[2026-07-23T22:53:21+0700] MAVROS, flight controller, camera, and AprilTag processes were not stopped
+[2026-07-23 22:53:21] [all-mapping] Combined mapping stack stopped; individual autosave handlers have completed

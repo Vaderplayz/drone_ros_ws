@@ -1,0 +1,19 @@
+[INFO] [launch]: All log files can be found below /home/pi5drone/.ros/log/2026-08-02-20-45-10-359343-pi5drone-desktop-19431
+[INFO] [launch]: Default logging verbosity is set to INFO
+[INFO] [submap_slam_2d_node-1]: process started with pid [19456]
+[submap_slam_2d_node-1] [INFO] [1785678311.372120297] [submap_slam_2d]: Observer-only submap mapper: scan=/scan_slam prediction=odom->base_footprint output_frame=submap_map map_tf=disabled
+[submap_slam_2d_node-1] [WARN] [1785678391.155298453] [submap_slam_2d]: Rejected scan: low_match_score
+[submap_slam_2d_node-1] [WARN] [1785678396.253974209] [submap_slam_2d]: Rejected scan: excess_translation_correction
+[submap_slam_2d_node-1] [WARN] [1785678401.270180947] [submap_slam_2d]: Rejected scan: excess_translation_correction
+[submap_slam_2d_node-1] [WARN] [1785678406.304679592] [submap_slam_2d]: Rejected scan: high_match_rmse
+[submap_slam_2d_node-1] [WARN] [1785678413.272912181] [submap_slam_2d]: Rejected scan: coarse_match_failed
+[submap_slam_2d_node-1] [WARN] [1785678418.507681548] [submap_slam_2d]: Rejected scan: high_match_rmse
+[submap_slam_2d_node-1] [WARN] [1785678423.590457582] [submap_slam_2d]: Rejected scan: high_match_rmse
+[submap_slam_2d_node-1] [WARN] [1785678429.581750134] [submap_slam_2d]: Rejected scan: high_match_rmse
+[submap_slam_2d_node-1] [WARN] [1785678434.632349779] [submap_slam_2d]: Rejected scan: high_match_rmse
+[submap_slam_2d_node-1] [WARN] [1785678439.768029109] [submap_slam_2d]: Rejected scan: high_match_rmse
+[submap_slam_2d_node-1] [WARN] [1785678444.829008514] [submap_slam_2d]: Rejected scan: high_match_rmse
+[submap_slam_2d_node-1] [WARN] [1785678449.922036011] [submap_slam_2d]: Rejected scan: high_match_rmse
+[submap_slam_2d_node-1] [WARN] [1785678454.968169785] [submap_slam_2d]: Rejected scan: high_match_rmse
+[submap_slam_2d_node-1] [WARN] [1785678460.024157412] [submap_slam_2d]: Rejected scan: high_match_rmse
+[submap_slam_2d_node-1] [WARN] [1785678465.061315927] [submap_slam_2d]: Rejected scan: high_match_rmse

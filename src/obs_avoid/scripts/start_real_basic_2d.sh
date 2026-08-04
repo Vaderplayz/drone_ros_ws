@@ -12,6 +12,7 @@ START_LIDAR_PX4_BRIDGE="${START_LIDAR_PX4_BRIDGE:-1}"
 START_RF2O_OBSERVER="${START_RF2O_OBSERVER:-0}"
 START_SLAM_IN_RF2O_VALIDATION="${START_SLAM_IN_RF2O_VALIDATION:-1}"
 ENABLE_SUBMAP_SLAM="${ENABLE_SUBMAP_SLAM:-1}"
+ENABLE_FLIGHT_PLANNER="${ENABLE_FLIGHT_PLANNER:-0}"
 RECORD_LIDAR_DIAGNOSTIC_BAG="${RECORD_LIDAR_DIAGNOSTIC_BAG:-${RECORD_BAG:-1}}"
 
 WAIT_TIMEOUT_SEC="${WAIT_TIMEOUT_SEC:-60}"
@@ -61,6 +62,7 @@ DESKEW_TIMEOUT_SEC="${DESKEW_TIMEOUT_SEC:-0.35}"
 SLAM_PARAMS_FILE="${SLAM_PARAMS_FILE:-${ROS_WS}/src/obs_avoid/config/slam2d_real_1lidar.yaml}"
 SUBMAP_PARAMS_FILE="${SUBMAP_PARAMS_FILE:-${ROS_WS}/src/submap_slam_2d/config/real_rf2o_submap.yaml}"
 PLANNER_PARAMS_FILE="${PLANNER_PARAMS_FILE:-${ROS_WS}/src/obs_avoid/config/local_planner_mode_a_real_safe.yaml}"
+GUARD_PARAMS_FILE="${GUARD_PARAMS_FILE:-${ROS_WS}/src/obs_avoid/config/spatial_command_guard_real.yaml}"
 LIDAR_MONITOR_PARAMS_FILE="${LIDAR_MONITOR_PARAMS_FILE:-${ROS_WS}/src/obs_avoid/config/lidar_odom_px4_bridge.yaml}"
 RF2O_PARAMS_FILE="${RF2O_PARAMS_FILE:-${ROS_WS}/src/obs_avoid/config/rf2o_real_a1m8.yaml}"
 PRECLAND_MODE="${PRECLAND_MODE:-}"
@@ -124,8 +126,11 @@ startup_ready_components() {
   local component
   local -a required=(
     MAVROS RPLIDAR RAW_SCAN ODOM_FLATTEN STATIC_TF SCAN_AUDIT
-    CANONICALIZER CANONICAL_SCAN SLAM MAP PLANNER
+    CANONICALIZER CANONICAL_SCAN SLAM MAP
   )
+  if [[ "${ENABLE_FLIGHT_PLANNER}" == "1" ]]; then
+    required+=(PLANNER)
+  fi
   if [[ "${ENABLE_SUBMAP_SLAM}" == "1" ]]; then
     required+=(SUBMAP_SLAM)
   fi
@@ -913,17 +918,22 @@ start_submap_slam() {
 }
 
 start_planner() {
+  if [[ "${ENABLE_FLIGHT_PLANNER}" != "1" ]]; then
+    set_component_state PLANNER STOPPED "flight_control_disabled_by_default"
+    return 0
+  fi
   if [[ "${COMPONENT_STATE[MAP]}" != "READY" ]]; then
     set_component_state PLANNER STOPPED "map_not_ready"
     return 0
   fi
   set_component_state PLANNER STARTING "after_map"
   start_process planner "${PLANNER_LOG}" \
-    ros2 run obs_avoid local_planner_mode_a --ros-args \
-      --params-file "${PLANNER_PARAMS_FILE}" -p use_sim_time:="${USE_SIM_TIME}" \
+    env ROS_WS="${ROS_WS}" USE_SIM_TIME="${USE_SIM_TIME}" \
+      PLANNER_PARAMS_FILE="${PLANNER_PARAMS_FILE}" GUARD_PARAMS_FILE="${GUARD_PARAMS_FILE}" \
+      "${ROS_WS}/src/obs_avoid/scripts/start_flight_mode.sh" \
       -r /scan_horizontal:="${RF2O_SCAN_TOPIC}"
   PLANNER_PID="${LAST_STARTED_PID}"
-  sleep 2
+  sleep 3
   if kill -0 "${PLANNER_PID}" 2>/dev/null; then
     set_component_state PLANNER READY "process_alive"
   else
@@ -1163,6 +1173,10 @@ main() {
   esac
   if [[ "${ENABLE_SUBMAP_SLAM}" != "0" && "${ENABLE_SUBMAP_SLAM}" != "1" ]]; then
     log "ERROR ENABLE_SUBMAP_SLAM must be 0 or 1"
+    exit 1
+  fi
+  if [[ "${ENABLE_FLIGHT_PLANNER}" != "0" && "${ENABLE_FLIGHT_PLANNER}" != "1" ]]; then
+    log "ERROR ENABLE_FLIGHT_PLANNER must be 0 or 1"
     exit 1
   fi
   if [[ "${LIDAR_MODE}" == "px4_fusion" && "${START_LIDAR_PX4_BRIDGE}" != "1" ]]; then

@@ -1,0 +1,11 @@
+[INFO] [launch]: All log files can be found below /home/pi5drone/.ros/log/2026-07-24-22-55-16-691644-pi5drone-desktop-25234
+[INFO] [launch]: Default logging verbosity is set to INFO
+[INFO] [async_slam_toolbox_node-1]: process started with pid [25282]
+[async_slam_toolbox_node-1] [INFO] [1784908517.580967816] [slam_toolbox]: Node using stack size 40000000
+[async_slam_toolbox_node-1] [INFO] [1784908518.436806826] [slam_toolbox]: Configuring
+[async_slam_toolbox_node-1] [INFO] [1784908518.481139356] [slam_toolbox]: Using solver plugin solver_plugins::CeresSolver
+[async_slam_toolbox_node-1] [INFO] [1784908518.492283370] [slam_toolbox]: CeresSolver: Using SCHUR_JACOBI preconditioner.
+[INFO] [launch.user]: [LifecycleLaunch] Slamtoolbox node is activating.
+[async_slam_toolbox_node-1] [INFO] [1784908519.144142146] [slam_toolbox]: Activating
+[async_slam_toolbox_node-1] [INFO] [1784908519.611441496] [slam_toolbox]: Message Filter dropping message: frame 'laser_frame' at time 1784908519.248 for reason 'the timestamp on the message is earlier than all the data in the transform cache'
+[async_slam_toolbox_node-1] Registering sensor: [Custom Described Lidar]

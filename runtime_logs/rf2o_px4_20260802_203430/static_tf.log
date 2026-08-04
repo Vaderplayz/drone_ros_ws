@@ -1,0 +1,4 @@
+[INFO] [1785677704.229289196] [static_transform_publisher_cGcW2nXI8voMLIoP]: Spinning until stopped - publishing transform
+translation: ('0.000000', '0.000000', '0.100000')
+rotation: ('0.000000', '0.000000', '0.000000', '1.000000')
+from 'base_footprint' to 'laser_frame'

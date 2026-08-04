@@ -1,0 +1,137 @@
+[INFO] [1785064255.235844660] [vertical_lidar_mapper]: vertical_lidar_mapper started. scan_topic='/scan_vertical' target_frame='odom' local_voxel=0.100 global_voxel=0.080 global_cap=400000 global_publish=3.0Hz revoxel_every=10
+[INFO] [1785064255.236477080] [vertical_lidar_mapper]: Global integration mode: keyframe (keyframe_min_translation=0.030m keyframe_min_yaw=0.025rad keyframe_max_interval=0.100s max_keyframes=10000).
+[INFO] [1785064255.236684658] [vertical_lidar_mapper]: Full-pose deskew: enabled (required=true odom_topic='/mavros/local_position/odom' odom_frame='odom' stamp_reference='start' pose_gap<=0.100s wait_timeout=0.350s queue=30 poll=100.0Hz output='/vertical_points_deskewed').
+[INFO] [1785064255.236739104] [vertical_lidar_mapper]: Stable integration gate: enabled (odom_age<=0.200s |yaw_rate|<=0.700rad/s |vertical_speed|<=0.400m/s tilt_rate<=0.450rad/s).
+[INFO] [1785064255.236766549] [vertical_lidar_mapper]: Map-rebase: disabled (map_frame='map' odom_frame='odom' trans_th=0.080m yaw_th=0.040rad)
+[INFO] [1785064255.236782623] [vertical_lidar_mapper]: Relative-pose gate: disabled (map='map' odom='odom' trans_err_th=0.080m yaw_err_th=0.060rad min_motion=0.030m max_map_step=0.250m max_map_yaw=0.150rad)
+[INFO] [1785064255.236799364] [vertical_lidar_mapper]: 3D scan matching: disabled (map_frame='vertical_map' max_rate=4.0Hz radius=4.00m voxel=0.12m corr_dist=0.45m overlap>=0.30 rmse<=0.18m correction<=0.30m/17.2deg drop_failure=true).
+[INFO] [1785064255.236828402] [vertical_lidar_mapper]: Map-rebase cooldown: 6 scans after correction.
+[INFO] [1785064255.236841402] [vertical_lidar_mapper]: Floor filter: disabled (drop z <= 0.10 m in 'odom' frame).
+[INFO] [1785064255.236856051] [vertical_lidar_mapper]: Floor stabilization: enabled (percentile=0.10 band=0.08m min_points=30 max_correction=0.25m drop_failure=true).
+[INFO] [1785064255.236882274] [vertical_lidar_mapper]: PCD export service: '/vertical_lidar_mapper/save_pcd' dir='/home/pi5drone/drone_ros_ws/maps/vertical_3d' binary=true
+[INFO] [1785064255.236900829] [vertical_lidar_mapper]: SLAM 2D map export on save: enabled (topic='/map' prefix='slam2d_map').
+[INFO] [1785064255.237026776] [vertical_lidar_mapper]: Structural GLB export on save: enabled (prefix='lidar2_structural_environment' auto_height=true ceiling=false grid_cap=2000000).
+[INFO] [1785064255.237096444] [vertical_lidar_mapper]: Loop-closure dedup-only mode: disabled
+[INFO] [1785064255.237111871] [vertical_lidar_mapper]: Global rebuild service: '/vertical_lidar_mapper/rebuild_global' (rebuild_on_map_correction=false corr_trans_th=0.080m corr_yaw_th=0.040rad freeze_scans=6).
+[WARN] [1785064258.115890668] [vertical_lidar_mapper]: Dropping vertical scan after waiting 0.350s for odometry through its final beam (remaining lag 0.000s).
+[WARN] [1785064258.715958388] [vertical_lidar_mapper]: Dropping vertical scan: pose history starts 0.418s after the first beam.
+[INFO] [1785064258.887968587] [vertical_lidar_mapper]: Initialized floor stabilization reference at z=-1.457m in frame 'odom'.
+[WARN] [1785064365.507436777] [vertical_lidar_mapper]: Dropped unstable global scan: odom_age=0.134s (max 0.200), |yaw|=0.094 (max 0.700), |vz|=0.406 (max 0.400), tilt_rate=0.156 (max 0.450).
+[WARN] [1785064365.607114837] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.259m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064366.667732340] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.739m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064367.698232779] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.822m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064368.797253602] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.932m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064369.798461050] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.003m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064370.887324837] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.997m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064371.987344550] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.964m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064373.087175704] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.917m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064374.177864138] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.929m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064375.277311302] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.093m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064376.277487026] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.218m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064377.368065402] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.272m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064378.467243653] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.331m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064379.567273940] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.354m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064380.657367066] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.376m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064381.657494955] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.365m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064382.757126845] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.381m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064383.887235193] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.396m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064384.947444779] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.354m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064385.977333520] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.357m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064387.077316991] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.353m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064388.167299836] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.342m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064389.167309352] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.331m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064390.267195358] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.333m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064391.267227077] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.327m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064392.357962993] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.320m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064393.457136670] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.335m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064394.457217391] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.390m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064395.557149415] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.387m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064396.647277467] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.375m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064397.647389911] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.374m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064398.737326607] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.383m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064399.837092202] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.377m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064400.837391307] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.340m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064401.867516197] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.350m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064402.927465917] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.332m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064404.027081446] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.386m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064405.027332448] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.381m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064406.057105063] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.366m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064407.157176303] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.381m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064408.247236419] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.399m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064409.248346632] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.384m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064410.337303909] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.306m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064411.437171755] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.318m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064412.437185688] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.300m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064413.527570195] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.294m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064414.627395041] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.006m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064415.727145894] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.705m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064416.817181336] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.432m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064417.917133157] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.390m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064418.949100119] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.479m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064420.017198440] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.275m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064475.377253657] [vertical_lidar_mapper]: Dropped unstable global scan: odom_age=0.121s (max 0.200), |yaw|=0.149 (max 0.700), |vz|=0.009 (max 0.400), tilt_rate=0.987 (max 0.450).
+[WARN] [1785064477.777134827] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.262m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064478.867293437] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.574m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064479.967105397] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.849m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064481.059363405] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.145m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064482.157408438] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.194m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064483.257290127] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.170m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064484.257340744] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.197m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064485.287328517] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.200m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064486.348658981] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.198m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064487.447341997] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.174m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064488.577513927] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.167m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064489.667216236] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.102m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064490.767101768] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.090m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064491.809088660] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.106m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064492.869208819] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.100m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064493.869474238] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.111m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064494.957367925] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.783m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064496.057251259] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.734m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064497.147128244] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.617m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064498.148293766] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.592m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064499.237632575] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.585m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064500.237902907] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.573m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064501.337348748] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.538m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064502.427933495] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.524m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064503.457193145] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.556m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064504.557247962] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.455m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064505.657123273] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.260m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064587.077698670] [vertical_lidar_mapper]: Dropped unstable global scan: odom_age=0.228s (max 0.200), |yaw|=0.008 (max 0.700), |vz|=0.003 (max 0.400), tilt_rate=0.006 (max 0.450).
+[WARN] [1785064880.787174379] [vertical_lidar_mapper]: Dropped unstable global scan: odom_age=0.214s (max 0.200), |yaw|=0.009 (max 0.700), |vz|=0.001 (max 0.400), tilt_rate=0.014 (max 0.450).
+[WARN] [1785064885.467252055] [vertical_lidar_mapper]: Dropped unstable global scan: odom_age=0.201s (max 0.200), |yaw|=0.012 (max 0.700), |vz|=0.002 (max 0.400), tilt_rate=0.002 (max 0.450).
+[WARN] [1785064950.107265268] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.278m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064951.107381943] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.807m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064952.210932750] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.541m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064953.239005550] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.448m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064954.303317195] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.470m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064955.327292671] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.525m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064956.427820398] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.549m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064957.527264909] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.467m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064958.617421534] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.523m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064959.717427930] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.598m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064960.817336749] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.591m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064961.907344724] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.492m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064963.010929051] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.791m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064964.107628464] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.472m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064965.207277829] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.380m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064966.297911675] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.241m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064967.298989927] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.174m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064968.387508876] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.173m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064969.488342306] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.195m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064970.588825952] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.182m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064971.717339737] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.192m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064972.717361935] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.215m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064973.807529191] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.210m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064974.907906038] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.231m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064976.007215878] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.247m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064977.097666948] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.252m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064978.197906243] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.243m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064979.200183994] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.240m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064980.287457614] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.246m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064981.287808491] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.224m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064982.387557567] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.203m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064983.478654647] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.184m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064984.577724237] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.028m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064985.677320810] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.631m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785064986.967273177] [vertical_lidar_mapper]: Dropped unstable global scan: odom_age=0.100s (max 0.200), |yaw|=0.118 (max 0.700), |vz|=0.029 (max 0.400), tilt_rate=0.502 (max 0.450).

@@ -1,0 +1,6 @@
+[WARN] [1784907567.779038873] [laser_scan_canonicalizer]: Canonical scan state: CLASSIFYING_INPUT
+[INFO] [1784907567.779199020] [laser_scan_canonicalizer]: Canonicalizing /scan to /scan_rf2o with 720 bins in auto mode
+[WARN] [1784907570.393333518] [laser_scan_canonicalizer]: Canonical scan state: INITIALIZING
+[INFO] [1784907570.393431314] [laser_scan_canonicalizer]: Canonicalizer mode locked: per_message_full_scan (full=20 partial=0 malformed=0)
+[INFO] [1784907570.528680977] [laser_scan_canonicalizer]: Canonical scan state: OK_FULL_SCAN
+[INFO] [1784907630.124523871] [rclcpp]: signal_handler(SIGINT/SIGTERM)

@@ -1,0 +1,66 @@
+[2026-07-23 17:34:22] [independent-3d] Independent 3D startup; expecting MAVROS and AprilTag to already be running
+[2026-07-23 17:34:25] [independent-3d] Waiting for /mavros/local_position/odom; elapsed=3s deadline=90s
+[2026-07-23 17:34:33] [independent-3d] Ready: message stream /mavros/local_position/odom
+[2026-07-23 17:34:36] [independent-3d] Reusing existing TF odom -> base_footprint
+[2026-07-23 17:34:36] [independent-3d] Starting lidar2 mapping in odom; no 2D map is required
+[2026-07-23T17:34:38+0700] Real lidar2 3D mapping startup
+[2026-07-23T17:34:38+0700] Workspace=/home/pi5drone/drone_ros_ws; lidar2=/dev/ttyUSB1@460800; target_frame=odom
+[2026-07-23T17:34:38+0700] This launcher will not manage lidar1, RF2O, 2D SLAM, MAVROS, or flight control
+[2026-07-23 17:34:39] [independent-3d] Waiting for TF base_footprint -> lidar_vert_link; elapsed=3s deadline=90s
+[2026-07-23T17:34:40+0700] STARTED message stream /mavros/local_position/odom
+[2026-07-23T17:34:43+0700] Waiting for TF odom -> base_footprint; elapsed=3s deadline=90s
+[2026-07-23T17:34:48+0700] STARTED TF odom -> base_footprint
+[2026-07-23T17:34:48+0700] WARNING REQUIRE_2D_MAP=0; mapper will use TARGET_FRAME=odom
+[2026-07-23 17:34:48] [independent-3d] Waiting for TF base_footprint -> lidar_vert_link; elapsed=12s deadline=90s
+[2026-07-23T17:34:48+0700] STARTED sllidar2 pgid=26004
+[2026-07-23T17:34:49+0700] Waiting for /scan_vertical; elapsed=1s deadline=60s
+[2026-07-23T17:34:52+0700] STARTED message stream /scan_vertical
+[2026-07-23 17:34:56] [independent-3d] Waiting for TF base_footprint -> lidar_vert_link; elapsed=20s deadline=90s
+[2026-07-23T17:34:56+0700] STARTED lidar2_static_tf pgid=26219
+[2026-07-23T17:35:00+0700] STARTED TF base_footprint -> lidar_vert_link
+[2026-07-23 17:35:00] [independent-3d] Ready: TF base_footprint -> lidar_vert_link
+[2026-07-23T17:35:03+0700] STARTED TF odom -> lidar_vert_link
+[2026-07-23 17:35:03] [independent-3d] Verified lidar2 TF: translation=[0.000, 0.000, 0.700] RPY=[1.571, -0.000, 1.571]
+[2026-07-23 17:35:04] [independent-3d] Waiting for /mapping/global_cloud; elapsed=1s deadline=90s
+[2026-07-23T17:35:08+0700] STARTED vertical_lidar_mapper pgid=26557
+[2026-07-23T17:35:12+0700] Waiting for /vertical_cloud; elapsed=4s deadline=90s
+[2026-07-23 17:35:13] [independent-3d] Waiting for /mapping/global_cloud; elapsed=10s deadline=90s
+[2026-07-23T17:35:16+0700] Waiting for /vertical_cloud; elapsed=8s deadline=90s
+[2026-07-23T17:35:20+0700] Waiting for /vertical_cloud; elapsed=12s deadline=90s
+[2026-07-23T17:35:24+0700] Waiting for /vertical_cloud; elapsed=16s deadline=90s
+[2026-07-23 17:35:25] [independent-3d] Waiting for /mapping/global_cloud; elapsed=22s deadline=90s
+[2026-07-23T17:35:29+0700] Waiting for /vertical_cloud; elapsed=21s deadline=90s
+[2026-07-23T17:35:33+0700] Waiting for /vertical_cloud; elapsed=25s deadline=90s
+[2026-07-23 17:35:34] [independent-3d] Waiting for /mapping/global_cloud; elapsed=31s deadline=90s
+[2026-07-23T17:35:41+0700] Waiting for /vertical_cloud; elapsed=33s deadline=90s
+[2026-07-23 17:35:43] [independent-3d] Waiting for /mapping/global_cloud; elapsed=40s deadline=90s
+[2026-07-23T17:35:46+0700] Waiting for /vertical_cloud; elapsed=38s deadline=90s
+[2026-07-23T17:35:50+0700] Waiting for /vertical_cloud; elapsed=42s deadline=90s
+[2026-07-23T17:35:54+0700] Waiting for /vertical_cloud; elapsed=46s deadline=90s
+[2026-07-23 17:35:56] [independent-3d] Waiting for /mapping/global_cloud; elapsed=53s deadline=90s
+[2026-07-23 17:35:59] [independent-3d] Ready: message stream /mapping/global_cloud
+[2026-07-23 17:35:59] [independent-3d] ALL READY: independent lidar2 3D map in frame odom
+[2026-07-23 17:35:59] [independent-3d] Live cloud: /mapping/global_cloud; Ctrl+C autosaves PCD and trajectory
+[2026-07-23 17:35:59] [independent-3d] Runtime logs: /home/pi5drone/drone_ros_ws/runtime_logs/independent_3d_20260723_173421
+[2026-07-23T17:35:59+0700] Waiting for /vertical_cloud; elapsed=51s deadline=90s
+[2026-07-23T17:36:03+0700] Waiting for /vertical_cloud; elapsed=55s deadline=90s
+[2026-07-23T17:36:11+0700] Waiting for /vertical_cloud; elapsed=63s deadline=90s
+[2026-07-23T17:36:16+0700] Waiting for /vertical_cloud; elapsed=68s deadline=90s
+[2026-07-23T17:36:20+0700] Waiting for /vertical_cloud; elapsed=72s deadline=90s
+[2026-07-23T17:36:24+0700] Waiting for /vertical_cloud; elapsed=76s deadline=90s
+[2026-07-23T17:36:28+0700] Waiting for /vertical_cloud; elapsed=80s deadline=90s
+[2026-07-23T17:36:32+0700] STARTED message stream /vertical_cloud
+[2026-07-23T17:36:34+0700] STARTED message stream /mapping/global_cloud
+
+######################################################################
+#                                                                    #
+#                       LIDAR2 3D MAP READY                          #
+#                                                                    #
+#             VERTICAL C1M1 MAPPING - OBSERVER ONLY                  #
+#                                                                    #
+######################################################################
+
+[2026-07-23T17:36:55+0700] Export service: ros2 service call /vertical_lidar_mapper/save_pcd std_srvs/srv/Trigger '{}'
+[2026-07-23T17:36:55+0700] On Ctrl+C, autosave requests one PCD/GLB asset set in /home/pi5drone/drone_ros_ws/maps/vertical_3d
+[2026-07-23T17:36:55+0700] Runtime logs: /home/pi5drone/drone_ros_ws/runtime_logs/lidar2_3d_20260723_173436
+[2026-07-23T17:36:55+0700] No PX4 parameter, arm, mode, movement, or setpoint command was sent

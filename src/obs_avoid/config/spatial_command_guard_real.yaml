@@ -1,0 +1,18 @@
+spatial_command_guard:
+  ros__parameters:
+    input_command_topic: /planner_cmd_vel_raw
+    output_command_topic: /planner_cmd_vel
+    awareness_topic: /mapping/spatial_awareness/status
+    odom_topic: /mavros/local_position/odom
+    diagnostics_topic: /mapping/obstacle_avoidance/guard_status
+    command_xy_frame: world
+    command_timeout_sec: 0.30
+    awareness_timeout_sec: 0.65
+    odom_timeout_sec: 0.35
+    publish_rate_hz: 20.0
+    diagnostics_rate_hz: 2.0
+    warning_speed_scale: 0.25
+    unknown_blocks_motion: true
+    max_horizontal_speed_mps: 0.30
+    max_vertical_speed_mps: 0.20
+    max_yaw_rate_rad_s: 0.30

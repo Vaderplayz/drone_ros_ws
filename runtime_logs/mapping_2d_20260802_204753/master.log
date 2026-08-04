@@ -1,0 +1,22 @@
+[1;32m[2026-08-02T20:47:57+0700] STARTED launcher inputs and installed ROS interfaces validated[0m
+[2026-08-02T20:47:57+0700] Independent observer-only 2D mapping startup
+[2026-08-02T20:47:57+0700] This launcher starts mapping scan deskew, slam_toolbox, and enhanced submap SLAM
+[2026-08-02T20:47:57+0700] It will not manage RF2O/PX4 fusion, MAVROS, LiDAR, camera, AprilTag, planner, or flight control
+[1;32m[2026-08-02T20:48:11+0700] STARTED live input /scan_rf2o[0m
+[2026-08-02T20:48:14+0700] Waiting for /mavros/local_position/odom; elapsed=3s deadline=60s
+[1;32m[2026-08-02T20:48:18+0700] STARTED live input /mavros/local_position/odom[0m
+[1;32m[2026-08-02T20:48:22+0700] STARTED live scan and odometry timestamps share one clock domain[0m
+[1;32m[2026-08-02T20:48:26+0700] STARTED TF odom -> base_footprint[0m
+[2026-08-02T20:48:29+0700] Waiting for TF base_footprint -> laser_frame; elapsed=3s deadline=60s
+[1;32m[2026-08-02T20:48:33+0700] STARTED TF base_footprint -> laser_frame[0m
+[1;32m[2026-08-02T20:48:33+0700] STARTED mapping_scan_deskew pgid=23959[0m
+[2026-08-02T20:48:36+0700] Waiting for /scan_slam; elapsed=3s deadline=60s
+[2026-08-02T20:48:40+0700] Waiting for /scan_slam; elapsed=7s deadline=60s
+[1;32m[2026-08-02T20:48:44+0700] STARTED live input /scan_slam[0m
+[1;32m[2026-08-02T20:48:47+0700] STARTED diagnostic /scan_slam/diagnostics deskew_applied=true[0m
+[1;32m[2026-08-02T20:48:48+0700] STARTED mapping scan deskew active on /scan_slam[0m
+[1;31m[2026-08-02T20:48:55+0700] ERROR could not read a timestamp from /mavros/local_position/odom[0m
+[2026-08-02T20:48:55+0700] Shutdown reason: normal exit; launcher_exit=1
+[1;33m[2026-08-02T20:48:55+0700] WARNING 2D map autosave skipped because slam_toolbox is not running[0m
+[2026-08-02T20:48:55+0700] Stopping mapping-owned process group: mapping_scan_deskew pgid=23959
+[2026-08-02T20:48:56+0700] RF2O/PX4 fusion, MAVROS, LiDAR, camera, AprilTag, and flight control were not stopped

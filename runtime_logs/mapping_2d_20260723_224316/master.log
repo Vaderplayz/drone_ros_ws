@@ -1,0 +1,11 @@
+[2026-07-23T22:43:20+0700] STARTED launcher inputs and installed ROS interfaces validated
+[2026-07-23T22:43:20+0700] Independent observer-only 2D mapping startup
+[2026-07-23T22:43:20+0700] This launcher will only start mapping scan deskew and slam_toolbox
+[2026-07-23T22:43:20+0700] It will not manage RF2O/PX4 fusion, MAVROS, LiDAR, camera, AprilTag, planner, or flight control
+[2026-07-23T22:43:35+0700] STARTED live input /scan_rf2o
+[2026-07-23T22:43:38+0700] Waiting for /mavros/local_position/odom; elapsed=3s deadline=60s
+[2026-07-23T22:43:42+0700] STARTED live input /mavros/local_position/odom
+[2026-07-23T22:43:50+0700] ERROR could not read a timestamp from /mavros/local_position/odom
+[2026-07-23T22:43:50+0700] Shutdown reason: normal exit; launcher_exit=1
+[2026-07-23T22:43:50+0700] WARNING 2D map autosave skipped because slam_toolbox is not running
+[2026-07-23T22:43:50+0700] RF2O/PX4 fusion, MAVROS, LiDAR, camera, AprilTag, and flight control were not stopped

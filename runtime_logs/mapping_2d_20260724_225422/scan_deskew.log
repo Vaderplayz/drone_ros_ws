@@ -1,0 +1,49 @@
+[WARN] [1784908497.846876044] [mapping_scan_deskew]: Canonical scan state: INITIALIZING
+[INFO] [1784908497.847134774] [mapping_scan_deskew]: Canonicalizing /scan_rf2o to /scan_slam with 720 bins in per_message_full_scan mode
+[INFO] [1784908500.976695132] [mapping_scan_deskew]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1784908500.980065844] [mapping_scan_deskew]: Canonical scan state: INCOMPLETE_REVOLUTION
+[WARN] [1784908500.980161069] [mapping_scan_deskew]: Canonical output rate limit suppressed this revolution
+[INFO] [1784908501.177610683] [mapping_scan_deskew]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1784908511.205673185] [mapping_scan_deskew]: Canonical scan state: INCOMPLETE_REVOLUTION
+[WARN] [1784908511.205806634] [mapping_scan_deskew]: Canonical output rate limit suppressed this revolution
+[INFO] [1784908511.359296401] [mapping_scan_deskew]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1784908523.273799753] [mapping_scan_deskew]: Canonical scan state: INCOMPLETE_REVOLUTION
+[WARN] [1784908523.273889311] [mapping_scan_deskew]: Canonical output rate limit suppressed this revolution
+[INFO] [1784908523.414462841] [mapping_scan_deskew]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1784908569.481325630] [mapping_scan_deskew]: Canonical scan state: INCOMPLETE_REVOLUTION
+[WARN] [1784908569.481441466] [mapping_scan_deskew]: Canonical output rate limit suppressed this revolution
+[INFO] [1784908569.624237924] [mapping_scan_deskew]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1784908570.754305319] [mapping_scan_deskew]: Canonical scan state: INCOMPLETE_REVOLUTION
+[INFO] [1784908570.821307839] [mapping_scan_deskew]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1784908573.723992067] [mapping_scan_deskew]: Canonical scan state: INCOMPLETE_REVOLUTION
+[INFO] [1784908573.883432307] [mapping_scan_deskew]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1784908582.018794406] [mapping_scan_deskew]: Dropping scan because deskew TF is unavailable: Lookup would require extrapolation into the future.  Requested time 1784908581.628924 but the latest data is at time 1784908581.605717, when looking up transform from frame [laser_frame] to frame [odom]
+[WARN] [1784908582.018906965] [mapping_scan_deskew]: Canonical scan state: DESKEW_UNAVAILABLE
+[WARN] [1784908582.018947743] [mapping_scan_deskew]: Dropping full scan because deskew TF is unavailable
+[INFO] [1784908582.073244324] [mapping_scan_deskew]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1784908589.249920479] [mapping_scan_deskew]: Canonical scan state: INCOMPLETE_REVOLUTION
+[WARN] [1784908589.250010925] [mapping_scan_deskew]: Canonical output rate limit suppressed this revolution
+[INFO] [1784908589.399585478] [mapping_scan_deskew]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1784908589.470389594] [mapping_scan_deskew]: Canonical scan state: INCOMPLETE_REVOLUTION
+[INFO] [1784908589.598175042] [mapping_scan_deskew]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1784908624.631127648] [mapping_scan_deskew]: Canonical scan state: INCOMPLETE_REVOLUTION
+[WARN] [1784908624.631231113] [mapping_scan_deskew]: Canonical output rate limit suppressed this revolution
+[INFO] [1784908624.766546231] [mapping_scan_deskew]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1784908746.132409699] [mapping_scan_deskew]: Canonical scan state: INCOMPLETE_REVOLUTION
+[WARN] [1784908746.132508274] [mapping_scan_deskew]: Canonical output rate limit suppressed this revolution
+[INFO] [1784908746.278737799] [mapping_scan_deskew]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1784908751.697975491] [mapping_scan_deskew]: Canonical scan state: INCOMPLETE_REVOLUTION
+[WARN] [1784908751.698047751] [mapping_scan_deskew]: Canonical output rate limit suppressed this revolution
+[INFO] [1784908751.928938616] [mapping_scan_deskew]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1784908756.051431325] [mapping_scan_deskew]: Canonical scan state: INCOMPLETE_REVOLUTION
+[INFO] [1784908756.284340522] [mapping_scan_deskew]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1784908760.076083593] [mapping_scan_deskew]: Canonical scan state: INCOMPLETE_REVOLUTION
+[WARN] [1784908760.076184669] [mapping_scan_deskew]: Canonical output rate limit suppressed this revolution
+[INFO] [1784908760.202365233] [mapping_scan_deskew]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1784908766.432079228] [mapping_scan_deskew]: Canonical scan state: INCOMPLETE_REVOLUTION
+[WARN] [1784908766.432154618] [mapping_scan_deskew]: Canonical output rate limit suppressed this revolution
+[INFO] [1784908766.621113852] [mapping_scan_deskew]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1784908939.879912373] [mapping_scan_deskew]: Canonical scan state: INCOMPLETE_REVOLUTION
+[WARN] [1784908939.880014430] [mapping_scan_deskew]: Canonical output rate limit suppressed this revolution
+[INFO] [1784908940.046876503] [mapping_scan_deskew]: Canonical scan state: OK_FULL_SCAN
+[INFO] [1784908945.464400705] [rclcpp]: signal_handler(SIGINT/SIGTERM)

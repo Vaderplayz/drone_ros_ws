@@ -1,0 +1,71 @@
+[WARN] [1785071509.456915898] [lidar_odom_px4_bridge]: Bridge state: waiting_for_inputs
+[INFO] [1785071509.457117858] [lidar_odom_px4_bridge]: LiDAR external odometry bridge: /lidar/odom -> /mavros/odometry/out (odom -> base_link)
+[INFO] [1785071509.457150135] [lidar_odom_px4_bridge]: Covariance: xy_stddev=0.300 m yaw_stddev=0.200 rad unused_variance=1000000.0
+[WARN] [1785071509.558537225] [lidar_odom_px4_bridge]: Bridge state: mavros_disconnected
+[INFO] [1785071512.056937215] [lidar_odom_px4_bridge]: Alignment complete while disarmed: x=0.0069 y=0.0519 yaw=19.910 deg
+[WARN] [1785071512.057195230] [lidar_odom_px4_bridge]: Bridge state: none
+[WARN] [1785071525.256979175] [lidar_odom_px4_bridge]: Bridge state: monitor_diagnostics_stale
+[WARN] [1785071525.356957591] [lidar_odom_px4_bridge]: Bridge state: none
+[WARN] [1785071585.363655091] [lidar_odom_px4_bridge]: Bridge state: monitor_diagnostics_stale
+[WARN] [1785071585.459057998] [lidar_odom_px4_bridge]: Bridge state: none
+[WARN] [1785071612.257244411] [lidar_odom_px4_bridge]: Bridge state: monitor_diagnostics_stale
+[WARN] [1785071612.556994675] [lidar_odom_px4_bridge]: Bridge state: none
+[WARN] [1785071615.756845632] [lidar_odom_px4_bridge]: Bridge state: lidar_odom_stale
+[ERROR] [1785071616.186402529] [lidar_odom_px4_bridge]: External odometry stopped; disarmed re-alignment required: rf2o_monitor_LOW_ANGULAR_COVERAGE
+[WARN] [1785071616.186559285] [lidar_odom_px4_bridge]: Bridge state: rf2o_monitor_LOW_ANGULAR_COVERAGE
+[WARN] [1785071616.256945071] [lidar_odom_px4_bridge]: Bridge state: lidar_odom_stale
+[WARN] [1785071617.056955144] [lidar_odom_px4_bridge]: Bridge state: rf2o_monitor_LOW_ANGULAR_COVERAGE
+[INFO] [1785071617.258089451] [lidar_odom_px4_bridge]: Alignment complete while disarmed: x=0.0112 y=0.0546 yaw=21.271 deg
+[WARN] [1785071617.258257226] [lidar_odom_px4_bridge]: Bridge state: none
+[WARN] [1785071702.436472872] [lidar_odom_px4_bridge]: Bridge state: monitor_diagnostics_stale
+[WARN] [1785071702.557034835] [lidar_odom_px4_bridge]: Bridge state: none
+[WARN] [1785073040.221459448] [lidar_odom_px4_bridge]: Bridge state: monitor_diagnostics_stale
+[WARN] [1785073040.257303063] [lidar_odom_px4_bridge]: Bridge state: none
+[WARN] [1785073231.856934244] [lidar_odom_px4_bridge]: Bridge state: lidar_odom_stale
+[ERROR] [1785073232.185525646] [lidar_odom_px4_bridge]: External odometry stopped; disarmed re-alignment required: rf2o_monitor_LOW_ANGULAR_COVERAGE
+[WARN] [1785073232.185618571] [lidar_odom_px4_bridge]: Bridge state: rf2o_monitor_LOW_ANGULAR_COVERAGE
+[WARN] [1785073232.256957470] [lidar_odom_px4_bridge]: Bridge state: lidar_odom_stale
+[WARN] [1785073233.056929678] [lidar_odom_px4_bridge]: Bridge state: rf2o_monitor_LOW_ANGULAR_COVERAGE
+[INFO] [1785073233.256938547] [lidar_odom_px4_bridge]: Alignment complete while disarmed: x=-0.0124 y=0.0212 yaw=48.358 deg
+[WARN] [1785073233.257107954] [lidar_odom_px4_bridge]: Bridge state: none
+[WARN] [1785073643.256921080] [lidar_odom_px4_bridge]: Bridge state: monitor_diagnostics_stale
+[WARN] [1785073643.460874099] [lidar_odom_px4_bridge]: Bridge state: none
+[WARN] [1785073664.267461147] [lidar_odom_px4_bridge]: Bridge state: monitor_diagnostics_stale
+[WARN] [1785073664.361428011] [lidar_odom_px4_bridge]: Bridge state: none
+[WARN] [1785073766.256930066] [lidar_odom_px4_bridge]: Bridge state: monitor_diagnostics_stale
+[WARN] [1785073766.356997193] [lidar_odom_px4_bridge]: Bridge state: none
+[WARN] [1785073899.759019045] [lidar_odom_px4_bridge]: Bridge state: lidar_odom_stale
+[ERROR] [1785073900.185551732] [lidar_odom_px4_bridge]: External odometry stopped; disarmed re-alignment required: rf2o_monitor_LOW_ANGULAR_COVERAGE
+[WARN] [1785073900.185858325] [lidar_odom_px4_bridge]: Bridge state: rf2o_monitor_LOW_ANGULAR_COVERAGE
+[WARN] [1785073900.257417803] [lidar_odom_px4_bridge]: Bridge state: lidar_odom_stale
+[WARN] [1785073901.056922997] [lidar_odom_px4_bridge]: Bridge state: rf2o_monitor_LOW_ANGULAR_COVERAGE
+[INFO] [1785073901.256933387] [lidar_odom_px4_bridge]: Alignment complete while disarmed: x=-0.0809 y=-0.0118 yaw=9.825 deg
+[WARN] [1785073901.257117998] [lidar_odom_px4_bridge]: Bridge state: none
+[WARN] [1785074017.056924946] [lidar_odom_px4_bridge]: Bridge state: lidar_odom_stale
+[ERROR] [1785074017.190028037] [lidar_odom_px4_bridge]: External odometry stopped; disarmed re-alignment required: rf2o_monitor_LOW_ANGULAR_COVERAGE
+[WARN] [1785074017.190137889] [lidar_odom_px4_bridge]: Bridge state: rf2o_monitor_LOW_ANGULAR_COVERAGE
+[WARN] [1785074017.258916905] [lidar_odom_px4_bridge]: Bridge state: lidar_odom_stale
+[INFO] [1785074018.257011073] [lidar_odom_px4_bridge]: Alignment complete while disarmed: x=-0.0838 y=-0.0137 yaw=7.707 deg
+[WARN] [1785074018.258293850] [lidar_odom_px4_bridge]: Bridge state: none
+[WARN] [1785074303.256964559] [lidar_odom_px4_bridge]: Bridge state: monitor_diagnostics_stale
+[WARN] [1785074303.556850439] [lidar_odom_px4_bridge]: Bridge state: lidar_odom_stale
+[ERROR] [1785074304.247831875] [lidar_odom_px4_bridge]: External odometry stopped; disarmed re-alignment required: rf2o_monitor_STALE_SCAN
+[WARN] [1785074304.247940653] [lidar_odom_px4_bridge]: Bridge state: rf2o_monitor_STALE_SCAN
+[WARN] [1785074304.257551945] [lidar_odom_px4_bridge]: Bridge state: lidar_odom_stale
+[WARN] [1785074305.056963628] [lidar_odom_px4_bridge]: Bridge state: rf2o_monitor_STALE_SCAN
+[INFO] [1785074305.256920904] [lidar_odom_px4_bridge]: Alignment complete while disarmed: x=0.4596 y=0.1331 yaw=-44.640 deg
+[WARN] [1785074305.257157829] [lidar_odom_px4_bridge]: Bridge state: none
+[WARN] [1785074385.156851668] [lidar_odom_px4_bridge]: Bridge state: scan_stale
+[ERROR] [1785074385.352246074] [lidar_odom_px4_bridge]: External odometry stopped; disarmed re-alignment required: rf2o_monitor_STALE_SCAN
+[WARN] [1785074385.352361167] [lidar_odom_px4_bridge]: Bridge state: rf2o_monitor_STALE_SCAN
+[WARN] [1785074385.364665745] [lidar_odom_px4_bridge]: Bridge state: scan_stale
+[WARN] [1785074385.456956907] [lidar_odom_px4_bridge]: Bridge state: rf2o_monitor_STALE_SCAN
+[INFO] [1785074386.256963204] [lidar_odom_px4_bridge]: Alignment complete while disarmed: x=0.4697 y=0.1280 yaw=-45.644 deg
+[WARN] [1785074386.257200648] [lidar_odom_px4_bridge]: Bridge state: none
+[WARN] [1785074709.059112379] [lidar_odom_px4_bridge]: Bridge state: lidar_odom_stale
+[ERROR] [1785074709.369883226] [lidar_odom_px4_bridge]: External odometry stopped; disarmed re-alignment required: rf2o_monitor_STALE_SCAN
+[WARN] [1785074709.370004577] [lidar_odom_px4_bridge]: Bridge state: rf2o_monitor_STALE_SCAN
+[INFO] [1785074710.256914300] [lidar_odom_px4_bridge]: Alignment complete while disarmed: x=0.4964 y=0.1200 yaw=-48.206 deg
+[WARN] [1785074710.257063614] [lidar_odom_px4_bridge]: Bridge state: none
+[WARN] [1785074730.611794026] [lidar_odom_px4_bridge]: Bridge state: lidar_odom_stale
+[WARN] [1785074730.657223342] [lidar_odom_px4_bridge]: Bridge state: none

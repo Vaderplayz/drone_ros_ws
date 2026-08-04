@@ -1,0 +1,36 @@
+[2026-07-23T23:14:11+0700] Real lidar2 3D mapping startup
+[2026-07-23T23:14:11+0700] Workspace=/home/pi5drone/drone_ros_ws; lidar2=/dev/ttyUSB1@460800; target_frame=odom
+[2026-07-23T23:14:11+0700] This launcher will not manage lidar1, RF2O, 2D SLAM, MAVROS, or flight control
+[2026-07-23T23:14:13+0700] STARTED message stream /mavros/local_position/odom
+[2026-07-23T23:14:16+0700] STARTED TF odom -> base_footprint
+[2026-07-23T23:14:16+0700] WARNING REQUIRE_2D_MAP=0; mapper will use TARGET_FRAME=odom
+[2026-07-23T23:14:17+0700] STARTED sllidar2 pgid=28877
+[2026-07-23T23:14:20+0700] Waiting for /scan_vertical; elapsed=3s deadline=60s
+[2026-07-23T23:14:23+0700] STARTED message stream /scan_vertical
+[2026-07-23T23:14:27+0700] STARTED lidar2_static_tf pgid=29163
+[2026-07-23T23:14:30+0700] STARTED TF base_footprint -> lidar_vert_link
+[2026-07-23T23:14:34+0700] STARTED TF odom -> lidar_vert_link
+[2026-07-23T23:14:39+0700] STARTED vertical_lidar_mapper pgid=29486
+[2026-07-23T23:14:40+0700] Waiting for /vertical_cloud; elapsed=1s deadline=90s
+[2026-07-23T23:14:44+0700] STARTED message stream /vertical_cloud
+[2026-07-23T23:14:47+0700] STARTED message stream /mapping/global_cloud
+
+######################################################################
+#                                                                    #
+#                       LIDAR2 3D MAP READY                          #
+#                                                                    #
+#             VERTICAL C1M1 MAPPING - OBSERVER ONLY                  #
+#                                                                    #
+######################################################################
+
+[2026-07-23T23:15:07+0700] Export service: ros2 service call /vertical_lidar_mapper/save_pcd std_srvs/srv/Trigger '{}'
+[2026-07-23T23:15:07+0700] On Ctrl+C, autosave requests one PCD/GLB asset set in /home/pi5drone/drone_ros_ws/maps/vertical_3d
+[2026-07-23T23:15:07+0700] Runtime logs: /home/pi5drone/drone_ros_ws/runtime_logs/lidar2_3d_20260723_231409
+[2026-07-23T23:15:07+0700] No PX4 parameter, arm, mode, movement, or setpoint command was sent
+[2026-07-23T23:17:29+0700] Shutdown reason: received signal TERM; launcher_exit=130
+[2026-07-23T23:17:30+0700] Autosaving 3D map assets through /vertical_lidar_mapper/save_pcd
+[2026-07-23T23:17:32+0700] 3D map autosave requested; PCD/GLB output directory: /home/pi5drone/drone_ros_ws/maps/vertical_3d
+[2026-07-23T23:17:32+0700] Stopping launcher-owned process group: vertical_lidar_mapper pgid=29486
+[2026-07-23T23:17:32+0700] Stopping launcher-owned process group: lidar2_static_tf pgid=29163
+[2026-07-23T23:17:32+0700] Stopping launcher-owned process group: sllidar2 pgid=28877
+[2026-07-23T23:17:33+0700] lidar1, RF2O, 2D SLAM, MAVROS, camera, AprilTag, planner, and flight control were not stopped

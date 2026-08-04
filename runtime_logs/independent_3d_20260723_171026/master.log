@@ -1,0 +1,35 @@
+[2026-07-23 17:10:27] [independent-3d] Independent 3D startup; expecting MAVROS and AprilTag to already be running
+[2026-07-23 17:10:30] [independent-3d] Waiting for /mavros/local_position/odom; elapsed=3s deadline=90s
+[2026-07-23 17:10:33] [independent-3d] Ready: message stream /mavros/local_position/odom
+[2026-07-23 17:10:36] [independent-3d] Starting full-pose MAVROS odometry TF bridge
+[2026-07-23 17:10:39] [independent-3d] Waiting for TF odom -> base_footprint; elapsed=3s deadline=90s
+[2026-07-23 17:10:47] [independent-3d] Ready: TF odom -> base_footprint
+[2026-07-23 17:10:47] [independent-3d] Starting lidar2 mapping in odom; no 2D map is required
+[2026-07-23T17:10:49+0700] Real lidar2 3D mapping startup
+[2026-07-23T17:10:49+0700] Workspace=/home/pi5drone/drone_ros_ws; lidar2=/dev/ttyUSB1@460800; target_frame=odom
+[2026-07-23T17:10:49+0700] This launcher will not manage lidar1, RF2O, 2D SLAM, MAVROS, or flight control
+[2026-07-23 17:10:50] [independent-3d] Waiting for TF base_footprint -> lidar_vert_link; elapsed=3s deadline=90s
+[2026-07-23T17:10:52+0700] Waiting for /mavros/local_position/odom; elapsed=3s deadline=90s
+[2026-07-23T17:10:55+0700] STARTED message stream /mavros/local_position/odom
+[2026-07-23T17:10:58+0700] Waiting for TF odom -> base_footprint; elapsed=3s deadline=90s
+[2026-07-23 17:10:59] [independent-3d] Waiting for TF base_footprint -> lidar_vert_link; elapsed=12s deadline=90s
+[2026-07-23T17:11:03+0700] STARTED TF odom -> base_footprint
+[2026-07-23T17:11:03+0700] WARNING REQUIRE_2D_MAP=0; mapper will use TARGET_FRAME=odom
+[2026-07-23T17:11:03+0700] STARTED sllidar2 pgid=3813
+[2026-07-23T17:11:04+0700] Waiting for /scan_vertical; elapsed=1s deadline=60s
+[2026-07-23 17:11:07] [independent-3d] Waiting for TF base_footprint -> lidar_vert_link; elapsed=20s deadline=90s
+[2026-07-23T17:11:07+0700] STARTED message stream /scan_vertical
+[2026-07-23T17:11:12+0700] STARTED lidar2_static_tf pgid=4038
+[2026-07-23T17:11:15+0700] STARTED TF base_footprint -> lidar_vert_link
+[2026-07-23 17:11:16] [independent-3d] Ready: TF base_footprint -> lidar_vert_link
+[2026-07-23T17:11:18+0700] STARTED TF odom -> lidar_vert_link
+[2026-07-23 17:11:19] [independent-3d] ERROR: could not inspect TF base_footprint -> lidar_vert_link
+[2026-07-23 17:11:19] [independent-3d] Shutdown reason: could not inspect TF base_footprint -> lidar_vert_link; launcher_exit=1
+[2026-07-23 17:11:19] [independent-3d] Stopping 3D mapping launcher pid=3376
+[2026-07-23T17:11:20+0700] Shutdown reason: received signal TERM; launcher_exit=130
+[2026-07-23T17:11:21+0700] WARNING 3D map autosave skipped because /vertical_lidar_mapper/save_pcd is unavailable
+[2026-07-23T17:11:21+0700] Stopping launcher-owned process group: lidar2_static_tf pgid=4038
+[2026-07-23T17:11:21+0700] Stopping launcher-owned process group: sllidar2 pgid=3813
+[2026-07-23T17:11:22+0700] lidar1, RF2O, 2D SLAM, MAVROS, camera, AprilTag, planner, and flight control were not stopped
+[2026-07-23 17:11:22] [independent-3d] Stopping odometry TF bridge pid=3141
+[2026-07-23 17:11:23] [independent-3d] Independent 3D mapping stopped; MAVROS and AprilTag were left running

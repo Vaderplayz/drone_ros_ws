@@ -1,0 +1,3 @@
+[INFO] [1785680786.293792559] [spatial_awareness]: Spatial awareness: horizontal=/scan_slam vertical_scan=/scan_vertical vertical_cloud=/vertical_cloud fixed=odom output=base_footprint
+[INFO] [1785680786.293986614] [spatial_awareness]: Collision span 0.75x0.75x0.22m (propeller tips included), safety margins h=0.40m v=0.30m
+[INFO] [1785680980.085264221] [rclcpp]: signal_handler(SIGINT/SIGTERM)

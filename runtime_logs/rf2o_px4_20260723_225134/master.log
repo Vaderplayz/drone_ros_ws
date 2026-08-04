@@ -1,0 +1,5 @@
+[2026-07-23T22:51:35+0700] Independent RF2O/PX4 odometry startup
+[2026-07-23T22:51:35+0700] Workspace=/home/pi5drone/drone_ros_ws; LiDAR=/dev/ttyUSB0; use_sim_time=false
+[2026-07-23T22:51:35+0700] This launcher will not manage MAVROS, the flight controller, camera, or AprilTag nodes
+[2026-07-23T22:51:39+0700] Shutdown reason: received signal INT; launcher_exit=130
+[2026-07-23T22:51:39+0700] MAVROS, flight controller, camera, and AprilTag processes were not stopped

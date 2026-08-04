@@ -1,0 +1,19 @@
+[WARN] [1784821550.392341682] [mapping_scan_deskew]: Canonical scan state: INITIALIZING
+[INFO] [1784821550.392526207] [mapping_scan_deskew]: Canonicalizing /scan_rf2o to /scan_slam with 720 bins in per_message_full_scan mode
+[WARN] [1784821552.767999412] [mapping_scan_deskew]: Dropping scan because deskew TF is unavailable: Could not find a connection between 'odom' and 'laser_frame' because they are not part of the same tree.Tf has two or more unconnected trees.
+[WARN] [1784821552.768127268] [mapping_scan_deskew]: Canonical scan state: DESKEW_UNAVAILABLE
+[WARN] [1784821552.768144750] [mapping_scan_deskew]: Dropping full scan because deskew TF is unavailable
+[INFO] [1784821553.844203575] [mapping_scan_deskew]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1784821553.852792368] [mapping_scan_deskew]: Canonical scan state: INCOMPLETE_REVOLUTION
+[INFO] [1784821554.018243719] [mapping_scan_deskew]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1784821556.104013823] [mapping_scan_deskew]: Canonical scan state: INCOMPLETE_REVOLUTION
+[INFO] [1784821556.253437738] [mapping_scan_deskew]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1784821557.805364658] [mapping_scan_deskew]: Canonical scan state: INCOMPLETE_REVOLUTION
+[WARN] [1784821557.806873339] [mapping_scan_deskew]: Canonical output rate limit suppressed this revolution
+[INFO] [1784821557.943902243] [mapping_scan_deskew]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1784821563.401759122] [mapping_scan_deskew]: Canonical scan state: INCOMPLETE_REVOLUTION
+[WARN] [1784821563.401852625] [mapping_scan_deskew]: Canonical output rate limit suppressed this revolution
+[INFO] [1784821563.482122547] [mapping_scan_deskew]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1784821565.542017232] [mapping_scan_deskew]: Canonical scan state: INCOMPLETE_REVOLUTION
+[INFO] [1784821565.674516171] [mapping_scan_deskew]: Canonical scan state: OK_FULL_SCAN
+[INFO] [1784821652.156007867] [rclcpp]: signal_handler(SIGINT/SIGTERM)

@@ -1,0 +1,49 @@
+[WARN] [1785679356.095107504] [laser_scan_canonicalizer]: Canonical scan state: CLASSIFYING_INPUT
+[INFO] [1785679356.095279245] [laser_scan_canonicalizer]: Canonicalizing /scan to /scan_rf2o with 720 bins in auto mode
+[WARN] [1785679359.795034113] [laser_scan_canonicalizer]: Canonical scan state: INITIALIZING
+[INFO] [1785679359.795108761] [laser_scan_canonicalizer]: Canonicalizer mode locked: per_message_full_scan (full=20 partial=0 malformed=0)
+[INFO] [1785679359.930657650] [laser_scan_canonicalizer]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1785679670.007469706] [laser_scan_canonicalizer]: Canonical scan state: INCOMPLETE_REVOLUTION
+[WARN] [1785679670.009842076] [laser_scan_canonicalizer]: Canonical output rate limit suppressed this revolution
+[INFO] [1785679670.150921798] [laser_scan_canonicalizer]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1785679691.942373933] [laser_scan_canonicalizer]: Canonical scan state: INCOMPLETE_REVOLUTION
+[WARN] [1785679691.942485989] [laser_scan_canonicalizer]: Canonical output rate limit suppressed this revolution
+[INFO] [1785679692.087443192] [laser_scan_canonicalizer]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1785679704.206289389] [laser_scan_canonicalizer]: Canonical scan state: INCOMPLETE_REVOLUTION
+[WARN] [1785679704.206384148] [laser_scan_canonicalizer]: Canonical output rate limit suppressed this revolution
+[INFO] [1785679704.350074444] [laser_scan_canonicalizer]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1785679704.792578352] [laser_scan_canonicalizer]: Canonical scan state: INCOMPLETE_REVOLUTION
+[INFO] [1785679704.908590055] [laser_scan_canonicalizer]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1785680463.172844585] [laser_scan_canonicalizer]: Canonical scan state: INCOMPLETE_REVOLUTION
+[WARN] [1785680463.172941640] [laser_scan_canonicalizer]: Canonical output rate limit suppressed this revolution
+[INFO] [1785680463.368016677] [laser_scan_canonicalizer]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1785680472.193210765] [laser_scan_canonicalizer]: Canonical scan state: INCOMPLETE_REVOLUTION
+[WARN] [1785680472.193281357] [laser_scan_canonicalizer]: Canonical output rate limit suppressed this revolution
+[INFO] [1785680472.320419524] [laser_scan_canonicalizer]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1785680733.877207849] [laser_scan_canonicalizer]: Canonical scan state: INCOMPLETE_REVOLUTION
+[WARN] [1785680733.877315738] [laser_scan_canonicalizer]: Canonical output rate limit suppressed this revolution
+[INFO] [1785680734.022802386] [laser_scan_canonicalizer]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1785680749.892392988] [laser_scan_canonicalizer]: Canonical scan state: INCOMPLETE_REVOLUTION
+[WARN] [1785680749.894202321] [laser_scan_canonicalizer]: Canonical output rate limit suppressed this revolution
+[INFO] [1785680750.032860710] [laser_scan_canonicalizer]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1785680751.126708246] [laser_scan_canonicalizer]: Canonical scan state: INCOMPLETE_REVOLUTION
+[INFO] [1785680751.259885543] [laser_scan_canonicalizer]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1785680765.859300497] [laser_scan_canonicalizer]: Canonical scan state: INCOMPLETE_REVOLUTION
+[WARN] [1785680765.859413460] [laser_scan_canonicalizer]: Canonical output rate limit suppressed this revolution
+[INFO] [1785680766.035431386] [laser_scan_canonicalizer]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1785680790.240535353] [laser_scan_canonicalizer]: Canonical scan state: INCOMPLETE_REVOLUTION
+[WARN] [1785680790.240622964] [laser_scan_canonicalizer]: Canonical output rate limit suppressed this revolution
+[INFO] [1785680790.403614797] [laser_scan_canonicalizer]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1785680792.698585296] [laser_scan_canonicalizer]: Canonical scan state: INCOMPLETE_REVOLUTION
+[INFO] [1785680792.833587573] [laser_scan_canonicalizer]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1785680793.791306536] [laser_scan_canonicalizer]: Canonical scan state: INCOMPLETE_REVOLUTION
+[INFO] [1785680793.930976851] [laser_scan_canonicalizer]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1785680811.858842840] [laser_scan_canonicalizer]: Canonical scan state: INCOMPLETE_REVOLUTION
+[WARN] [1785680811.858948377] [laser_scan_canonicalizer]: Canonical output rate limit suppressed this revolution
+[INFO] [1785680811.998130395] [laser_scan_canonicalizer]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1785680820.494211483] [laser_scan_canonicalizer]: Canonical scan state: INCOMPLETE_REVOLUTION
+[WARN] [1785680820.494287761] [laser_scan_canonicalizer]: Canonical output rate limit suppressed this revolution
+[INFO] [1785680820.633717261] [laser_scan_canonicalizer]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1785680825.281626906] [laser_scan_canonicalizer]: Canonical scan state: INCOMPLETE_REVOLUTION
+[INFO] [1785680825.445034591] [laser_scan_canonicalizer]: Canonical scan state: OK_FULL_SCAN
+[INFO] [1785680976.137650872] [rclcpp]: signal_handler(SIGINT/SIGTERM)

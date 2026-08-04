@@ -1,0 +1,119 @@
+[INFO] [1784801545.691634751] [vertical_lidar_mapper]: vertical_lidar_mapper started. scan_topic='/scan_vertical' target_frame='odom' local_voxel=0.100 global_voxel=0.050 global_cap=1000000
+[INFO] [1784801545.691978500] [vertical_lidar_mapper]: Global integration mode: keyframe (keyframe_min_translation=0.050m keyframe_min_yaw=0.040rad keyframe_max_interval=0.200s max_keyframes=10000).
+[INFO] [1784801545.692007872] [vertical_lidar_mapper]: Full-pose deskew: enabled (required=true odom_topic='/mavros/local_position/odom' odom_frame='odom' stamp_reference='start' pose_gap<=0.100s output='/vertical_points_deskewed').
+[INFO] [1784801545.692039706] [vertical_lidar_mapper]: Map-rebase: disabled (map_frame='map' odom_frame='odom' trans_th=0.080m yaw_th=0.040rad)
+[INFO] [1784801545.692054651] [vertical_lidar_mapper]: Relative-pose gate: disabled (map='map' odom='odom' trans_err_th=0.080m yaw_err_th=0.060rad min_motion=0.030m max_map_step=0.250m max_map_yaw=0.150rad)
+[INFO] [1784801545.692073540] [vertical_lidar_mapper]: Map-rebase cooldown: 6 scans after correction.
+[INFO] [1784801545.692087763] [vertical_lidar_mapper]: Floor filter: disabled (drop z <= 0.10 m in 'odom' frame).
+[INFO] [1784801545.692111430] [vertical_lidar_mapper]: PCD export service: '/vertical_lidar_mapper/save_pcd' dir='/home/pi5drone/drone_ros_ws/maps/vertical_3d' binary=true
+[INFO] [1784801545.692125134] [vertical_lidar_mapper]: SLAM 2D map export on save: disabled (topic='/map' prefix='slam2d_map').
+[INFO] [1784801545.692144060] [vertical_lidar_mapper]: Structural GLB export on save: disabled (prefix='lidar2_structural_environment' auto_height=true ceiling=false grid_cap=2000000).
+[INFO] [1784801545.692159839] [vertical_lidar_mapper]: Loop-closure dedup-only mode: disabled
+[INFO] [1784801545.692172302] [vertical_lidar_mapper]: Global rebuild service: '/vertical_lidar_mapper/rebuild_global' (rebuild_on_map_correction=true corr_trans_th=0.080m corr_yaw_th=0.040rad freeze_scans=6).
+[WARN] [1784801546.779859800] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.102s): full-pose buffer has fewer than two samples
+[WARN] [1784801548.873208690] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.100s): only 92.8% of valid beams had interpolated poses
+[WARN] [1784801550.878489206] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.100s): only 92.4% of valid beams had interpolated poses
+[WARN] [1784801552.881896583] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.102s): only 92.3% of valid beams had interpolated poses
+[WARN] [1784801554.977714428] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.101s): only 92.3% of valid beams had interpolated poses
+[WARN] [1784801557.072274128] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.100s): only 91.5% of valid beams had interpolated poses
+[WARN] [1784801559.171322255] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.100s): only 93.0% of valid beams had interpolated poses
+[WARN] [1784801561.555831141] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.392s): only 92.6% of valid beams had interpolated poses
+[WARN] [1784801563.568240532] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.100s): only 93.8% of valid beams had interpolated poses
+[WARN] [1784801565.664616864] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.101s): only 91.9% of valid beams had interpolated poses
+[WARN] [1784801567.665104670] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.101s): only 92.3% of valid beams had interpolated poses
+[WARN] [1784801569.764435268] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.099s): only 92.6% of valid beams had interpolated poses
+[WARN] [1784801571.860918721] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.098s): only 92.1% of valid beams had interpolated poses
+[WARN] [1784801573.957103632] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.100s): only 92.8% of valid beams had interpolated poses
+[WARN] [1784801575.961607375] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.102s): only 92.8% of valid beams had interpolated poses
+[WARN] [1784801578.054321226] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.101s): only 92.3% of valid beams had interpolated poses
+[WARN] [1784801580.152368273] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.099s): only 92.1% of valid beams had interpolated poses
+[WARN] [1784801582.248631211] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.098s): only 92.6% of valid beams had interpolated poses
+[WARN] [1784801584.251046777] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.105s): only 92.8% of valid beams had interpolated poses
+[WARN] [1784801586.344833708] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.098s): only 92.5% of valid beams had interpolated poses
+[WARN] [1784801588.444573838] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.102s): only 93.1% of valid beams had interpolated poses
+[WARN] [1784801590.542010499] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.101s): only 92.8% of valid beams had interpolated poses
+[WARN] [1784801591.263821680] [vertical_lidar_mapper]: New subscription discovered on topic '/vertical_points_deskewed', requesting incompatible QoS. No messages will be sent to it. Last incompatible policy: RELIABILITY_QOS_POLICY
+[WARN] [1784801592.544919343] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.103s): only 92.4% of valid beams had interpolated poses
+[WARN] [1784801594.636736886] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.098s): only 92.5% of valid beams had interpolated poses
+[WARN] [1784801596.637491279] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.100s): only 92.3% of valid beams had interpolated poses
+[WARN] [1784801598.639078589] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.101s): only 93.2% of valid beams had interpolated poses
+[WARN] [1784801600.734199560] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.098s): only 92.3% of valid beams had interpolated poses
+[WARN] [1784801602.831803525] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.101s): only 92.8% of valid beams had interpolated poses
+[WARN] [1784801604.832021615] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.100s): only 92.8% of valid beams had interpolated poses
+[WARN] [1784801606.923189466] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.098s): only 93.1% of valid beams had interpolated poses
+[WARN] [1784801608.924653762] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.101s): only 93.0% of valid beams had interpolated poses
+[WARN] [1784801611.023478161] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.102s): only 94.2% of valid beams had interpolated poses
+[WARN] [1784801613.118779981] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.097s): only 92.1% of valid beams had interpolated poses
+[WARN] [1784801615.119077222] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.102s): only 94.7% of valid beams had interpolated poses
+[WARN] [1784801617.312912008] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.097s): only 93.7% of valid beams had interpolated poses
+[WARN] [1784801619.316089561] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.102s): only 94.7% of valid beams had interpolated poses
+[WARN] [1784801621.312083951] [vertical_lidar_mapper]: Dropped scan from global integration: |yaw_rate|=0.379 > 0.350 rad/s (odom_age=0.081s).
+[WARN] [1784801621.909047031] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.100s): only 94.8% of valid beams had interpolated poses
+[WARN] [1784801624.005361485] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.098s): only 89.7% of valid beams had interpolated poses
+[WARN] [1784801626.006618270] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.096s): only 89.9% of valid beams had interpolated poses
+[WARN] [1784801628.104613249] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.100s): only 90.0% of valid beams had interpolated poses
+[WARN] [1784801630.105539605] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.101s): only 90.2% of valid beams had interpolated poses
+[WARN] [1784801632.195824836] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.100s): only 89.4% of valid beams had interpolated poses
+[WARN] [1784801633.801514474] [vertical_lidar_mapper]: Dropped scan from global integration: |yaw_rate|=0.351 > 0.350 rad/s (odom_age=0.092s).
+[WARN] [1784801634.201420621] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.101s): only 91.8% of valid beams had interpolated poses
+[WARN] [1784801636.292448719] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.100s): only 88.7% of valid beams had interpolated poses
+[WARN] [1784801638.294828465] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.102s): only 89.2% of valid beams had interpolated poses
+[WARN] [1784801640.297016300] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.104s): only 89.8% of valid beams had interpolated poses
+[WARN] [1784801642.384653600] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.100s): only 89.8% of valid beams had interpolated poses
+[WARN] [1784801644.385770658] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.101s): only 90.0% of valid beams had interpolated poses
+[WARN] [1784801646.482985035] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.099s): only 90.4% of valid beams had interpolated poses
+[WARN] [1784801648.485204260] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.101s): only 90.5% of valid beams had interpolated poses
+[WARN] [1784801650.583766069] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.100s): only 94.3% of valid beams had interpolated poses
+[WARN] [1784801652.676943313] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.101s): only 93.5% of valid beams had interpolated poses
+[WARN] [1784801654.679436670] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.099s): only 91.1% of valid beams had interpolated poses
+[WARN] [1784801656.778729733] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.101s): only 89.8% of valid beams had interpolated poses
+[WARN] [1784801658.874168897] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.101s): only 90.0% of valid beams had interpolated poses
+[WARN] [1784801660.876461557] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.101s): only 90.2% of valid beams had interpolated poses
+[WARN] [1784801662.971030256] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.101s): only 89.8% of valid beams had interpolated poses
+[WARN] [1784801665.067831687] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.099s): only 92.7% of valid beams had interpolated poses
+[WARN] [1784801665.369026320] [vertical_lidar_mapper]: Dropped scan from global integration: |yaw_rate|=0.383 > 0.350 rad/s (odom_age=0.069s).
+[WARN] [1784801667.166451248] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.102s): only 92.2% of valid beams had interpolated poses
+[WARN] [1784801669.166691150] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.101s): only 89.7% of valid beams had interpolated poses
+[WARN] [1784801671.265212827] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.102s): only 89.8% of valid beams had interpolated poses
+[WARN] [1784801673.267545468] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.098s): only 89.7% of valid beams had interpolated poses
+[WARN] [1784801675.364027261] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.101s): only 90.5% of valid beams had interpolated poses
+[WARN] [1784801677.462018388] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.100s): only 92.1% of valid beams had interpolated poses
+[WARN] [1784801679.566196631] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.103s): only 91.5% of valid beams had interpolated poses
+[WARN] [1784801681.656265850] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.100s): only 91.7% of valid beams had interpolated poses
+[WARN] [1784801683.752144586] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.097s): only 89.6% of valid beams had interpolated poses
+[WARN] [1784801685.752668754] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.101s): only 92.1% of valid beams had interpolated poses
+[WARN] [1784801687.851599238] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.100s): only 92.5% of valid beams had interpolated poses
+[WARN] [1784801689.949830070] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.100s): only 92.1% of valid beams had interpolated poses
+[WARN] [1784801692.046284562] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.100s): only 91.9% of valid beams had interpolated poses
+[WARN] [1784801694.046642473] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.106s): only 92.6% of valid beams had interpolated poses
+[WARN] [1784801696.143331048] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.101s): only 92.1% of valid beams had interpolated poses
+[WARN] [1784801698.239422901] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.104s): only 92.0% of valid beams had interpolated poses
+[WARN] [1784801700.339787464] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.103s): only 92.1% of valid beams had interpolated poses
+[WARN] [1784801702.437142887] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.100s): only 91.9% of valid beams had interpolated poses
+[WARN] [1784801704.536259877] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.102s): only 92.4% of valid beams had interpolated poses
+[WARN] [1784801706.634258321] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.101s): only 92.4% of valid beams had interpolated poses
+[WARN] [1784801708.729334404] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.100s): only 92.4% of valid beams had interpolated poses
+[WARN] [1784801710.826654732] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.099s): only 91.7% of valid beams had interpolated poses
+[WARN] [1784801712.925021189] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.101s): only 92.3% of valid beams had interpolated poses
+[WARN] [1784801715.022623700] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.098s): only 91.7% of valid beams had interpolated poses
+[WARN] [1784801717.115955380] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.100s): only 91.6% of valid beams had interpolated poses
+[WARN] [1784801719.120335726] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.104s): only 92.7% of valid beams had interpolated poses
+[WARN] [1784801721.215317396] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.099s): only 92.3% of valid beams had interpolated poses
+[WARN] [1784801723.311122117] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.098s): only 90.1% of valid beams had interpolated poses
+[WARN] [1784801725.409290106] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.100s): only 89.3% of valid beams had interpolated poses
+[WARN] [1784801727.503964225] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.100s): only 89.4% of valid beams had interpolated poses
+[WARN] [1784801729.508630656] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.100s): only 89.4% of valid beams had interpolated poses
+[WARN] [1784801731.604733522] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.101s): only 89.9% of valid beams had interpolated poses
+[WARN] [1784801733.697998827] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.098s): only 89.2% of valid beams had interpolated poses
+[WARN] [1784801735.699071957] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.101s): only 88.6% of valid beams had interpolated poses
+[WARN] [1784801737.501370331] [vertical_lidar_mapper]: Dropped scan from global integration: |yaw_rate|=0.424 > 0.350 rad/s (odom_age=0.098s).
+[WARN] [1784801737.797270693] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.098s): only 88.8% of valid beams had interpolated poses
+[WARN] [1784801739.798476526] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.100s): only 90.6% of valid beams had interpolated poses
+[WARN] [1784801741.893461526] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.099s): only 88.7% of valid beams had interpolated poses
+[WARN] [1784801743.987777234] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.101s): only 88.4% of valid beams had interpolated poses
+[WARN] [1784801745.993427709] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.101s): only 88.7% of valid beams had interpolated poses
+[WARN] [1784801748.088820528] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.098s): only 88.1% of valid beams had interpolated poses
+[WARN] [1784801750.088927999] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.100s): only 88.2% of valid beams had interpolated poses
+[WARN] [1784801752.090847987] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.104s): only 88.4% of valid beams had interpolated poses
+[INFO] [1784801753.841436289] [vertical_lidar_mapper]: Saved PCD: /home/pi5drone/drone_ros_ws/maps/vertical_3d/lidar2_vertical_global_map_1784801753_834519961.pcd | trajectory: /home/pi5drone/drone_ros_ws/maps/vertical_3d/lidar2_vertical_trajectory_1784801753_834519961.csv
+[INFO] [1784801754.176408138] [rclcpp]: signal_handler(SIGINT/SIGTERM)

@@ -1,0 +1,7 @@
+[WARN] [1785061053.608354452] [lidar_odom_px4_bridge]: Bridge state: waiting_for_inputs
+[INFO] [1785061053.608516099] [lidar_odom_px4_bridge]: LiDAR external odometry bridge: /lidar/odom -> /mavros/odometry/out (odom -> base_link)
+[INFO] [1785061053.608539988] [lidar_odom_px4_bridge]: Covariance: xy_stddev=0.300 m yaw_stddev=0.200 rad unused_variance=1000000.0
+[WARN] [1785061053.716661979] [lidar_odom_px4_bridge]: Bridge state: mavros_disconnected
+[INFO] [1785061054.610164050] [lidar_odom_px4_bridge]: Alignment complete while disarmed: x=-0.0160 y=0.0291 yaw=146.432 deg
+[WARN] [1785061054.610382697] [lidar_odom_px4_bridge]: Bridge state: none
+[INFO] [1785061069.092045367] [rclcpp]: signal_handler(SIGINT/SIGTERM)

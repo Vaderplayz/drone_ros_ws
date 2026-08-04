@@ -1,0 +1,4 @@
+[2026-07-23T22:53:13+0700] ERROR obs_avoid laser_scan_canonicalizer executable is unavailable
+[2026-07-23T22:53:13+0700] Shutdown reason: normal exit; launcher_exit=1
+[2026-07-23T22:53:13+0700] WARNING 2D map autosave skipped because slam_toolbox is not running
+[2026-07-23T22:53:13+0700] RF2O/PX4 fusion, MAVROS, LiDAR, camera, AprilTag, and flight control were not stopped

@@ -1,5 +1,16 @@
 # Master Startup Scripts
 
+## Obstacle-avoidance readiness
+
+`check_obstacle_avoidance_readiness.sh` is a read-only onboard audit for the
+two LiDAR streams, odometry, local/global clouds, six-direction awareness, and
+the guarded command path. It does not arm, change mode, publish setpoints, or
+modify PX4 parameters.
+
+The real guarded planner is started separately with
+`src/obs_avoid/scripts/start_flight_mode.sh` only after spatial awareness is
+publishing. Mapping launchers remain flight-command free by default.
+
 Central entry points for the real-drone mapping stack:
 
 ```bash

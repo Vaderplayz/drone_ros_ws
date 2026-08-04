@@ -1,0 +1,49 @@
+[2026-07-26T20:10:36+0700] Independent RF2O/PX4 odometry startup
+[2026-07-26T20:10:36+0700] Workspace=/home/pi5drone/drone_ros_ws; LiDAR=/dev/ttyUSB0; use_sim_time=false
+[2026-07-26T20:10:36+0700] This launcher will not manage MAVROS, the flight controller, camera, or AprilTag nodes
+[2026-07-26T20:10:39+0700] Waiting for existing MAVROS connection; elapsed=2s deadline=60s
+[1;32m[2026-07-26T20:10:43+0700] STARTED existing MAVROS connected; vehicle disarmed[0m
+[1;32m[2026-07-26T20:10:48+0700] STARTED rplidar pid=5936[0m
+[2026-07-26T20:10:49+0700] Waiting for /scan; elapsed=1s deadline=60s
+[1;32m[2026-07-26T20:10:53+0700] STARTED message stream /scan[0m
+[1;32m[2026-07-26T20:10:54+0700] STARTED odom_flatten pid=6072[0m
+[1;32m[2026-07-26T20:10:54+0700] STARTED static_lidar_tf pid=6074[0m
+[1;32m[2026-07-26T20:10:56+0700] STARTED TF odom -> base_footprint[0m
+[2026-07-26T20:10:58+0700] Waiting for TF base_footprint -> laser_frame; elapsed=2s deadline=60s
+[2026-07-26T20:11:02+0700] Waiting for TF base_footprint -> laser_frame; elapsed=6s deadline=60s
+[2026-07-26T20:11:08+0700] Waiting for TF base_footprint -> laser_frame; elapsed=12s deadline=60s
+[2026-07-26T20:11:11+0700] Waiting for TF base_footprint -> laser_frame; elapsed=15s deadline=60s
+[1;32m[2026-07-26T20:11:17+0700] STARTED TF base_footprint -> laser_frame[0m
+[1;32m[2026-07-26T20:11:17+0700] STARTED scan_audit pid=6592[0m
+[2026-07-26T20:11:19+0700] Waiting for /scan_stream_audit/diagnostics classification_ready=true; elapsed=2s deadline=30s
+[2026-07-26T20:11:22+0700] Waiting for /scan_stream_audit/diagnostics classification_ready=true; elapsed=5s deadline=30s
+[1;32m[2026-07-26T20:11:25+0700] STARTED diagnostic /scan_stream_audit/diagnostics classification_ready=true[0m
+[1;32m[2026-07-26T20:11:25+0700] STARTED canonicalizer pid=6780[0m
+waiting for /scan_rf2o: 0/5
+[2026-07-26T20:11:35+0700] Waiting for /scan_rf2o/diagnostics timestamp_monotonic=true; elapsed=3s deadline=15s
+[1;32m[2026-07-26T20:11:39+0700] STARTED diagnostic /scan_rf2o/diagnostics timestamp_monotonic=true[0m
+[1;32m[2026-07-26T20:11:39+0700] STARTED five coherent canonical scans[0m
+[1;32m[2026-07-26T20:11:39+0700] STARTED lidar_odom_monitor pid=7036[0m
+[1;32m[2026-07-26T20:11:40+0700] STARTED rf2o pid=7069[0m
+waiting for /lidar/odom_raw: 0/5
+[1;32m[2026-07-26T20:11:45+0700] STARTED RF2O raw odometry /lidar/odom_raw[0m
+waiting for /lidar/odom: 0/5
+[1;32m[2026-07-26T20:11:48+0700] STARTED health-gated LiDAR odometry /lidar/odom[0m
+[1;32m[2026-07-26T20:11:48+0700] STARTED lidar_odom_px4_bridge pid=7241[0m
+[2026-07-26T20:11:49+0700] Waiting for /lidar_odom_px4_bridge/diagnostics; elapsed=1s deadline=15s
+[2026-07-26T20:11:53+0700] Waiting for /lidar_odom_px4_bridge/diagnostics; elapsed=5s deadline=15s
+[1;32m[2026-07-26T20:11:55+0700] STARTED message stream /lidar_odom_px4_bridge/diagnostics[0m
+[1;32m[2026-07-26T20:11:57+0700] STARTED message stream /mavros/odometry/out[0m
+[1;32m[2026-07-26T20:11:58+0700] STARTED RF2O feed to PX4 via /mavros/odometry/out[0m
+
+[1;32m######################################################################
+#                                                                    #
+#                         ALL SYSTEM READY                           #
+#                                                                    #
+#             RF2O odometry is feeding PX4 through MAVROS            #
+#                                                                    #
+######################################################################
+[0m
+[2026-07-26T20:12:08+0700] ROS/MAVROS feed is ready; verify EKF2 external-vision aid flags before flight
+[2026-07-26T20:12:08+0700] No PX4 parameter, arm, mode, or movement command was sent
+[2026-07-26T20:12:08+0700] Runtime logs: /home/pi5drone/drone_ros_ws/runtime_logs/rf2o_px4_20260726_201035

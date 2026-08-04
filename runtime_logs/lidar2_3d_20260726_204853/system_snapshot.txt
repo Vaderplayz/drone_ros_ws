@@ -1,0 +1,530 @@
+timestamp=2026-07-26T20:49:37+0700
+workspace=/home/pi5drone/drone_ros_ws
+use_sim_time=false
+lidar2_port=/dev/ttyUSB1
+lidar2_baudrate=460800
+lidar2_scan_topic=/scan_vertical
+lidar2_frame=lidar_vert_link
+frames=odom->odom->base_footprint->lidar_vert_link
+lidar2_static_tf_xyz_rpy=0.0,0.0,0.70,1.57079632679,0.0,-1.57079632679
+mapper_params=/home/pi5drone/drone_ros_ws/src/vertical_lidar_mapper/config/real_c1m1_left.yaml
+export_dir=/home/pi5drone/drone_ros_ws/maps/vertical_3d
+
+-- /scan_vertical --
+Type: sensor_msgs/msg/LaserScan
+
+Publisher count: 1
+
+Node name: sllidar2_vertical
+Node namespace: /
+Topic type: sensor_msgs/msg/LaserScan
+Topic type hash: RIHS01_64c191398013af96509d518dac71d5164f9382553fce5c1f8cca5be7924bd828
+Endpoint type: PUBLISHER
+GID: 01.0f.45.d4.83.a3.07.96.00.00.00.00.00.00.14.03
+QoS profile:
+  Reliability: RELIABLE
+  History (Depth): UNKNOWN
+  Durability: VOLATILE
+  Lifespan: Infinite
+  Deadline: Infinite
+  Liveliness: AUTOMATIC
+  Liveliness lease duration: Infinite
+
+Subscription count: 1
+
+Node name: vertical_lidar_mapper
+Node namespace: /
+Topic type: sensor_msgs/msg/LaserScan
+Topic type hash: RIHS01_64c191398013af96509d518dac71d5164f9382553fce5c1f8cca5be7924bd828
+Endpoint type: SUBSCRIPTION
+GID: 01.0f.45.d4.ff.a5.34.dc.00.00.00.00.00.00.25.04
+QoS profile:
+  Reliability: BEST_EFFORT
+  History (Depth): UNKNOWN
+  Durability: VOLATILE
+  Lifespan: Infinite
+  Deadline: Infinite
+  Liveliness: AUTOMATIC
+  Liveliness lease duration: Infinite
+
+
+-- /vertical_points_deskewed --
+Type: sensor_msgs/msg/PointCloud2
+
+Publisher count: 1
+
+Node name: vertical_lidar_mapper
+Node namespace: /
+Topic type: sensor_msgs/msg/PointCloud2
+Topic type hash: RIHS01_9198cabf7da3796ae6fe19c4cb3bdd3525492988c70522628af5daa124bae2b5
+Endpoint type: PUBLISHER
+GID: 01.0f.45.d4.ff.a5.34.dc.00.00.00.00.00.00.1b.03
+QoS profile:
+  Reliability: BEST_EFFORT
+  History (Depth): UNKNOWN
+  Durability: VOLATILE
+  Lifespan: Infinite
+  Deadline: Infinite
+  Liveliness: AUTOMATIC
+  Liveliness lease duration: Infinite
+
+Subscription count: 0
+
+
+-- /vertical_cloud --
+Type: sensor_msgs/msg/PointCloud2
+
+Publisher count: 1
+
+Node name: vertical_lidar_mapper
+Node namespace: /
+Topic type: sensor_msgs/msg/PointCloud2
+Topic type hash: RIHS01_9198cabf7da3796ae6fe19c4cb3bdd3525492988c70522628af5daa124bae2b5
+Endpoint type: PUBLISHER
+GID: 01.0f.45.d4.ff.a5.34.dc.00.00.00.00.00.00.1a.03
+QoS profile:
+  Reliability: BEST_EFFORT
+  History (Depth): UNKNOWN
+  Durability: VOLATILE
+  Lifespan: Infinite
+  Deadline: Infinite
+  Liveliness: AUTOMATIC
+  Liveliness lease duration: Infinite
+
+Subscription count: 0
+
+
+-- /vertical_map --
+Type: sensor_msgs/msg/PointCloud2
+
+Publisher count: 1
+
+Node name: vertical_lidar_mapper
+Node namespace: /
+Topic type: sensor_msgs/msg/PointCloud2
+Topic type hash: RIHS01_9198cabf7da3796ae6fe19c4cb3bdd3525492988c70522628af5daa124bae2b5
+Endpoint type: PUBLISHER
+GID: 01.0f.45.d4.ff.a5.34.dc.00.00.00.00.00.00.1c.03
+QoS profile:
+  Reliability: RELIABLE
+  History (Depth): UNKNOWN
+  Durability: VOLATILE
+  Lifespan: Infinite
+  Deadline: Infinite
+  Liveliness: AUTOMATIC
+  Liveliness lease duration: Infinite
+
+Subscription count: 0
+
+
+-- /mapping/global_cloud --
+Type: sensor_msgs/msg/PointCloud2
+
+Publisher count: 1
+
+Node name: vertical_lidar_mapper
+Node namespace: /
+Topic type: sensor_msgs/msg/PointCloud2
+Topic type hash: RIHS01_9198cabf7da3796ae6fe19c4cb3bdd3525492988c70522628af5daa124bae2b5
+Endpoint type: PUBLISHER
+GID: 01.0f.45.d4.ff.a5.34.dc.00.00.00.00.00.00.1d.03
+QoS profile:
+  Reliability: RELIABLE
+  History (Depth): UNKNOWN
+  Durability: VOLATILE
+  Lifespan: Infinite
+  Deadline: Infinite
+  Liveliness: AUTOMATIC
+  Liveliness lease duration: Infinite
+
+Subscription count: 1
+
+Node name: rviz
+Node namespace: /
+Topic type: sensor_msgs/msg/PointCloud2
+Topic type hash: RIHS01_9198cabf7da3796ae6fe19c4cb3bdd3525492988c70522628af5daa124bae2b5
+Endpoint type: SUBSCRIPTION
+GID: 01.0f.28.36.34.24.6b.d0.00.00.00.00.00.00.37.04
+QoS profile:
+  Reliability: RELIABLE
+  History (Depth): UNKNOWN
+  Durability: VOLATILE
+  Lifespan: Infinite
+  Deadline: Infinite
+  Liveliness: AUTOMATIC
+  Liveliness lease duration: Infinite
+
+
+-- /mapping/status --
+Type: diagnostic_msgs/msg/DiagnosticArray
+
+Publisher count: 1
+
+Node name: vertical_lidar_mapper
+Node namespace: /
+Topic type: diagnostic_msgs/msg/DiagnosticArray
+Topic type hash: RIHS01_5a8a36efb05fb25070fa0fb3810290c0e6cd4862b54a8fb975a1ee8dc55a333e
+Endpoint type: PUBLISHER
+GID: 01.0f.45.d4.ff.a5.34.dc.00.00.00.00.00.00.1e.03
+QoS profile:
+  Reliability: RELIABLE
+  History (Depth): UNKNOWN
+  Durability: VOLATILE
+  Lifespan: Infinite
+  Deadline: Infinite
+  Liveliness: AUTOMATIC
+  Liveliness lease duration: Infinite
+
+Subscription count: 0
+
+
+-- mapper status --
+header:
+  stamp:
+    sec: 1785073786
+    nanosec: 573889259
+  frame_id: ''
+status:
+- level: "\x01"
+  name: vertical_lidar_mapper
+  message: running_with_deskew_warnings
+  hardware_id: dual_2d_lidar
+  values:
+  - key: target_frame
+    value: odom
+  - key: global_cloud_frame
+    value: odom
+  - key: integration_mode
+    value: keyframe
+  - key: loop_closure_dedup_only
+    value: 'false'
+  - key: vertical_scan_input_rate_hz
+    value: '10.00'
+  - key: accepted_scan_rate_hz
+    value: '10.00'
+  - key: keyframe_creation_rate_hz
+    value: '8.00'
+  - key: total_scans_seen
+    value: '125'
+  - key: accepted_scans
+    value: '117'
+  - key: dropped_scans
+    value: '7'
+  - key: last_scan_drop_reason
+    value: none
+  - key: last_scan_age_sec
+    value: '0.1293'
+  - key: total_scans_processed
+    value: '117'
+  - key: total_scans_global_integrated
+    value: '78'
+  - key: total_scans_keyframe_integrated
+    value: '78'
+  - key: keyframes_total
+    value: '78'
+  - key: integrated_pose_yaw_current_deg
+    value: '174.99'
+  - key: integrated_pose_yaw_travel_deg
+    value: '0.31'
+  - key: integrated_pose_yaw_coverage_deg
+    value: '10.0'
+  - key: keyframe_drop_non_keyframe
+    value: '38'
+  - key: keyframe_evictions
+    value: '0'
+  - key: dropped_excess_motion
+    value: '1'
+  - key: dropped_stale_odom
+    value: '1'
+  - key: dropped_yaw_motion
+    value: '0'
+  - key: dropped_vertical_motion
+    value: '0'
+  - key: dropped_tilt_motion
+    value: '0'
+  - key: motion_odom_age_sec
+    value: '0.1161'
+  - key: motion_yaw_rate_rad_s
+    value: '0.015'
+  - key: motion_vertical_speed_m_s
+    value: '0.000'
+  - key: motion_tilt_rate_rad_s
+    value: '0.008'
+  - key: full_pose_deskew_enabled
+    value: 'true'
+  - key: deskewed_scans
+    value: '117'
+  - key: deskew_failures
+    value: '7'
+  - key: pose_interpolation_failures
+    value: '0'
+  - key: deskew_pending_scans
+    value: '1'
+  - key: deskew_queue_max_depth
+    value: '4'
+  - key: deskew_queue_overflows
+    value: '0'
+  - key: deskew_pose_wait_timeouts
+    value: '3'
+  - key: deskew_pose_history_misses
+    value: '4'
+  - key: deskew_pose_wait_sec
+    value: '0.0284'
+  - key: deskew_pose_wait_max_sec
+    value: '0.3592'
+  - key: deskew_pose_lag_sec
+    value: '0.0000'
+  - key: last_valid_input_points
+    value: '425'
+  - key: last_deskewed_points
+    value: '425'
+  - key: deskewed_points_total
+    value: '49875'
+  - key: pose_bracket_gap_sec
+    value: '0.0397'
+  - key: pose_buffer_oldest_age_sec
+    value: '4.8688'
+  - key: pose_buffer_newest_age_sec
+    value: '0.1161'
+  - key: tilt_compensation
+    value: 'false'
+  - key: exclude_floor_points
+    value: 'false'
+  - key: floor_z_max_m
+    value: '0.100'
+  - key: floor_points_dropped
+    value: '0'
+  - key: floor_stabilization_enabled
+    value: 'true'
+  - key: floor_reference_z_m
+    value: '-1.433'
+  - key: observed_floor_z_m
+    value: '-1.418'
+  - key: floor_residual_m
+    value: '0.002'
+  - key: floor_correction_m
+    value: '-0.015'
+  - key: floor_stabilization_corrections
+    value: '107'
+  - key: floor_stabilization_estimate_failures
+    value: '0'
+  - key: floor_stabilization_rejections
+    value: '0'
+  - key: tf_filter_drops
+    value: '0'
+  - key: tf_lookup_failures
+    value: '0'
+  - key: tf_lookup_p95_ms
+    value: '4.853'
+  - key: local_raw_points
+    value: '49875'
+  - key: local_voxel_points
+    value: '0'
+  - key: local_map_publish_hz
+    value: '2.00'
+  - key: raw_keyframe_points
+    value: '33221'
+  - key: global_points
+    value: '1344'
+  - key: memory_estimate_mib
+    value: '1.3'
+  - key: global_revoxelizations
+    value: '7'
+  - key: global_integrations_since_revoxel
+    value: '8'
+  - key: map_rebase_enabled
+    value: 'false'
+  - key: map_rebase_count
+    value: '0'
+  - key: last_map_rebase_translation_m
+    value: '0.000'
+  - key: last_map_rebase_yaw_deg
+    value: '0.000'
+  - key: rebuild_count
+    value: '0'
+  - key: rebuild_last_duration_ms
+    value: '0.000'
+  - key: rebuild_freeze_remaining_scans
+    value: '0'
+  - key: rebuild_freeze_drops
+    value: '0'
+  - key: relative_pose_gate_enabled
+    value: 'false'
+  - key: relative_pose_gate_drops
+    value: '0'
+  - key: relative_pose_gate_lookup_failures
+    value: '0'
+  - key: relative_pose_translation_error_m
+    value: '0.000'
+  - key: relative_pose_yaw_error_deg
+    value: '0.000'
+  - key: relative_pose_motion_xy_m
+    value: '0.000'
+  - key: relative_pose_map_step_xy_m
+    value: '0.000'
+  - key: relative_pose_map_step_yaw_deg
+    value: '0.000'
+  - key: scan_matching_enabled
+    value: 'false'
+  - key: scan_matching_status
+    value: disabled
+  - key: scan_matching_lock_valid
+    value: 'false'
+  - key: scan_matching_attempts
+    value: '0'
+  - key: scan_matching_accepted
+    value: '0'
+  - key: scan_matching_rejected
+    value: '0'
+  - key: scan_matching_dropped_keyframes
+    value: '0'
+  - key: scan_matching_insufficient_submap
+    value: '0'
+  - key: scan_matching_nonconverged
+    value: '0'
+  - key: scan_matching_quality_rejections
+    value: '0'
+  - key: scan_matching_bounds_rejections
+    value: '0'
+  - key: scan_matching_source_points
+    value: '0'
+  - key: scan_matching_submap_points
+    value: '0'
+  - key: scan_matching_correspondences
+    value: '0'
+  - key: scan_matching_overlap_ratio
+    value: '0.000'
+  - key: scan_matching_rmse_m
+    value: '0.000'
+  - key: scan_matching_step_translation_m
+    value: '0.000'
+  - key: scan_matching_step_yaw_deg
+    value: '0.000'
+  - key: scan_matching_total_translation_m
+    value: '0.000'
+  - key: scan_matching_total_yaw_deg
+    value: '0.000'
+  - key: scan_matching_duration_ms
+    value: '0.000'
+  - key: map_rebase_cooldown_remaining_scans
+    value: '0'
+  - key: map_rebase_cooldown_drops
+    value: '0'
+  - key: pcd_export_count
+    value: '0'
+  - key: last_pcd_export_path
+    value: '-'
+  - key: map2d_export_count
+    value: '0'
+  - key: last_map2d_export_path
+    value: '-'
+  - key: last_map2d_yaml_path
+    value: '-'
+  - key: slam_map2d_export_count
+    value: '0'
+  - key: last_slam_map2d_export_path
+    value: '-'
+  - key: last_slam_map2d_yaml_path
+    value: '-'
+  - key: trajectory_export_count
+    value: '0'
+  - key: last_trajectory_export_path
+    value: '-'
+  - key: trajectory_points
+    value: '1'
+  - key: structural_mesh_export_enabled
+    value: 'true'
+  - key: structural_mesh_export_count
+    value: '0'
+  - key: structural_mesh_vertices
+    value: '0'
+  - key: structural_mesh_triangles
+    value: '0'
+  - key: structural_mesh_bytes
+    value: '0'
+  - key: structural_mesh_floor_z
+    value: '0.000'
+  - key: structural_mesh_ceiling_z
+    value: '0.000'
+  - '...'
+---
+
+-- mapper node --
+/vertical_lidar_mapper
+  Subscribers:
+    /map: nav_msgs/msg/OccupancyGrid
+    /mavros/local_position/odom: nav_msgs/msg/Odometry
+    /parameter_events: rcl_interfaces/msg/ParameterEvent
+    /scan_vertical: sensor_msgs/msg/LaserScan
+  Publishers:
+    /mapping/global_cloud: sensor_msgs/msg/PointCloud2
+    /mapping/status: diagnostic_msgs/msg/DiagnosticArray
+    /parameter_events: rcl_interfaces/msg/ParameterEvent
+    /rosout: rcl_interfaces/msg/Log
+    /vertical_cloud: sensor_msgs/msg/PointCloud2
+    /vertical_map: sensor_msgs/msg/PointCloud2
+    /vertical_points_deskewed: sensor_msgs/msg/PointCloud2
+  Service Servers:
+    /vertical_lidar_mapper/describe_parameters: rcl_interfaces/srv/DescribeParameters
+    /vertical_lidar_mapper/get_parameter_types: rcl_interfaces/srv/GetParameterTypes
+    /vertical_lidar_mapper/get_parameters: rcl_interfaces/srv/GetParameters
+    /vertical_lidar_mapper/get_type_description: type_description_interfaces/srv/GetTypeDescription
+    /vertical_lidar_mapper/list_parameters: rcl_interfaces/srv/ListParameters
+    /vertical_lidar_mapper/rebuild_global: std_srvs/srv/Trigger
+    /vertical_lidar_mapper/save_pcd: std_srvs/srv/Trigger
+    /vertical_lidar_mapper/set_parameters: rcl_interfaces/srv/SetParameters
+    /vertical_lidar_mapper/set_parameters_atomically: rcl_interfaces/srv/SetParametersAtomically
+  Service Clients:
+
+  Action Servers:
+
+  Action Clients:
+
+
+-- TF checks --
+[INFO] [1785073788.275745038] [tf2_echo]: Waiting for transform base_footprint ->  lidar_vert_link: Invalid frame ID "base_footprint" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1785073790.196648692] [tf2_echo]: Waiting for transform base_footprint ->  lidar_vert_link: Invalid frame ID "lidar_vert_link" passed to canTransform argument source_frame - frame does not exist
+At time 0.0
+- Translation: [0.000, 0.000, 0.700]
+- Rotation: in Quaternion (xyzw) [0.500, -0.500, -0.500, 0.500]
+- Rotation: in RPY (radian) [1.571, 0.000, -1.571]
+- Rotation: in RPY (degree) [90.000, 0.000, -90.000]
+- Matrix:
+  0.000  0.000 -1.000  0.000
+ -1.000 -0.000 -0.000  0.000
+ -0.000  1.000  0.000  0.700
+  0.000  0.000  0.000  1.000
+At time 0.0
+- Translation: [0.000, 0.000, 0.700]
+- Rotation: in Quaternion (xyzw) [0.500, -0.500, -0.500, 0.500]
+- Rotation: in RPY (radian) [1.571, 0.000, -1.571]
+- Rotation: in RPY (degree) [90.000, 0.000, -90.000]
+- Matrix:
+  0.000  0.000 -1.000  0.000
+ -1.000 -0.000 -0.000  0.000
+ -0.000  1.000  0.000  0.700
+  0.000  0.000  0.000  1.000
+[INFO] [1785073792.771156749] [rclcpp]: signal_handler(SIGINT/SIGTERM)
+[INFO] [1785073793.337475158] [tf2_echo]: Waiting for transform odom ->  lidar_vert_link: Invalid frame ID "odom" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1785073795.265798871] [tf2_echo]: Waiting for transform odom ->  lidar_vert_link: Invalid frame ID "lidar_vert_link" passed to canTransform argument source_frame - frame does not exist
+At time 1785073796.254867584
+- Translation: [-0.090, 0.114, 0.700]
+- Rotation: in Quaternion (xyzw) [0.031, 0.706, 0.706, 0.031]
+- Rotation: in RPY (radian) [1.571, 0.000, 3.053]
+- Rotation: in RPY (degree) [90.000, 0.000, 174.944]
+- Matrix:
+ -0.996 -0.000  0.088 -0.090
+  0.088 -0.000  0.996  0.114
+ -0.000  1.000  0.000  0.700
+  0.000  0.000  0.000  1.000
+At time 1785073797.249831424
+- Translation: [-0.090, 0.109, 0.700]
+- Rotation: in Quaternion (xyzw) [0.031, 0.706, 0.706, 0.031]
+- Rotation: in RPY (radian) [1.571, 0.000, 3.053]
+- Rotation: in RPY (degree) [90.000, 0.000, 174.920]
+- Matrix:
+ -0.996 -0.000  0.089 -0.090
+  0.089 -0.000  0.996  0.109
+ -0.000  1.000  0.000  0.700
+  0.000  0.000  0.000  1.000
+[INFO] [1785073797.779326743] [rclcpp]: signal_handler(SIGINT/SIGTERM)

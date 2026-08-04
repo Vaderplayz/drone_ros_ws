@@ -1,0 +1,7 @@
+[INFO] [1784802889.507071272] [sllidar2_vertical]: SLLidar running on ROS2 package SLLidar.ROS2 SDK Version:1.0.1, SLLIDAR SDK Version:2.1.0
+[INFO] [1784802890.036606961] [sllidar2_vertical]: SLLidar S/N: 612EE0F8C2E29AD3C1819FF5929F4E1F
+[INFO] [1784802890.036696867] [sllidar2_vertical]: Firmware Ver: 1.02
+[INFO] [1784802890.036718011] [sllidar2_vertical]: Hardware Rev: 18
+[INFO] [1784802890.040514081] [sllidar2_vertical]: SLLidar health status : 0
+[INFO] [1784802890.040542482] [sllidar2_vertical]: SLLidar health status : OK.
+[INFO] [1784802890.341555736] [sllidar2_vertical]: current scan mode: Standard, sample rate: 5 Khz, max_distance: 16.0 m, scan frequency:10.0 Hz, 

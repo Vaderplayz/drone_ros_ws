@@ -1,0 +1,50 @@
+[1;32m[2026-07-26T17:31:08+0700] STARTED launcher inputs and installed ROS interfaces validated[0m
+[2026-07-26T17:31:08+0700] Independent observer-only 2D mapping startup
+[2026-07-26T17:31:08+0700] This launcher will only start mapping scan deskew and slam_toolbox
+[2026-07-26T17:31:08+0700] It will not manage RF2O/PX4 fusion, MAVROS, LiDAR, camera, AprilTag, planner, or flight control
+[2026-07-26T17:31:21+0700] Waiting for /scan_rf2o; elapsed=3s deadline=60s
+[1;32m[2026-07-26T17:31:25+0700] STARTED live input /scan_rf2o[0m
+[1;32m[2026-07-26T17:31:27+0700] STARTED live input /mavros/local_position/odom[0m
+[1;32m[2026-07-26T17:31:33+0700] STARTED live scan and odometry timestamps share one clock domain[0m
+[2026-07-26T17:31:36+0700] Waiting for TF odom -> base_footprint; elapsed=3s deadline=60s
+[1;32m[2026-07-26T17:31:41+0700] STARTED TF odom -> base_footprint[0m
+[1;32m[2026-07-26T17:31:44+0700] STARTED TF base_footprint -> laser_frame[0m
+[1;32m[2026-07-26T17:31:44+0700] STARTED mapping_scan_deskew pgid=25852[0m
+[2026-07-26T17:31:45+0700] Waiting for /scan_slam; elapsed=1s deadline=60s
+[2026-07-26T17:31:50+0700] Waiting for /scan_slam; elapsed=6s deadline=60s
+[2026-07-26T17:31:54+0700] Waiting for /scan_slam; elapsed=10s deadline=60s
+[1;32m[2026-07-26T17:31:58+0700] STARTED live input /scan_slam[0m
+[1;32m[2026-07-26T17:32:01+0700] STARTED diagnostic /scan_slam/diagnostics deskew_applied=true[0m
+[1;32m[2026-07-26T17:32:02+0700] STARTED mapping scan deskew active on /scan_slam[0m
+[1;32m[2026-07-26T17:32:07+0700] STARTED live scan and odometry timestamps share one clock domain[0m
+[1;32m[2026-07-26T17:32:07+0700] STARTED slam_toolbox pgid=26452[0m
+[2026-07-26T17:32:11+0700] Waiting for /map; elapsed=4s deadline=120s
+[2026-07-26T17:32:15+0700] Waiting for /map; elapsed=8s deadline=120s
+[2026-07-26T17:32:20+0700] Waiting for /map; elapsed=13s deadline=120s
+[1;32m[2026-07-26T17:32:23+0700] STARTED 2D occupancy map /map[0m
+[1;32m[2026-07-26T17:32:27+0700] STARTED TF map -> odom[0m
+[2026-07-26T17:32:30+0700] Waiting for TF map -> laser_frame; elapsed=3s deadline=60s
+[2026-07-26T17:32:34+0700] Waiting for TF map -> laser_frame; elapsed=7s deadline=60s
+[2026-07-26T17:32:39+0700] Waiting for TF map -> laser_frame; elapsed=12s deadline=60s
+[2026-07-26T17:32:43+0700] Waiting for TF map -> laser_frame; elapsed=16s deadline=60s
+[1;32m[2026-07-26T17:32:48+0700] STARTED TF map -> laser_frame[0m
+[1;32m[2026-07-26T17:32:49+0700] STARTED slam_toolbox scan subscription verified[0m
+[1;32m[2026-07-26T17:32:53+0700] STARTED no flight-control or planner publishers added[0m
+
+[1;32m######################################################################
+#                                                                    #
+#                         2D MAP READY                               #
+#                                                                    #
+#          DESKEW ACTIVE - OBSERVER ONLY - NO FLIGHT CONTROL         #
+#                                                                    #
+######################################################################
+[0m
+[2026-07-26T17:33:00+0700] Move the vehicle manually to build the map; this process sends no vehicle commands
+[2026-07-26T17:33:00+0700] On Ctrl+C, autosave writes /home/pi5drone/drone_ros_ws/maps/indoor_map_20260726_173104.yaml/.pgm/.png
+[2026-07-26T17:33:00+0700] Runtime logs: /home/pi5drone/drone_ros_ws/runtime_logs/mapping_2d_20260726_173104
+[2026-07-26T17:50:50+0700] Shutdown reason: received signal INT; launcher_exit=130
+[2026-07-26T17:50:54+0700] Autosaving 2D map to /home/pi5drone/drone_ros_ws/maps/indoor_map_20260726_173104.yaml/.pgm
+[2026-07-26T17:50:56+0700] 2D map autosaved: /home/pi5drone/drone_ros_ws/maps/indoor_map_20260726_173104.yaml, /home/pi5drone/drone_ros_ws/maps/indoor_map_20260726_173104.pgm, /home/pi5drone/drone_ros_ws/maps/indoor_map_20260726_173104.png
+[2026-07-26T17:50:56+0700] Stopping mapping-owned process group: slam_toolbox pgid=26452
+[2026-07-26T17:50:56+0700] Stopping mapping-owned process group: mapping_scan_deskew pgid=25852
+[2026-07-26T17:50:56+0700] RF2O/PX4 fusion, MAVROS, LiDAR, camera, AprilTag, and flight control were not stopped

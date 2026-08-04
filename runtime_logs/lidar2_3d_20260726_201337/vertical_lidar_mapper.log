@@ -1,0 +1,91 @@
+[INFO] [1785071692.898817090] [vertical_lidar_mapper]: vertical_lidar_mapper started. scan_topic='/scan_vertical' target_frame='odom' local_voxel=0.100 global_voxel=0.080 global_cap=400000 global_publish=3.0Hz revoxel_every=10
+[INFO] [1785071692.899138195] [vertical_lidar_mapper]: Global integration mode: keyframe (keyframe_min_translation=0.030m keyframe_min_yaw=0.025rad keyframe_max_interval=0.100s max_keyframes=10000).
+[INFO] [1785071692.899176676] [vertical_lidar_mapper]: Full-pose deskew: enabled (required=true odom_topic='/mavros/local_position/odom' odom_frame='odom' stamp_reference='start' pose_gap<=0.100s wait_timeout=0.350s queue=30 poll=100.0Hz output='/vertical_points_deskewed').
+[INFO] [1785071692.899198416] [vertical_lidar_mapper]: Stable integration gate: enabled (odom_age<=0.200s |yaw_rate|<=0.700rad/s |vertical_speed|<=0.400m/s tilt_rate<=0.450rad/s).
+[INFO] [1785071692.899214193] [vertical_lidar_mapper]: Map-rebase: disabled (map_frame='map' odom_frame='odom' trans_th=0.080m yaw_th=0.040rad)
+[INFO] [1785071692.899228674] [vertical_lidar_mapper]: Relative-pose gate: disabled (map='map' odom='odom' trans_err_th=0.080m yaw_err_th=0.060rad min_motion=0.030m max_map_step=0.250m max_map_yaw=0.150rad)
+[INFO] [1785071692.899244859] [vertical_lidar_mapper]: 3D scan matching: disabled (map_frame='vertical_map' max_rate=4.0Hz radius=4.00m voxel=0.12m corr_dist=0.45m overlap>=0.30 rmse<=0.18m correction<=0.30m/17.2deg drop_failure=true).
+[INFO] [1785071692.899265711] [vertical_lidar_mapper]: Map-rebase cooldown: 6 scans after correction.
+[INFO] [1785071692.899278414] [vertical_lidar_mapper]: Floor filter: disabled (drop z <= 0.10 m in 'odom' frame).
+[INFO] [1785071692.899301340] [vertical_lidar_mapper]: Floor stabilization: enabled (percentile=0.10 band=0.08m min_points=30 max_residual=0.25m alpha=0.080 max_step=0.020m update_vertical_speed<=0.15m/s drop_failure=false).
+[INFO] [1785071692.899326024] [vertical_lidar_mapper]: PCD export service: '/vertical_lidar_mapper/save_pcd' dir='/home/pi5drone/drone_ros_ws/maps/vertical_3d' binary=true
+[INFO] [1785071692.899341154] [vertical_lidar_mapper]: SLAM 2D map export on save: enabled (topic='/map' prefix='slam2d_map').
+[INFO] [1785071692.899354542] [vertical_lidar_mapper]: Structural GLB export on save: enabled (prefix='lidar2_structural_environment' auto_height=true ceiling=false grid_cap=2000000).
+[INFO] [1785071692.899368227] [vertical_lidar_mapper]: Loop-closure dedup-only mode: disabled
+[INFO] [1785071692.899381857] [vertical_lidar_mapper]: Global rebuild service: '/vertical_lidar_mapper/rebuild_global' (rebuild_on_map_correction=false corr_trans_th=0.080m corr_yaw_th=0.040rad freeze_scans=6).
+[WARN] [1785071696.508942606] [vertical_lidar_mapper]: Dropping vertical scan after waiting 0.358s for odometry through its final beam (remaining lag 0.000s).
+[WARN] [1785071696.658953900] [vertical_lidar_mapper]: Dropping vertical scan: pose history starts 0.331s after the first beam.
+[INFO] [1785071696.830512976] [vertical_lidar_mapper]: Initialized floor stabilization reference at z=-1.370m in frame 'odom'.
+[WARN] [1785071702.492464562] [vertical_lidar_mapper]: Dropped unstable global scan: odom_age=0.289s (max 0.200), |yaw|=0.003 (max 0.700), |vz|=0.005 (max 0.400), tilt_rate=0.012 (max 0.450).
+[WARN] [1785071797.521492873] [vertical_lidar_mapper]: Ignoring vertical scan floor residual -0.310m exceeds 0.250m; retaining filtered bias 0.027m.
+[WARN] [1785071798.620180484] [vertical_lidar_mapper]: Ignoring vertical scan floor residual -0.759m exceeds 0.250m; retaining filtered bias 0.027m.
+[WARN] [1785071799.620191935] [vertical_lidar_mapper]: Ignoring vertical scan floor residual -0.831m exceeds 0.250m; retaining filtered bias 0.027m.
+[WARN] [1785071800.710283222] [vertical_lidar_mapper]: Ignoring vertical scan floor residual -0.840m exceeds 0.250m; retaining filtered bias 0.027m.
+[WARN] [1785071801.812389443] [vertical_lidar_mapper]: Ignoring vertical scan floor residual -0.836m exceeds 0.250m; retaining filtered bias 0.027m.
+[WARN] [1785071802.910218511] [vertical_lidar_mapper]: Ignoring vertical scan floor residual -0.842m exceeds 0.250m; retaining filtered bias 0.027m.
+[WARN] [1785071804.010184144] [vertical_lidar_mapper]: Ignoring vertical scan floor residual -0.864m exceeds 0.250m; retaining filtered bias 0.027m.
+[WARN] [1785071805.101834448] [vertical_lidar_mapper]: Ignoring vertical scan floor residual -0.852m exceeds 0.250m; retaining filtered bias 0.027m.
+[WARN] [1785071806.200291128] [vertical_lidar_mapper]: Ignoring vertical scan floor residual -0.893m exceeds 0.250m; retaining filtered bias 0.027m.
+[WARN] [1785071807.300224276] [vertical_lidar_mapper]: Ignoring vertical scan floor residual -0.872m exceeds 0.250m; retaining filtered bias 0.027m.
+[WARN] [1785071808.390120686] [vertical_lidar_mapper]: Ignoring vertical scan floor residual -0.870m exceeds 0.250m; retaining filtered bias 0.027m.
+[WARN] [1785071809.390286567] [vertical_lidar_mapper]: Ignoring vertical scan floor residual -0.867m exceeds 0.250m; retaining filtered bias 0.027m.
+[WARN] [1785071810.420208644] [vertical_lidar_mapper]: Ignoring vertical scan floor residual -0.900m exceeds 0.250m; retaining filtered bias 0.027m.
+[WARN] [1785071811.510133420] [vertical_lidar_mapper]: Ignoring vertical scan floor residual -0.906m exceeds 0.250m; retaining filtered bias 0.027m.
+[WARN] [1785071812.510166818] [vertical_lidar_mapper]: Ignoring vertical scan floor residual -0.884m exceeds 0.250m; retaining filtered bias 0.027m.
+[WARN] [1785071813.510268806] [vertical_lidar_mapper]: Ignoring vertical scan floor residual -0.859m exceeds 0.250m; retaining filtered bias 0.027m.
+[WARN] [1785071814.512404288] [vertical_lidar_mapper]: Ignoring vertical scan floor residual -0.853m exceeds 0.250m; retaining filtered bias 0.027m.
+[WARN] [1785071815.604994838] [vertical_lidar_mapper]: Ignoring vertical scan floor residual -0.839m exceeds 0.250m; retaining filtered bias 0.027m.
+[WARN] [1785071816.610258660] [vertical_lidar_mapper]: Ignoring vertical scan floor residual -0.851m exceeds 0.250m; retaining filtered bias 0.027m.
+[WARN] [1785071817.700487776] [vertical_lidar_mapper]: Ignoring vertical scan floor residual -0.867m exceeds 0.250m; retaining filtered bias 0.027m.
+[WARN] [1785071818.790156827] [vertical_lidar_mapper]: Ignoring vertical scan floor residual -0.856m exceeds 0.250m; retaining filtered bias 0.027m.
+[WARN] [1785071819.792886162] [vertical_lidar_mapper]: Ignoring vertical scan floor residual -0.859m exceeds 0.250m; retaining filtered bias 0.027m.
+[WARN] [1785071820.890478306] [vertical_lidar_mapper]: Ignoring vertical scan floor residual -0.871m exceeds 0.250m; retaining filtered bias 0.027m.
+[WARN] [1785071821.980233890] [vertical_lidar_mapper]: Ignoring vertical scan floor residual -0.849m exceeds 0.250m; retaining filtered bias 0.027m.
+[WARN] [1785071823.080157150] [vertical_lidar_mapper]: Ignoring vertical scan floor residual -0.862m exceeds 0.250m; retaining filtered bias 0.027m.
+[WARN] [1785071824.080168223] [vertical_lidar_mapper]: Ignoring vertical scan floor residual -0.844m exceeds 0.250m; retaining filtered bias 0.027m.
+[WARN] [1785071825.170277833] [vertical_lidar_mapper]: Ignoring vertical scan floor residual -0.868m exceeds 0.250m; retaining filtered bias 0.027m.
+[WARN] [1785071826.200303966] [vertical_lidar_mapper]: Ignoring vertical scan floor residual -0.876m exceeds 0.250m; retaining filtered bias 0.027m.
+[WARN] [1785071827.300228167] [vertical_lidar_mapper]: Ignoring vertical scan floor residual -0.869m exceeds 0.250m; retaining filtered bias 0.027m.
+[WARN] [1785071828.300238273] [vertical_lidar_mapper]: Ignoring vertical scan floor residual -0.876m exceeds 0.250m; retaining filtered bias 0.027m.
+[WARN] [1785071829.390827684] [vertical_lidar_mapper]: Ignoring vertical scan floor residual -0.867m exceeds 0.250m; retaining filtered bias 0.027m.
+[WARN] [1785071830.490176394] [vertical_lidar_mapper]: Ignoring vertical scan floor residual -0.856m exceeds 0.250m; retaining filtered bias 0.027m.
+[WARN] [1785071831.490195035] [vertical_lidar_mapper]: Ignoring vertical scan floor residual -0.856m exceeds 0.250m; retaining filtered bias 0.027m.
+[WARN] [1785071832.590221914] [vertical_lidar_mapper]: Ignoring vertical scan floor residual -0.891m exceeds 0.250m; retaining filtered bias 0.027m.
+[WARN] [1785071833.680240334] [vertical_lidar_mapper]: Ignoring vertical scan floor residual -0.875m exceeds 0.250m; retaining filtered bias 0.027m.
+[WARN] [1785071834.780267970] [vertical_lidar_mapper]: Ignoring vertical scan floor residual -0.877m exceeds 0.250m; retaining filtered bias 0.027m.
+[WARN] [1785071835.880171313] [vertical_lidar_mapper]: Ignoring vertical scan floor residual -0.846m exceeds 0.250m; retaining filtered bias 0.027m.
+[WARN] [1785071836.970186044] [vertical_lidar_mapper]: Ignoring vertical scan floor residual -0.812m exceeds 0.250m; retaining filtered bias 0.027m.
+[WARN] [1785071838.070181364] [vertical_lidar_mapper]: Ignoring vertical scan floor residual -0.848m exceeds 0.250m; retaining filtered bias 0.027m.
+[WARN] [1785071839.170375846] [vertical_lidar_mapper]: Ignoring vertical scan floor residual -1.015m exceeds 0.250m; retaining filtered bias 0.027m.
+[WARN] [1785071840.260290910] [vertical_lidar_mapper]: Ignoring vertical scan floor residual -1.284m exceeds 0.250m; retaining filtered bias 0.027m.
+[WARN] [1785071841.360196600] [vertical_lidar_mapper]: Ignoring vertical scan floor residual -1.279m exceeds 0.250m; retaining filtered bias 0.027m.
+[WARN] [1785071842.461140360] [vertical_lidar_mapper]: Ignoring vertical scan floor residual -1.227m exceeds 0.250m; retaining filtered bias 0.027m.
+[WARN] [1785071843.550165126] [vertical_lidar_mapper]: Ignoring vertical scan floor residual -1.226m exceeds 0.250m; retaining filtered bias 0.027m.
+[WARN] [1785071844.550224553] [vertical_lidar_mapper]: Ignoring vertical scan floor residual -1.252m exceeds 0.250m; retaining filtered bias 0.027m.
+[WARN] [1785071845.580381706] [vertical_lidar_mapper]: Ignoring vertical scan floor residual -1.147m exceeds 0.250m; retaining filtered bias 0.027m.
+[WARN] [1785071846.681815694] [vertical_lidar_mapper]: Ignoring vertical scan floor residual -0.989m exceeds 0.250m; retaining filtered bias 0.027m.
+[WARN] [1785071846.681945432] [vertical_lidar_mapper]: Dropped unstable global scan: odom_age=0.225s (max 0.200), |yaw|=0.236 (max 0.700), |vz|=0.091 (max 0.400), tilt_rate=0.084 (max 0.450).
+[WARN] [1785071847.770254469] [vertical_lidar_mapper]: Ignoring vertical scan floor residual -0.905m exceeds 0.250m; retaining filtered bias 0.027m.
+[WARN] [1785071848.870201245] [vertical_lidar_mapper]: Ignoring vertical scan floor residual -0.793m exceeds 0.250m; retaining filtered bias 0.027m.
+[WARN] [1785071849.870226725] [vertical_lidar_mapper]: Ignoring vertical scan floor residual -0.945m exceeds 0.250m; retaining filtered bias 0.027m.
+[WARN] [1785071850.960160115] [vertical_lidar_mapper]: Ignoring vertical scan floor residual -0.932m exceeds 0.250m; retaining filtered bias 0.027m.
+[WARN] [1785071851.960569271] [vertical_lidar_mapper]: Ignoring vertical scan floor residual -0.912m exceeds 0.250m; retaining filtered bias 0.027m.
+[WARN] [1785071853.060206551] [vertical_lidar_mapper]: Ignoring vertical scan floor residual -0.952m exceeds 0.250m; retaining filtered bias 0.027m.
+[WARN] [1785071854.160210397] [vertical_lidar_mapper]: Ignoring vertical scan floor residual -1.074m exceeds 0.250m; retaining filtered bias 0.027m.
+[WARN] [1785071855.160263336] [vertical_lidar_mapper]: Ignoring vertical scan floor residual -0.904m exceeds 0.250m; retaining filtered bias 0.027m.
+[WARN] [1785071856.250277795] [vertical_lidar_mapper]: Ignoring vertical scan floor residual -0.798m exceeds 0.250m; retaining filtered bias 0.027m.
+[WARN] [1785071857.253834512] [vertical_lidar_mapper]: Ignoring vertical scan floor residual -0.818m exceeds 0.250m; retaining filtered bias 0.027m.
+[WARN] [1785071858.340196713] [vertical_lidar_mapper]: Ignoring vertical scan floor residual -0.861m exceeds 0.250m; retaining filtered bias 0.027m.
+[WARN] [1785071859.340199818] [vertical_lidar_mapper]: Ignoring vertical scan floor residual -0.869m exceeds 0.250m; retaining filtered bias 0.027m.
+[WARN] [1785071860.440219901] [vertical_lidar_mapper]: Ignoring vertical scan floor residual -0.874m exceeds 0.250m; retaining filtered bias 0.027m.
+[WARN] [1785071861.530228431] [vertical_lidar_mapper]: Ignoring vertical scan floor residual -0.824m exceeds 0.250m; retaining filtered bias 0.027m.
+[WARN] [1785071862.560308317] [vertical_lidar_mapper]: Ignoring vertical scan floor residual -0.762m exceeds 0.250m; retaining filtered bias 0.027m.
+[WARN] [1785071863.661731017] [vertical_lidar_mapper]: Ignoring vertical scan floor residual -0.552m exceeds 0.250m; retaining filtered bias 0.027m.
+[WARN] [1785071864.760157075] [vertical_lidar_mapper]: Ignoring vertical scan floor residual -0.415m exceeds 0.250m; retaining filtered bias 0.027m.
+[WARN] [1785071865.851385893] [vertical_lidar_mapper]: Ignoring vertical scan floor residual -0.333m exceeds 0.250m; retaining filtered bias 0.027m.
+[WARN] [1785072290.540434541] [vertical_lidar_mapper]: Dropped unstable global scan: odom_age=0.236s (max 0.200), |yaw|=0.004 (max 0.700), |vz|=0.003 (max 0.400), tilt_rate=0.014 (max 0.450).
+[WARN] [1785072628.130456799] [vertical_lidar_mapper]: Dropped unstable global scan: odom_age=0.205s (max 0.200), |yaw|=0.010 (max 0.700), |vz|=0.002 (max 0.400), tilt_rate=0.003 (max 0.450).
+[WARN] [1785072631.480383616] [vertical_lidar_mapper]: Dropped unstable global scan: odom_age=0.266s (max 0.200), |yaw|=0.010 (max 0.700), |vz|=0.005 (max 0.400), tilt_rate=0.006 (max 0.450).
+[WARN] [1785072745.401864968] [vertical_lidar_mapper]: Dropped unstable global scan: odom_age=0.212s (max 0.200), |yaw|=0.009 (max 0.700), |vz|=0.002 (max 0.400), tilt_rate=0.005 (max 0.450).
+[INFO] [1785072848.848742121] [vertical_lidar_mapper]: Saved PCD: /home/pi5drone/drone_ros_ws/maps/vertical_3d/lidar2_vertical_global_map_1785072848_797170511.pcd | 2D map: /home/pi5drone/drone_ros_ws/maps/vertical_3d/lidar2_vertical_map2d_1785072848_797170511.pgm (yaml: /home/pi5drone/drone_ros_ws/maps/vertical_3d/lidar2_vertical_map2d_1785072848_797170511.yaml) | slam2d: /home/pi5drone/drone_ros_ws/maps/vertical_3d/slam2d_map_1785072848_797170511.pgm (yaml: /home/pi5drone/drone_ros_ws/maps/vertical_3d/slam2d_map_1785072848_797170511.yaml) | trajectory: /home/pi5drone/drone_ros_ws/maps/vertical_3d/lidar2_vertical_trajectory_1785072848_797170511.csv | structural GLB: /home/pi5drone/drone_ros_ws/maps/vertical_3d/lidar2_structural_environment_1785072848_797170511.glb
+[INFO] [1785072849.145059430] [rclcpp]: signal_handler(SIGINT/SIGTERM)

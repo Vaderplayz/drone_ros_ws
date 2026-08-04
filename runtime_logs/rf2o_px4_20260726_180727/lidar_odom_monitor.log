@@ -1,0 +1,5 @@
+[WARN] [1785064106.546871445] [lidar_odom_monitor]: RF2O monitor state: WAITING_FOR_SCAN
+[INFO] [1785064106.547135694] [lidar_odom_monitor]: Monitoring coherent scan /scan_rf2o and RF2O /lidar/odom_raw -> /lidar/odom
+[WARN] [1785064108.548186757] [lidar_odom_monitor]: RF2O monitor state: LOW_ANGULAR_COVERAGE
+[WARN] [1785064109.546960808] [lidar_odom_monitor]: RF2O monitor state: WAITING_FOR_ODOM
+[INFO] [1785064112.547782222] [lidar_odom_monitor]: RF2O monitor state: OK

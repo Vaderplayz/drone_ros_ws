@@ -1,0 +1,14 @@
+[INFO] [launch]: All log files can be found below /home/pi5drone/.ros/log/2026-08-02-20-38-51-950090-pi5drone-desktop-11148
+[INFO] [launch]: Default logging verbosity is set to INFO
+[INFO] [submap_slam_2d_node-1]: process started with pid [11185]
+[submap_slam_2d_node-1] [INFO] [1785677932.935577819] [submap_slam_2d]: Observer-only submap mapper: scan=/scan_slam prediction=odom->base_footprint output_frame=submap_map map_tf=disabled
+[submap_slam_2d_node-1] [WARN] [1785678020.096757341] [submap_slam_2d]: Rejected scan: high_match_rmse
+[submap_slam_2d_node-1] [WARN] [1785678042.245355624] [submap_slam_2d]: Rejected scan: high_match_rmse
+[submap_slam_2d_node-1] [WARN] [1785678048.876937879] [submap_slam_2d]: Rejected scan: excess_translation_correction
+[submap_slam_2d_node-1] [WARN] [1785678053.906140173] [submap_slam_2d]: Rejected scan: high_match_rmse
+[submap_slam_2d_node-1] [WARN] [1785678059.107613688] [submap_slam_2d]: Rejected scan: low_match_score
+[submap_slam_2d_node-1] [WARN] [1785678064.109948185] [submap_slam_2d]: Rejected scan: coarse_match_failed
+[submap_slam_2d_node-1] [WARN] [1785678069.192533941] [submap_slam_2d]: Rejected scan: coarse_match_failed
+[submap_slam_2d_node-1] [WARN] [1785678074.279809716] [submap_slam_2d]: Rejected scan: coarse_match_failed
+[submap_slam_2d_node-1] [WARN] [1785678079.359944213] [submap_slam_2d]: Rejected scan: coarse_match_failed
+[submap_slam_2d_node-1] [WARN] [1785678084.480184673] [submap_slam_2d]: Rejected scan: coarse_match_failed

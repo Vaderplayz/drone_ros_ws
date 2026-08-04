@@ -1,0 +1,5 @@
+[INFO] [1785061129.390336525] [laser_scan_stream_audit]: Raw scan audit state: CLASSIFYING_INPUT
+[INFO] [1785061129.390695708] [laser_scan_stream_audit]: Auditing raw scan geometry on /scan for at least 20 messages
+[INFO] [1785061132.414457544] [laser_scan_stream_audit]: Raw scan audit state: FULL_REVOLUTION
+[INFO] [1785061132.414583321] [laser_scan_stream_audit]: Raw scan classification locked: FULL_REVOLUTION (full=20 partial=0 malformed=0 unknown=0)
+[INFO] [1785063052.025735150] [rclcpp]: signal_handler(SIGINT/SIGTERM)

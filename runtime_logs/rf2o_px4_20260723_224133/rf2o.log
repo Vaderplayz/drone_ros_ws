@@ -1,0 +1,19 @@
+[WARN] [1784821370.530376093] [rcl.logging_rosout]: Publisher already registered for node name: 'rf2o_laser_odometry'. If this is due to multiple nodes with the same name then all logs for the logger named 'rf2o_laser_odometry' will go out over the existing publisher. As soon as any node with that name is destructed it will unregister the publisher, preventing any further logs for that name from being published on the rosout topic.
+[INFO] [1784821370.556432597] [rf2o_laser_odometry]: Initializing RF2O node...
+[WARN] [1784821370.579922761] [rf2o_laser_odometry]: Waiting for qualified laser scans
+[INFO] [1784821370.980641513] [rf2o_laser_odometry]: RF2O canonical scan qualification: 1/5
+[WARN] [1784821371.489021072] [rf2o_laser_odometry]: "base_footprint" passed to lookupTransform argument target_frame does not exist. 
+[WARN] [1784821371.489153408] [rf2o_laser_odometry]: Waiting for transform from laser_frame to base_footprint before RF2O initialization
+[INFO] [1784821372.779743309] [rf2o_laser_odometry]: Got first Laser Scan .... Configuring node
+[WARN] [1784821375.879384062] [rf2o_laser_odometry]: Waiting for qualified laser scans
+[WARN] [1784821381.251290510] [rf2o_laser_odometry]: Waiting for qualified laser scans
+[WARN] [1784821386.352575501] [rf2o_laser_odometry]: Waiting for qualified laser scans
+[WARN] [1784821391.751971034] [rf2o_laser_odometry]: Waiting for qualified laser scans
+[WARN] [1784821396.852992318] [rf2o_laser_odometry]: Waiting for qualified laser scans
+[WARN] [1784821402.351396956] [rf2o_laser_odometry]: Waiting for qualified laser scans
+[WARN] [1784821407.353340911] [rf2o_laser_odometry]: Waiting for qualified laser scans
+[WARN] [1784821412.356130938] [rf2o_laser_odometry]: Waiting for qualified laser scans
+[WARN] [1784821417.751153523] [rf2o_laser_odometry]: Waiting for qualified laser scans
+[WARN] [1784821422.854208665] [rf2o_laser_odometry]: Waiting for qualified laser scans
+[WARN] [1784821428.251153751] [rf2o_laser_odometry]: Waiting for qualified laser scans
+[INFO] [1784821432.408455308] [rclcpp]: signal_handler(SIGINT/SIGTERM)

@@ -1,0 +1,93 @@
+[WARN] [1785677916.162059699] [mapping_scan_deskew]: Canonical scan state: INITIALIZING
+[INFO] [1785677916.162202718] [mapping_scan_deskew]: Canonicalizing /scan_rf2o to /scan_slam with 720 bins in per_message_full_scan mode
+[WARN] [1785677918.501945142] [mapping_scan_deskew]: Dropping scan because deskew TF is unavailable: Could not find a connection between 'odom' and 'laser_frame' because they are not part of the same tree.Tf has two or more unconnected trees.
+[WARN] [1785677918.502063901] [mapping_scan_deskew]: Canonical scan state: DESKEW_UNAVAILABLE
+[WARN] [1785677918.502089031] [mapping_scan_deskew]: Dropping full scan because deskew TF is unavailable
+[INFO] [1785677918.650969827] [mapping_scan_deskew]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1785677918.653422864] [mapping_scan_deskew]: Canonical scan state: INCOMPLETE_REVOLUTION
+[INFO] [1785677918.845075383] [mapping_scan_deskew]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1785677919.564823753] [mapping_scan_deskew]: Canonical scan state: INCOMPLETE_REVOLUTION
+[INFO] [1785677919.668307049] [mapping_scan_deskew]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1785677922.698644880] [mapping_scan_deskew]: Canonical scan state: INCOMPLETE_REVOLUTION
+[INFO] [1785677922.959805010] [mapping_scan_deskew]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1785677923.388300528] [mapping_scan_deskew]: Canonical scan state: INCOMPLETE_REVOLUTION
+[INFO] [1785677923.521598195] [mapping_scan_deskew]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1785677924.357678268] [mapping_scan_deskew]: Canonical scan state: INCOMPLETE_REVOLUTION
+[WARN] [1785677924.357763379] [mapping_scan_deskew]: Angular observation coverage is below the configured minimum
+[INFO] [1785677924.624666601] [mapping_scan_deskew]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1785677930.245591561] [mapping_scan_deskew]: Canonical scan state: INCOMPLETE_REVOLUTION
+[WARN] [1785677930.245688117] [mapping_scan_deskew]: Canonical output rate limit suppressed this revolution
+[INFO] [1785677930.380150135] [mapping_scan_deskew]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1785677932.695667023] [mapping_scan_deskew]: Canonical scan state: INCOMPLETE_REVOLUTION
+[INFO] [1785677932.765810393] [mapping_scan_deskew]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1785677933.056440559] [mapping_scan_deskew]: Canonical scan state: INCOMPLETE_REVOLUTION
+[INFO] [1785677933.294034430] [mapping_scan_deskew]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1785677933.329306911] [mapping_scan_deskew]: Canonical scan state: INCOMPLETE_REVOLUTION
+[INFO] [1785677933.615887337] [mapping_scan_deskew]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1785677933.863098096] [mapping_scan_deskew]: Canonical scan state: INCOMPLETE_REVOLUTION
+[INFO] [1785677934.082961077] [mapping_scan_deskew]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1785677934.156266707] [mapping_scan_deskew]: Canonical scan state: INCOMPLETE_REVOLUTION
+[INFO] [1785677934.578706170] [mapping_scan_deskew]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1785677934.834979873] [mapping_scan_deskew]: Canonical scan state: INCOMPLETE_REVOLUTION
+[INFO] [1785677934.960899410] [mapping_scan_deskew]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1785677938.130450482] [mapping_scan_deskew]: Canonical scan state: INCOMPLETE_REVOLUTION
+[WARN] [1785677938.130535612] [mapping_scan_deskew]: Canonical output rate limit suppressed this revolution
+[INFO] [1785677938.290979038] [mapping_scan_deskew]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1785677938.550612871] [mapping_scan_deskew]: Canonical scan state: INCOMPLETE_REVOLUTION
+[INFO] [1785677938.717371334] [mapping_scan_deskew]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1785677939.412436907] [mapping_scan_deskew]: Canonical scan state: INCOMPLETE_REVOLUTION
+[INFO] [1785677939.547403537] [mapping_scan_deskew]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1785677943.140583405] [mapping_scan_deskew]: Canonical scan state: INCOMPLETE_REVOLUTION
+[WARN] [1785677943.140672757] [mapping_scan_deskew]: Canonical output rate limit suppressed this revolution
+[INFO] [1785677943.379265461] [mapping_scan_deskew]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1785677943.392435961] [mapping_scan_deskew]: Canonical scan state: INCOMPLETE_REVOLUTION
+[INFO] [1785677943.539005331] [mapping_scan_deskew]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1785677945.631624200] [mapping_scan_deskew]: Canonical scan state: INCOMPLETE_REVOLUTION
+[INFO] [1785677945.770106459] [mapping_scan_deskew]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1785677951.839129215] [mapping_scan_deskew]: Canonical scan state: INCOMPLETE_REVOLUTION
+[WARN] [1785677951.840425474] [mapping_scan_deskew]: Canonical output rate limit suppressed this revolution
+[INFO] [1785677952.011269900] [mapping_scan_deskew]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1785677960.398066154] [mapping_scan_deskew]: Canonical scan state: INCOMPLETE_REVOLUTION
+[WARN] [1785677960.398150839] [mapping_scan_deskew]: Angular observation coverage is below the configured minimum
+[INFO] [1785677960.533397062] [mapping_scan_deskew]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1785677960.971859376] [mapping_scan_deskew]: Canonical scan state: INCOMPLETE_REVOLUTION
+[INFO] [1785677961.096347969] [mapping_scan_deskew]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1785677966.864926206] [mapping_scan_deskew]: Canonical scan state: INCOMPLETE_REVOLUTION
+[WARN] [1785677966.865078391] [mapping_scan_deskew]: Angular observation coverage is below the configured minimum
+[INFO] [1785677967.002771502] [mapping_scan_deskew]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1785677967.265081335] [mapping_scan_deskew]: Canonical scan state: INCOMPLETE_REVOLUTION
+[INFO] [1785677967.438401743] [mapping_scan_deskew]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1785677967.977161298] [mapping_scan_deskew]: Canonical scan state: INCOMPLETE_REVOLUTION
+[INFO] [1785677968.096592816] [mapping_scan_deskew]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1785677969.907051204] [mapping_scan_deskew]: Canonical scan state: INCOMPLETE_REVOLUTION
+[INFO] [1785677970.080180056] [mapping_scan_deskew]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1785677970.455855685] [mapping_scan_deskew]: Canonical scan state: INCOMPLETE_REVOLUTION
+[INFO] [1785677970.589708093] [mapping_scan_deskew]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1785677971.725877851] [mapping_scan_deskew]: Canonical scan state: INCOMPLETE_REVOLUTION
+[INFO] [1785677971.850360555] [mapping_scan_deskew]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1785677975.130455682] [mapping_scan_deskew]: Canonical scan state: INCOMPLETE_REVOLUTION
+[WARN] [1785677975.130561201] [mapping_scan_deskew]: Canonical output rate limit suppressed this revolution
+[INFO] [1785677975.364614423] [mapping_scan_deskew]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1785677975.433104479] [mapping_scan_deskew]: Canonical scan state: INCOMPLETE_REVOLUTION
+[INFO] [1785677975.678439349] [mapping_scan_deskew]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1785677975.976188923] [mapping_scan_deskew]: Canonical scan state: INCOMPLETE_REVOLUTION
+[INFO] [1785677976.112800719] [mapping_scan_deskew]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1785677984.297426658] [mapping_scan_deskew]: Canonical scan state: INCOMPLETE_REVOLUTION
+[WARN] [1785677984.297557658] [mapping_scan_deskew]: Canonical output rate limit suppressed this revolution
+[INFO] [1785677984.385575603] [mapping_scan_deskew]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1785677984.515738547] [mapping_scan_deskew]: Canonical scan state: INCOMPLETE_REVOLUTION
+[INFO] [1785677984.651909862] [mapping_scan_deskew]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1785677984.955397991] [mapping_scan_deskew]: Canonical scan state: INCOMPLETE_REVOLUTION
+[INFO] [1785677985.090930288] [mapping_scan_deskew]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1785677992.263894580] [mapping_scan_deskew]: Canonical scan state: INCOMPLETE_REVOLUTION
+[WARN] [1785677992.263997931] [mapping_scan_deskew]: Canonical output rate limit suppressed this revolution
+[INFO] [1785677992.398724561] [mapping_scan_deskew]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1785677998.613243187] [mapping_scan_deskew]: Canonical scan state: INCOMPLETE_REVOLUTION
+[WARN] [1785677998.613351020] [mapping_scan_deskew]: Angular observation coverage is below the configured minimum
+[INFO] [1785677998.886188576] [mapping_scan_deskew]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1785677999.309040872] [mapping_scan_deskew]: Canonical scan state: INCOMPLETE_REVOLUTION
+[INFO] [1785677999.421953483] [mapping_scan_deskew]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1785678058.280314448] [mapping_scan_deskew]: Canonical scan state: INCOMPLETE_REVOLUTION
+[WARN] [1785678058.280416300] [mapping_scan_deskew]: Angular observation coverage is below the configured minimum
+[INFO] [1785678058.407673577] [mapping_scan_deskew]: Canonical scan state: OK_FULL_SCAN
+[INFO] [1785678084.801955524] [rclcpp]: signal_handler(SIGINT/SIGTERM)

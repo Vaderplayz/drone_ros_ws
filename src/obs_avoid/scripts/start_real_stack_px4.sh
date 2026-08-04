@@ -78,8 +78,9 @@ LIDAR_HORIZ_PITCH="${LIDAR_HORIZ_PITCH:-0.0}"
 LIDAR_HORIZ_YAW="${LIDAR_HORIZ_YAW:-0.0}"
 
 PLANNER_NODE="${PLANNER_NODE:-local_planner_mode_a}"
-PLANNER_PARAMS_FILE="${PLANNER_PARAMS_FILE:-}"
+PLANNER_PARAMS_FILE="${PLANNER_PARAMS_FILE:-${ROS_WS}/src/obs_avoid/config/local_planner_mode_a_real_safe.yaml}"
 PLANNER_REMAP_CMD_VEL_TO="${PLANNER_REMAP_CMD_VEL_TO:-}"
+START_PLANNER="${START_PLANNER:-0}"
 
 START_MAPPING="${START_MAPPING:-0}"
 MAPPING_PROFILE="${MAPPING_PROFILE:-v11_clean}"
@@ -179,16 +180,15 @@ start_static_tf() {
 }
 
 start_planner() {
-  local cmd=(ros2 run obs_avoid "${PLANNER_NODE}" --ros-args -p use_sim_time:=false)
-  if [[ -n "${PLANNER_PARAMS_FILE}" ]]; then
-    cmd+=(--params-file "${PLANNER_PARAMS_FILE}")
-  fi
   if [[ -n "${PLANNER_REMAP_CMD_VEL_TO}" ]]; then
-    cmd+=(-r "/mavros/setpoint_velocity/cmd_vel:=${PLANNER_REMAP_CMD_VEL_TO}")
+    echo "[error] PLANNER_REMAP_CMD_VEL_TO is not supported by the guarded real launcher." >&2
+    echo "        The guard intentionally outputs only /planner_cmd_vel." >&2
+    return 1
   fi
-
-  echo "[run] ${PLANNER_NODE} -> ${PLANNER_LOG}"
-  "${cmd[@]}" >"${PLANNER_LOG}" 2>&1 &
+  echo "[run] guarded ${PLANNER_NODE} -> ${PLANNER_LOG}"
+  env ROS_WS="${ROS_WS}" PLANNER_NODE="${PLANNER_NODE}" \
+    PLANNER_PARAMS_FILE="${PLANNER_PARAMS_FILE}" \
+    "${SCRIPT_DIR}/start_flight_mode.sh" >"${PLANNER_LOG}" 2>&1 &
   add_process "$!" "planner"
 }
 
@@ -249,12 +249,16 @@ main() {
 
   start_odom_flatten
   start_static_tf
-  start_planner
+  if is_true "${START_PLANNER}"; then
+    start_planner
+  else
+    echo "[info] planner disabled by default; use the guarded start_flight_mode.sh after spatial awareness is ready"
+  fi
   start_mapping_mode
 
   echo "[ok] real PX4 stack started"
   echo "[info] FCU_URL=${FCU_URL}"
-  echo "[info] planner=${PLANNER_NODE}"
+  echo "[info] planner=${PLANNER_NODE} start_planner=${START_PLANNER}"
   echo "[info] use_sim_time=false"
   echo "[info] logs:"
   echo "  - ${MAVROS_LOG}"

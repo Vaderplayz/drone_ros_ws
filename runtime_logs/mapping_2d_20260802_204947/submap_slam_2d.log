@@ -1,0 +1,6 @@
+[INFO] [launch]: All log files can be found below /home/pi5drone/.ros/log/2026-08-02-20-50-29-126093-pi5drone-desktop-26053
+[INFO] [launch]: Default logging verbosity is set to INFO
+[INFO] [submap_slam_2d_node-1]: process started with pid [26094]
+[submap_slam_2d_node-1] [INFO] [1785678630.148712829] [submap_slam_2d]: Observer-only submap mapper: scan=/scan_slam prediction=odom->base_footprint output_frame=submap_map map_tf=disabled
+[submap_slam_2d_node-1] [WARN] [1785678630.319437773] [submap_slam_2d]: Rejected scan: tf_lookup_failed
+[submap_slam_2d_node-1] [WARN] [1785678630.319523959] [submap_slam_2d]: Submap scan dropped: "odom" passed to lookupTransform argument target_frame does not exist. 

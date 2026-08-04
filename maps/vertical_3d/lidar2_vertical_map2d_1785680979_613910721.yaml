@@ -1,0 +1,6 @@
+image: lidar2_vertical_map2d_1785680979_613910721.pgm
+resolution: 0.100000
+origin: [-5.339033, -5.143104, 0.0]
+negate: 0
+occupied_thresh: 0.65
+free_thresh: 0.196

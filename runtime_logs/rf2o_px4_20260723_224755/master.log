@@ -1,0 +1,18 @@
+[2026-07-23T22:47:55+0700] Independent RF2O/PX4 odometry startup
+[2026-07-23T22:47:55+0700] Workspace=/home/pi5drone/drone_ros_ws; LiDAR=/dev/ttyUSB0; use_sim_time=false
+[2026-07-23T22:47:55+0700] This launcher will not manage MAVROS, the flight controller, camera, or AprilTag nodes
+[2026-07-23T22:47:57+0700] Waiting for existing MAVROS connection; elapsed=1s deadline=60s
+[2026-07-23T22:48:01+0700] Waiting for existing MAVROS connection; elapsed=5s deadline=60s
+[2026-07-23T22:48:06+0700] Waiting for existing MAVROS connection; elapsed=10s deadline=60s
+[2026-07-23T22:48:12+0700] Waiting for existing MAVROS connection; elapsed=16s deadline=60s
+[2026-07-23T22:48:17+0700] Waiting for existing MAVROS connection; elapsed=21s deadline=60s
+[2026-07-23T22:48:21+0700] Waiting for existing MAVROS connection; elapsed=25s deadline=60s
+[2026-07-23T22:48:26+0700] Waiting for existing MAVROS connection; elapsed=30s deadline=60s
+[2026-07-23T22:48:31+0700] Waiting for existing MAVROS connection; elapsed=35s deadline=60s
+[2026-07-23T22:48:37+0700] Waiting for existing MAVROS connection; elapsed=41s deadline=60s
+[2026-07-23T22:48:41+0700] Waiting for existing MAVROS connection; elapsed=45s deadline=60s
+[2026-07-23T22:48:46+0700] Waiting for existing MAVROS connection; elapsed=50s deadline=60s
+[2026-07-23T22:48:51+0700] Waiting for existing MAVROS connection; elapsed=55s deadline=60s
+[1;31m[2026-07-23T22:48:57+0700] ERROR MAVROS did not report FCU connected within 60s[0m
+[2026-07-23T22:48:57+0700] Shutdown reason: normal exit; launcher_exit=12
+[2026-07-23T22:48:57+0700] MAVROS, flight controller, camera, and AprilTag processes were not stopped

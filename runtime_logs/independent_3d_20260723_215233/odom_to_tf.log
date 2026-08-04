@@ -1,0 +1,1 @@
+[INFO] [1784818360.213755934] [independent_3d_odom_to_tf]: odom_to_tf_bridge started. odom_topic='/mavros/local_position/odom', odom_frame='odom', base_frame='base_footprint'

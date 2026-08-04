@@ -1,0 +1,49 @@
+[2026-08-02T21:07:27+0700] Real lidar2 3D mapping startup
+[2026-08-02T21:07:27+0700] Workspace=/home/pi5drone/drone_ros_ws; lidar2=/dev/ttyUSB1@460800; target_frame=odom
+[2026-08-02T21:07:27+0700] This launcher will not manage lidar1, RF2O, 2D SLAM, MAVROS, or flight control
+[1;32m[2026-08-02T21:07:30+0700] STARTED message stream /mavros/local_position/odom[0m
+[1;32m[2026-08-02T21:07:33+0700] STARTED TF odom -> base_footprint[0m
+[1;33m[2026-08-02T21:07:33+0700] WARNING REQUIRE_2D_MAP=0; mapper will use TARGET_FRAME=odom[0m
+[1;32m[2026-08-02T21:07:34+0700] STARTED sllidar2 pgid=18818[0m
+[2026-08-02T21:07:36+0700] Waiting for /scan_vertical; elapsed=2s deadline=60s
+[1;32m[2026-08-02T21:07:39+0700] STARTED message stream /scan_vertical[0m
+[1;32m[2026-08-02T21:07:44+0700] STARTED lidar2_static_tf pgid=19070[0m
+[1;32m[2026-08-02T21:07:47+0700] STARTED TF base_footprint -> lidar_vert_link[0m
+[1;32m[2026-08-02T21:07:50+0700] STARTED verified lidar2 TF: translation=[0.000, 0.000, 0.700] RPY=[1.571, 0.000, -1.571][0m
+[1;32m[2026-08-02T21:07:54+0700] STARTED TF odom -> lidar_vert_link[0m
+[1;32m[2026-08-02T21:08:00+0700] STARTED vertical_lidar_mapper pgid=19527[0m
+[2026-08-02T21:08:01+0700] Waiting for /vertical_cloud; elapsed=1s deadline=90s
+[2026-08-02T21:08:08+0700] Waiting for /vertical_cloud; elapsed=8s deadline=90s
+[2026-08-02T21:08:12+0700] Waiting for /vertical_cloud; elapsed=12s deadline=90s
+[1;32m[2026-08-02T21:08:16+0700] STARTED message stream /vertical_cloud[0m
+[1;32m[2026-08-02T21:08:18+0700] STARTED message stream /mapping/global_cloud[0m
+[1;32m[2026-08-02T21:08:22+0700] STARTED spatial_awareness pgid=20108[0m
+[2026-08-02T21:08:24+0700] Waiting for /mapping/local_obstacle_cloud; elapsed=2s deadline=90s
+[2026-08-02T21:08:28+0700] Waiting for /mapping/local_obstacle_cloud; elapsed=6s deadline=90s
+[2026-08-02T21:08:32+0700] Waiting for /mapping/local_obstacle_cloud; elapsed=10s deadline=90s
+[1;32m[2026-08-02T21:08:39+0700] STARTED message stream /mapping/local_obstacle_cloud[0m
+[2026-08-02T21:08:43+0700] Waiting for /mapping/spatial_awareness/status; elapsed=4s deadline=90s
+[2026-08-02T21:08:48+0700] Waiting for /mapping/spatial_awareness/status; elapsed=9s deadline=90s
+[1;32m[2026-08-02T21:08:52+0700] STARTED message stream /mapping/spatial_awareness/status[0m
+
+[1;32m######################################################################
+#                                                                    #
+#                       LIDAR2 3D MAP READY                          #
+#                                                                    #
+#             VERTICAL C1M1 MAPPING - OBSERVER ONLY                  #
+#                                                                    #
+######################################################################
+[0m
+[2026-08-02T21:09:18+0700] Export service: ros2 service call /vertical_lidar_mapper/save_pcd std_srvs/srv/Trigger '{}'
+[2026-08-02T21:09:18+0700] Spatial awareness: /mapping/local_obstacle_cloud, /mapping/spatial_awareness/status, /mapping/spatial_awareness/markers
+[2026-08-02T21:09:18+0700] On Ctrl+C, autosave requests one PCD/GLB asset set in /home/pi5drone/drone_ros_ws/maps/vertical_3d
+[2026-08-02T21:09:18+0700] Runtime logs: /home/pi5drone/drone_ros_ws/runtime_logs/lidar2_3d_20260802_210725
+[2026-08-02T21:09:18+0700] No PX4 parameter, arm, mode, movement, or setpoint command was sent
+[2026-08-02T21:11:16+0700] Shutdown reason: received signal INT; launcher_exit=130
+[2026-08-02T21:11:17+0700] Autosaving 3D map assets through /vertical_lidar_mapper/save_pcd
+[2026-08-02T21:11:23+0700] 3D map autosave requested; PCD/GLB output directory: /home/pi5drone/drone_ros_ws/maps/vertical_3d
+[2026-08-02T21:11:23+0700] Stopping launcher-owned process group: spatial_awareness pgid=20108
+[2026-08-02T21:11:23+0700] Stopping launcher-owned process group: vertical_lidar_mapper pgid=19527
+[2026-08-02T21:11:23+0700] Stopping launcher-owned process group: lidar2_static_tf pgid=19070
+[2026-08-02T21:11:23+0700] Stopping launcher-owned process group: sllidar2 pgid=18818
+[2026-08-02T21:11:25+0700] lidar1, RF2O, 2D SLAM, MAVROS, camera, AprilTag, planner, and flight control were not stopped

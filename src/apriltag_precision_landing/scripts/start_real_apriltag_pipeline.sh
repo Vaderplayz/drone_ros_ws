@@ -67,6 +67,9 @@ DETECTOR_INPUT_SOURCE="${DETECTOR_INPUT_SOURCE:-device}"
 MAVROS_LAUNCH_FILE="${MAVROS_LAUNCH_FILE:-px4.launch}"
 FCU_URL="${FCU_URL:-serial:///dev/ttyACM0:115200}"
 MAVROS_RESPAWN="${MAVROS_RESPAWN:-true}"
+MAVROS_PROFILE="${MAVROS_PROFILE:-obstacle_ready}"
+MAVROS_PLUGINLISTS_FILE="${MAVROS_PLUGINLISTS_FILE:-}"
+MAVROS_CONFIG_FILE="${MAVROS_CONFIG_FILE:-/opt/ros/jazzy/share/mavros/launch/px4_config.yaml}"
 
 VIDEO_DEVICE_INPUT="${VIDEO_DEVICE_INPUT:-${VIDEO_DEVICE:-/dev/video0}}"
 VIDEO_DEVICE="${VIDEO_DEVICE_INPUT}"
@@ -145,10 +148,18 @@ kill_existing_stack() {
 
 start_mavros() {
   echo "[run] MAVROS -> ${MAVROS_LOG}"
-  ros2 launch mavros "${MAVROS_LAUNCH_FILE}" \
-    fcu_url:="${FCU_URL}" \
-    respawn_mavros:="${MAVROS_RESPAWN}" \
-    use_sim_time:=false >"${MAVROS_LOG}" 2>&1 &
+  if [[ "${MAVROS_PROFILE}" == "obstacle_ready" ]]; then
+    ros2 launch apriltag_precision_landing mavros_obstacle_ready.launch.xml \
+      fcu_url:="${FCU_URL}" \
+      pluginlists_yaml:="${MAVROS_PLUGINLISTS_FILE}" \
+      config_yaml:="${MAVROS_CONFIG_FILE}" \
+      use_sim_time:=false >"${MAVROS_LOG}" 2>&1 &
+  else
+    ros2 launch mavros "${MAVROS_LAUNCH_FILE}" \
+      fcu_url:="${FCU_URL}" \
+      respawn_mavros:="${MAVROS_RESPAWN}" \
+      use_sim_time:=false >"${MAVROS_LOG}" 2>&1 &
+  fi
   add_process "$!" "mavros"
 }
 
@@ -288,10 +299,28 @@ main() {
   if [[ -z "${APRILTAG_CONFIG}" ]]; then
     APRILTAG_CONFIG="$(ros2 pkg prefix apriltag_precision_landing)/share/apriltag_precision_landing/config/apriltag_precision_landing.yaml"
   fi
+  if [[ -z "${MAVROS_PLUGINLISTS_FILE}" ]]; then
+    MAVROS_PLUGINLISTS_FILE="$(ros2 pkg prefix apriltag_precision_landing)/share/apriltag_precision_landing/config/mavros_obstacle_ready_pluginlists.yaml"
+  fi
   if [[ ! -f "${APRILTAG_CONFIG}" ]]; then
     echo "[error] apriltag config not found: ${APRILTAG_CONFIG}" >&2
     exit 1
   fi
+  case "${MAVROS_PROFILE}" in
+    obstacle_ready)
+      if [[ ! -f "${MAVROS_PLUGINLISTS_FILE}" || ! -f "${MAVROS_CONFIG_FILE}" ]]; then
+        echo "[error] MAVROS obstacle-ready profile files are missing." >&2
+        echo "        pluginlist=${MAVROS_PLUGINLISTS_FILE}" >&2
+        echo "        config=${MAVROS_CONFIG_FILE}" >&2
+        exit 1
+      fi
+      ;;
+    full) ;;
+    *)
+      echo "[error] MAVROS_PROFILE must be obstacle_ready or full" >&2
+      exit 1
+      ;;
+  esac
 
   if is_true "${START_MAVROS}" && ! ros2 pkg prefix mavros >/dev/null 2>&1; then
     echo "[warn] mavros package not found in overlay; continuing without starting MAVROS." >&2
@@ -376,6 +405,7 @@ main() {
   echo "[ok] apriltag precision-landing pipeline started"
   echo "[info] startup mode: non-blocking best-effort (no topic wait gates)"
   echo "[info] START_MAVROS=${START_MAVROS} START_CAMERA=${START_CAMERA} START_IMAGE_VIEW=${START_IMAGE_VIEW} START_SYSTEM_MONITOR=${START_SYSTEM_MONITOR}"
+  echo "[info] MAVROS_PROFILE=${MAVROS_PROFILE} FCU_URL=${FCU_URL}"
   echo "[info] detector_input_source=${DETECTOR_INPUT_SOURCE}"
   echo "[info] camera: input=${VIDEO_DEVICE_INPUT} resolved_device=${VIDEO_DEVICE} image=${IMAGE_TOPIC} info=${CAMERA_INFO_TOPIC}"
   echo "[info] capture: latest_only buffer_request=${DETECTOR_CAPTURE_BUFFER_SIZE} publish_image_stream=${DETECTOR_PUBLISH_IMAGE_STREAM} image_view=${START_IMAGE_VIEW}"

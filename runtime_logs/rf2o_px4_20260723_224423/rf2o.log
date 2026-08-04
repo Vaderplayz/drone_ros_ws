@@ -1,0 +1,20 @@
+[WARN] [1784821501.807386877] [rcl.logging_rosout]: Publisher already registered for node name: 'rf2o_laser_odometry'. If this is due to multiple nodes with the same name then all logs for the logger named 'rf2o_laser_odometry' will go out over the existing publisher. As soon as any node with that name is destructed it will unregister the publisher, preventing any further logs for that name from being published on the rosout topic.
+[INFO] [1784821501.970667941] [rf2o_laser_odometry]: Initializing RF2O node...
+[WARN] [1784821502.134890469] [rf2o_laser_odometry]: Waiting for qualified laser scans
+[INFO] [1784821502.336263295] [rf2o_laser_odometry]: RF2O canonical scan qualification: 1/5
+[INFO] [1784821502.836401175] [rf2o_laser_odometry]: Got first Laser Scan .... Configuring node
+[WARN] [1784821507.234827885] [rf2o_laser_odometry]: Waiting for qualified laser scans
+[WARN] [1784821512.236299116] [rf2o_laser_odometry]: Waiting for qualified laser scans
+[WARN] [1784821517.635374177] [rf2o_laser_odometry]: Waiting for qualified laser scans
+[WARN] [1784821522.734843185] [rf2o_laser_odometry]: Waiting for qualified laser scans
+[WARN] [1784821527.736280753] [rf2o_laser_odometry]: Waiting for qualified laser scans
+[WARN] [1784821532.834807363] [rf2o_laser_odometry]: Waiting for qualified laser scans
+[WARN] [1784821537.834811745] [rf2o_laser_odometry]: Waiting for qualified laser scans
+[WARN] [1784821542.836451090] [rf2o_laser_odometry]: Waiting for qualified laser scans
+[WARN] [1784821547.934774404] [rf2o_laser_odometry]: Waiting for qualified laser scans
+[WARN] [1784821552.935253964] [rf2o_laser_odometry]: Waiting for qualified laser scans
+[WARN] [1784821558.036213744] [rf2o_laser_odometry]: Waiting for qualified laser scans
+[WARN] [1784821563.134782622] [rf2o_laser_odometry]: Waiting for qualified laser scans
+[WARN] [1784821568.137085864] [rf2o_laser_odometry]: Waiting for qualified laser scans
+[WARN] [1784821574.049288892] [rf2o_laser_odometry]: Waiting for qualified laser scans
+[INFO] [1784821574.220396468] [rclcpp]: signal_handler(SIGINT/SIGTERM)
