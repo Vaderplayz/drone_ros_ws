@@ -36,11 +36,12 @@ The spatial-awareness layer publishes `/mapping/local_obstacle_cloud` in
 diagnostics on `/mapping/spatial_awareness/status`. A stale or absent LiDAR
 produces `UNKNOWN`, never clear space.
 
-The C1 physical forward mark faces the drone's left, but `sllidar_ros2`
-publishes that direction as LaserScan local `-X`. The real lidar2 static TF
-therefore uses roll `+90` degrees and yaw `-90` degrees. The lidar2 launcher
-validates the active static transform before starting the mapper, including
-when it reuses a transform published elsewhere.
+LiDAR 2 is mounted 28 cm forward and 3.5 cm below the FC. Its top points
+drone-forward and its physical forward mark points drone-up. Because
+`sllidar_ros2` maps the physical mark to LaserScan local `-X`, the static TF is
+`xyz=(0.28, 0, -0.035)`, `rpy=(0, +90 deg, 0)`. The launcher validates the
+active transform before starting the mapper, including when it reuses a
+transform published elsewhere. LiDAR 1 is 3 cm forward and 7 cm above the FC.
 
 For diagnostics, `/mapping/global_cloud` is intentionally republished at 3 Hz.
 The actual integration throughput is
@@ -85,12 +86,11 @@ This launcher waits for `/mavros/local_position/odom`, creates the full-pose
 directly in `odom`. Ctrl+C saves PCD and trajectory output; map-dependent 2D
 and GLB exports are disabled for this mode.
 
-Floor stabilization is enabled for the real lidar profile. Disable it for a
-diagnostic run with:
-
-```bash
-ENABLE_FLOOR_STABILIZATION=false ./src/master_scripts/start_independent_3d_mapping.sh
-```
+The unobstructed front mount enables confidence-gated floor Z anchoring and
+floor tilt correction. Both remain nonblocking and may be disabled with
+`ENABLE_FLOOR_STABILIZATION=false`, particularly over uneven outdoor terrain.
+The mapper does not currently implement ceiling-based pose stabilization;
+ceiling returns remain ordinary map geometry.
 
 The old paths under `src/obs_avoid/scripts/` remain as wrappers for
 compatibility.

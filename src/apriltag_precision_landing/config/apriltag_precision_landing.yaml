@@ -34,7 +34,8 @@ apriltag_camera_detector:
 
     tag_pose_topic: /precision_landing/tag_pose_camera
     dictionary: 36h11
-    tag_size_m: 0.052 
+    # Measured black-square tag side length.
+    tag_size_m: 0.115
     target_tag_id: 0
     min_tag_area_px: 500.0
 
@@ -62,9 +63,10 @@ apriltag_precision_landing:
     publish_rate_hz: 20.0
     input_timeout_sec: 0.30
 
-    camera_offset_x: 0.0
+    # Camera optical origin measured from the FC origin; orientation unchanged.
+    camera_offset_x: 0.10
     camera_offset_y: 0.0
-    camera_offset_z: -0.07
+    camera_offset_z: -0.06
     # This tuned transform is applied directly from drone_frame -> camera_optical_frame.
     camera_roll: 0.0
     camera_pitch: 3.141592653589793

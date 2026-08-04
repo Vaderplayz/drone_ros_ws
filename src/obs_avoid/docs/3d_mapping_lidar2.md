@@ -26,20 +26,19 @@ Check the driver before startup:
 ros2 pkg prefix sllidar_ros2
 ```
 
-The default static TF assumes ROS body axes `x-forward`, `y-left`, `z-up`, and
-the C1M1 physical forward mark points to the drone's left. Slamtec's
-`sllidar_ros2` conversion publishes that physical direction as LaserScan local
-`-X`, so the scan-frame yaw is `-90` degrees rather than the physical mount
-heading of `+90` degrees. This makes the scan plane vertical and keeps lidar2
-aligned with lidar1:
+The default static TF assumes ROS body axes `x-forward`, `y-left`, `z-up`.
+LiDAR 2 is mounted at the front: its top points forward and its physical
+forward mark points up. Slamtec's `sllidar_ros2` conversion maps that mark to
+LaserScan local `-X`. Therefore local `+X` points down, local `+Y` points left,
+and local `+Z` points forward:
 
 ```bash
-LIDAR2_ROLL=1.57079632679
-LIDAR2_PITCH=0.0
-LIDAR2_YAW=-1.57079632679
-LIDAR2_X=0.0
+LIDAR2_ROLL=0.0
+LIDAR2_PITCH=1.57079632679
+LIDAR2_YAW=0.0
+LIDAR2_X=0.28
 LIDAR2_Y=0.0
-LIDAR2_Z=0.70
+LIDAR2_Z=-0.035
 ```
 
 Set `LIDAR2_X`, `LIDAR2_Y`, and `LIDAR2_Z` to the measured mount offset before
@@ -73,14 +72,12 @@ remains disabled so ordinary 2D SLAM corrections do not move stored 3D points.
 RViz can still display the odom-frame cloud together with the occupancy map by
 using the available `map -> odom` transform.
 
-Floor stabilization is flight-safe and non-blocking in the real profile.
-MAVROS odometry carries real altitude changes. A reliable floor observation is
-applied immediately so the persistent map does not preserve intermediate
-correction heights. When the floor is unavailable or rejected, the current
-correction is held and scans continue to integrate. This prevents altitude
-motion from pausing mapping or removing a yaw sector. The real profile anchors
-the corrected floor at `z=0`, so it coincides with the 2D occupancy-map plane
-in RViz.
+The front mount exposes the downward scan sector, so confidence-gated floor Z
+anchoring and floor tilt correction are enabled. They are nonblocking: an
+unavailable or rejected floor does not stop scan integration. Disable floor
+stabilization over uneven terrain with
+`ENABLE_FLOOR_STABILIZATION=false`. The mapper has no ceiling-based pose
+stabilizer; ceiling returns continue to accumulate as ordinary geometry.
 
 When MAVROS and AprilTag already run at boot, start odom-only 3D accumulation
 without lidar1, RF2O, or 2D SLAM:
@@ -98,7 +95,8 @@ PointCloud2 `/mapping/global_cloud`. Verify the mount after startup:
 ros2 run tf2_ros tf2_echo base_footprint lidar_vert_link
 ```
 
-The translation must be approximately `[0.0, 0.0, 0.70]`. Ctrl+C saves PCD
+The translation must be approximately `[0.28, 0.0, -0.035]`, and the reported
+pitch must be approximately `+1.571` rad. Ctrl+C saves PCD
 and trajectory files under `maps/vertical_3d`; map-dependent 2D and GLB exports
 are intentionally disabled in this mode.
 

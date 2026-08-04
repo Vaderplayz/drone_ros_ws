@@ -55,16 +55,17 @@ ROS 2 (Humble/Rolling) package for building a rolling 3D point cloud map from a 
   excessive corrections, and never feeds corrected poses back into MAVROS/PX4
 - Optionally anchors each complete vertical scan to a robust lower-percentile
   floor estimate so small altitude drift does not stack floor and wall layers
-- The real profile requires a spatially broad, nearly level floor observation
-  before a scan enters the permanent global cloud. Missing or tilted floor
-  observations remain visible live but cannot create duplicate/tilted layers.
+- Floor anchoring can require a spatially broad, nearly level observation
+  before a scan enters the permanent global cloud. The front-mounted real C1
+  exposes the downward sector, so this correction is enabled but nonblocking.
 - A trustworthy residual floor tilt rigidly rotates the complete scan slice
   about the LiDAR origin before Z stabilization. Floor and wall returns keep
   their shared corner instead of receiving independent height corrections.
 - Periodically removes isolated global returns with a bounded-radius filter;
   experimental single-scan ICP remains disabled.
-- Anchors the real-profile floor to `z=0`, matching the 2D occupancy-map plane
-  instead of retaining an arbitrary MAVROS odometry height.
+- Uses full MAVROS Z/roll/pitch plus confidence-gated floor Z/tilt correction
+  in the real profile. No ceiling-based pose stabilizer is currently
+  implemented; ceiling returns remain ordinary map geometry.
 - Compares SLAM-relative motion vs odom-relative motion and drops inconsistent global integration (`enable_relative_pose_gate`)
 - Rebuilds accumulated points on `map->odom` corrections to reduce loop-closure double walls (`enable_map_rebase`)
 - Supports `integration_mode`:

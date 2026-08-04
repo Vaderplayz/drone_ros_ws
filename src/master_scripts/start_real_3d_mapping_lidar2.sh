@@ -30,18 +30,18 @@ REQUIRE_2D_MAP="${REQUIRE_2D_MAP:-0}"
 WAIT_TIMEOUT_SEC="${WAIT_TIMEOUT_SEC:-90}"
 POINTCLOUD_WAIT_SEC="${POINTCLOUD_WAIT_SEC:-90}"
 
-# Mount convention:
-# - ROS base frame is x-forward, y-left, z-up.
-# - The C1M1 physical forward mark points to the drone's left (+Y).
-# - sllidar_ros2 publishes that physical direction as LaserScan local -X.
-# - LaserScan local +Y points up when the scan plane is vertical.
+# Front-mount convention (ROS base: x-forward, y-left, z-up):
+# - sllidar_ros2 maps the C1M1 physical forward mark to LaserScan local -X.
+# - LiDAR top (+Z) points drone-forward (+X).
+# - The physical forward mark (-X) points drone-up (+Z).
+# Thus LaserScan +X points down, +Y points left, and +Z points forward.
 START_LIDAR2_STATIC_TF="${START_LIDAR2_STATIC_TF:-1}"
-LIDAR2_X="${LIDAR2_X:-0.0}"
+LIDAR2_X="${LIDAR2_X:-0.28}"
 LIDAR2_Y="${LIDAR2_Y:-0.0}"
-LIDAR2_Z="${LIDAR2_Z:-0.70}"
-LIDAR2_ROLL="${LIDAR2_ROLL:-1.57079632679}"
-LIDAR2_PITCH="${LIDAR2_PITCH:-0.0}"
-LIDAR2_YAW="${LIDAR2_YAW:--1.57079632679}"
+LIDAR2_Z="${LIDAR2_Z:--0.035}"
+LIDAR2_ROLL="${LIDAR2_ROLL:-0.0}"
+LIDAR2_PITCH="${LIDAR2_PITCH:-1.57079632679}"
+LIDAR2_YAW="${LIDAR2_YAW:-0.0}"
 
 MAPPER_PARAMS_FILE="${MAPPER_PARAMS_FILE:-${ROS_WS}/src/vertical_lidar_mapper/config/real_c1m1_left.yaml}"
 VERTICAL_CLOUD_TOPIC="${VERTICAL_CLOUD_TOPIC:-/vertical_cloud}"
@@ -64,7 +64,11 @@ EXPORT_SLAM_MAP2D_ON_SAVE="${EXPORT_SLAM_MAP2D_ON_SAVE:-true}"
 EXPORT_STRUCTURAL_MESH_ON_SAVE="${EXPORT_STRUCTURAL_MESH_ON_SAVE:-true}"
 ENABLE_MAP_REBASE="${ENABLE_MAP_REBASE:-false}"
 ENABLE_RELATIVE_POSE_GATE="${ENABLE_RELATIVE_POSE_GATE:-false}"
+# The front mount exposes the downward scan sector. Floor anchoring remains
+# confidence-gated and nonblocking; disable it for uneven outdoor terrain.
+# There is currently no ceiling pose stabilizer in the mapper.
 ENABLE_FLOOR_STABILIZATION="${ENABLE_FLOOR_STABILIZATION:-true}"
+ENABLE_FLOOR_TILT_CORRECTION="${ENABLE_FLOOR_TILT_CORRECTION:-true}"
 ENABLE_SCAN_MATCHING="${ENABLE_SCAN_MATCHING:-false}"
 SCAN_MATCHING_DROP_ON_FAILURE="${SCAN_MATCHING_DROP_ON_FAILURE:-true}"
 SAVE_SERVICE_TIMEOUT_SEC="${SAVE_SERVICE_TIMEOUT_SEC:-30}"
@@ -309,6 +313,7 @@ validate_settings() {
   esac
   for boolean_value in \
     "${ENABLE_FLOOR_STABILIZATION}" \
+    "${ENABLE_FLOOR_TILT_CORRECTION}" \
     "${ENABLE_MAP_REBASE}" \
     "${ENABLE_RELATIVE_POSE_GATE}" \
     "${ENABLE_SCAN_MATCHING}" \
@@ -612,6 +617,9 @@ start_mapper() {
       -p enable_map_rebase:="${ENABLE_MAP_REBASE}" \
       -p enable_relative_pose_gate:="${ENABLE_RELATIVE_POSE_GATE}" \
       -p enable_floor_stabilization:="${ENABLE_FLOOR_STABILIZATION}" \
+      -p enable_floor_tilt_correction:="${ENABLE_FLOOR_TILT_CORRECTION}" \
+      -p require_floor_for_global_integration:=false \
+      -p drop_scan_on_floor_stabilization_failure:=false \
       -p enable_structural_cloud:="${ENABLE_STRUCTURAL_CLOUD}" \
       -p structural_cloud_topic:="${STRUCTURAL_CLOUD_TOPIC}" \
       -p enable_scan_matching:="${ENABLE_SCAN_MATCHING}" \

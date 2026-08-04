@@ -49,9 +49,9 @@ vertical_lidar_mapper:
     max_range: 10.0
     exclude_floor_points: false
     floor_z_max: 0.10
-    # Use the observed floor as an odometry-Z correction. Real altitude
-    # changes still come from MAVROS, while the correction keeps the mapped
-    # floor fixed in the target frame when that Z estimate drifts.
+    # The front mount exposes both halves of the vertical scan. Use a
+    # confidence-checked floor band as a nonblocking Z anchor while full
+    # MAVROS Z/roll/pitch deskew remains active.
     enable_floor_stabilization: true
     floor_stabilization_percentile: 0.10
     floor_stabilization_band_m: 0.08
@@ -64,14 +64,14 @@ vertical_lidar_mapper:
     floor_stabilization_max_tilt_rad: 0.1745
     # Match the physical floor to the z=0 plane used by the 2D occupancy map.
     floor_stabilization_target_z_m: 0.0
-    # Reject sudden altitude corrections and sloped low-return strips. A scan
-    # remains available live, but cannot contaminate the accumulated cloud
-    # unless its floor estimate passes all confidence checks.
+    # Reject sudden altitude corrections and sloped low-return strips. When a
+    # floor estimate is unavailable, retain the odometry-height scan instead
+    # of creating a blind direction in the accumulated cloud.
     # The first confidence-checked estimate may initialize a larger offset if
     # mapping starts while the drone is already held above its odom origin.
     floor_stabilization_max_correction_m: 1.50
     floor_stabilization_max_step_m: 0.15
-    require_floor_for_global_integration: true
+    require_floor_for_global_integration: false
     # Keep the odometry-height scan when no reliable floor observation exists.
     # Floor visibility depends on yaw and must not create angular blind sectors.
     drop_scan_on_floor_stabilization_failure: false
