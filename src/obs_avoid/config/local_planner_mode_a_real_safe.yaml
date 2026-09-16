@@ -10,3 +10,10 @@ dwa_local_planner_skeleton:
     collision_radius: 0.45
     max_use_range: 8.0
     obstacle_cloud_range: 8.0
+    input_timeout_sec: 0.35
+    allow_collision_radius_relaxation: false
+    full_search_if_empty: false
+    enable_wall_follow_fallback: false
+    enable_bypass_assist: false
+    enable_sharp_turn_assist: false
+    enable_min_cruise_kick: false

@@ -18,6 +18,7 @@ def generate_launch_description():
     base_stack_launch = os.path.join(apriltag_share, "launch", "stack_mavros_apriltag_preland.launch.py")
     rplidar_launch = os.path.join(rplidar_share, "launch", "rplidar.launch.py")
     slam_params = os.path.join(obs_share, "config", "slam2d_real_1lidar.yaml")
+    planner_params = os.path.join(obs_share, "config", "local_planner_mode_a_real_safe.yaml")
 
     return LaunchDescription([
         DeclareLaunchArgument("fcu_url", default_value="serial:///dev/ttyACM0:115200"),
@@ -43,9 +44,9 @@ def generate_launch_description():
         DeclareLaunchArgument("slam_params_file", default_value=slam_params),
         DeclareLaunchArgument("scan_topic", default_value="/scan_rf2o"),
         DeclareLaunchArgument("map_frame", default_value="map"),
-        DeclareLaunchArgument("start_planner", default_value="true"),
+        DeclareLaunchArgument("start_planner", default_value="false"),
         DeclareLaunchArgument("planner_scan_topic", default_value="/scan_rf2o"),
-        DeclareLaunchArgument("start_user_ctrl", default_value="true"),
+        DeclareLaunchArgument("start_user_ctrl", default_value="false"),
         DeclareLaunchArgument("ask_goal_on_start", default_value="true"),
         DeclareLaunchArgument("start_trajectory_node", default_value="true"),
         DeclareLaunchArgument("trajectory_topic", default_value="/mavros/trajectory_3d"),
@@ -112,12 +113,11 @@ def generate_launch_description():
         Node(
             package="obs_avoid",
             executable="local_planner_mode_a",
-            name="local_planner_mode_a",
             output="screen",
             remappings=[
                 ("/scan_horizontal", LaunchConfiguration("planner_scan_topic")),
             ],
-            parameters=[{"use_sim_time": False}],
+            parameters=[planner_params, {"use_sim_time": False}],
             condition=IfCondition(LaunchConfiguration("start_planner")),
         ),
         Node(

@@ -1,0 +1,15 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Mini Ground Control
+GenericName=Drone Ground Station
+Comment=Monitor PX4, mapping, LiDAR, navigation, and precision landing
+Exec=@EXECUTABLE@
+Icon=mini-ground-control
+Terminal=false
+Categories=Utility;Engineering;
+Keywords=PX4;ROS;Drone;LiDAR;Mapping;Ground Control;
+StartupNotify=true
+StartupWMClass=mini-ground-control
+DBusActivatable=false
+X-GNOME-UsesNotifications=true

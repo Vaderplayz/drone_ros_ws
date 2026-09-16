@@ -1,0 +1,23 @@
+/**:
+  ros__parameters:
+    # Minimal real-drone set for localization, precision landing, spatial
+    # awareness, and a later guarded velocity-control handoff. Mission, FTP,
+    # geofence, rallypoint, simulation, camera, and calibration plugins are
+    # intentionally omitted from the always-on Pi profile.
+    plugin_allowlist:
+      - sys_status
+      - sys_time
+      - command
+      - global_position
+      - gps_status
+      - home_position
+      - imu
+      - landing_target
+      - local_position
+      - obstacle_distance
+      - obstacle_distance_3d
+      - odometry
+      - rc_io
+      - setpoint_position
+      - setpoint_raw
+      - setpoint_velocity

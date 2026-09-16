@@ -7,3 +7,4 @@
 **/.vscode/
 *.pyc
 __pycache__/
+.venv-ground-control/

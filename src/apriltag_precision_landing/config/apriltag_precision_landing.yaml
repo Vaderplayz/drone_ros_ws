@@ -33,9 +33,11 @@ apriltag_camera_detector:
     publish_image_stream: false
 
     tag_pose_topic: /precision_landing/tag_pose_camera
+    tag_corners_topic: /precision_landing/tag_corners
+    tag_metadata_topic: /precision_landing/tag_detection
     dictionary: 36h11
     # Measured black-square tag side length.
-    tag_size_m: 0.115
+    tag_size_m: 0.117
     target_tag_id: 0
     min_tag_area_px: 500.0
 

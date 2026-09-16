@@ -11,6 +11,11 @@
 #include <vector>
 
 #include "cv_bridge/cv_bridge.hpp"
+#include "diagnostic_msgs/msg/diagnostic_array.hpp"
+#include "diagnostic_msgs/msg/diagnostic_status.hpp"
+#include "diagnostic_msgs/msg/key_value.hpp"
+#include "geometry_msgs/msg/point32.hpp"
+#include "geometry_msgs/msg/polygon_stamped.hpp"
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/camera_info.hpp"
@@ -82,6 +87,10 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
         });
 
     tag_pose_topic_ = declare_parameter<std::string>("tag_pose_topic", "/precision_landing/tag_pose_camera");
+    tag_corners_topic_ = declare_parameter<std::string>(
+        "tag_corners_topic", "/precision_landing/tag_corners");
+    tag_metadata_topic_ = declare_parameter<std::string>(
+        "tag_metadata_topic", "/precision_landing/tag_detection");
     tag_size_m_ = declare_parameter<double>("tag_size_m", std::numeric_limits<double>::quiet_NaN());
     target_tag_id_ = declare_parameter<int>("target_tag_id", -1);
     min_tag_area_px_ = declare_parameter<double>("min_tag_area_px", 80.0);
@@ -93,6 +102,10 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
     pub_image_ = create_publisher<sensor_msgs::msg::Image>(image_output_topic_, qos_sensor);
     pub_camera_info_ = create_publisher<sensor_msgs::msg::CameraInfo>(camera_info_output_topic_, qos_sensor);
     pub_tag_pose_ = create_publisher<geometry_msgs::msg::PoseStamped>(tag_pose_topic_, 10);
+    pub_tag_corners_ = create_publisher<geometry_msgs::msg::PolygonStamped>(
+        tag_corners_topic_, qos_sensor);
+    pub_tag_metadata_ = create_publisher<diagnostic_msgs::msg::DiagnosticArray>(
+        tag_metadata_topic_, rclcpp::QoS(10).reliable());
 
     if (!std::isfinite(tag_size_m_) || tag_size_m_ <= 0.0) {
       RCLCPP_FATAL(get_logger(), "tag_size_m must be provided and > 0.0");
@@ -575,6 +588,9 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
     out.pose.orientation.w = qw;
 
     pub_tag_pose_->publish(out);
+    publishDetectionMetadata(
+        out.header, picked_corners[0], ids[best_idx], image.cols, image.rows,
+        best_area_px, out.pose.position.x, out.pose.position.y, out.pose.position.z);
     ++detector_output_count_;
     if (last_detection_stamp_.nanoseconds() != 0 && stamp > last_detection_stamp_) {
       longest_detection_gap_sec_ = std::max(
@@ -608,6 +624,70 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
     bool use_sim_time = false;
     get_parameter("use_sim_time", use_sim_time);
     return use_sim_time;
+  }
+
+  void publishDetectionMetadata(
+      const std_msgs::msg::Header &header,
+      const std::vector<cv::Point2f> &corners,
+      int tag_id,
+      int image_width,
+      int image_height,
+      double area_px,
+      double target_x,
+      double target_y,
+      double target_z) {
+    if (corners.size() != 4) {
+      return;
+    }
+
+    geometry_msgs::msg::PolygonStamped polygon;
+    polygon.header = header;
+    polygon.polygon.points.reserve(corners.size());
+    double center_x = 0.0;
+    double center_y = 0.0;
+    for (const auto &corner : corners) {
+      geometry_msgs::msg::Point32 point;
+      point.x = corner.x;
+      point.y = corner.y;
+      point.z = 0.0F;
+      polygon.polygon.points.push_back(point);
+      center_x += corner.x;
+      center_y += corner.y;
+    }
+    center_x /= 4.0;
+    center_y /= 4.0;
+    pub_tag_corners_->publish(polygon);
+
+    diagnostic_msgs::msg::DiagnosticArray metadata;
+    metadata.header = header;
+    diagnostic_msgs::msg::DiagnosticStatus status;
+    status.level = diagnostic_msgs::msg::DiagnosticStatus::OK;
+    status.name = "apriltag_detection";
+    status.hardware_id = video_device_;
+    status.message = "TARGET_DETECTED";
+    const double image_area = std::max(1.0, static_cast<double>(image_width * image_height));
+    const double quality = std::clamp(area_px / (image_area * 0.10), 0.0, 1.0);
+    const auto add_value = [&status](const std::string &key, const std::string &value) {
+      diagnostic_msgs::msg::KeyValue item;
+      item.key = key;
+      item.value = value;
+      status.values.push_back(item);
+    };
+    add_value("tag_id", std::to_string(tag_id));
+    add_value("quality", std::to_string(quality));
+    add_value("tag_area_px", std::to_string(area_px));
+    add_value("center_x_px", std::to_string(center_x));
+    add_value("center_y_px", std::to_string(center_y));
+    add_value("image_width", std::to_string(image_width));
+    add_value("image_height", std::to_string(image_height));
+    add_value("pixel_error_x", std::to_string(center_x - static_cast<double>(image_width) * 0.5));
+    add_value("pixel_error_y", std::to_string(center_y - static_cast<double>(image_height) * 0.5));
+    add_value("target_x_m", std::to_string(target_x));
+    add_value("target_y_m", std::to_string(target_y));
+    add_value("target_z_m", std::to_string(target_z));
+    add_value("source_stamp_ns", std::to_string(rclcpp::Time(header.stamp).nanoseconds()));
+    metadata.status.push_back(status);
+    pub_tag_metadata_->publish(metadata);
   }
 
   void publishDiagnostics() {
@@ -699,6 +779,8 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
   std::vector<double> dist_coeffs_vec_;
 
   std::string tag_pose_topic_;
+  std::string tag_corners_topic_;
+  std::string tag_metadata_topic_;
   std::string dictionary_name_;
 
   double tag_size_m_{0.16};
@@ -763,6 +845,8 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
   rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr pub_image_;
   rclcpp::Publisher<sensor_msgs::msg::CameraInfo>::SharedPtr pub_camera_info_;
   rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr pub_tag_pose_;
+  rclcpp::Publisher<geometry_msgs::msg::PolygonStamped>::SharedPtr pub_tag_corners_;
+  rclcpp::Publisher<diagnostic_msgs::msg::DiagnosticArray>::SharedPtr pub_tag_metadata_;
   rclcpp::TimerBase::SharedPtr capture_timer_;
   rclcpp::TimerBase::SharedPtr diagnostics_timer_;
 };

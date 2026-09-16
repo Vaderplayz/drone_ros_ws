@@ -1,0 +1,125 @@
+app:
+  title: Mini Ground Control
+  gui_refresh_hz: 25.0
+  health_refresh_hz: 4.0
+  max_log_entries: 800
+  telemetry_source: mavros
+  display_frame: ENU
+  confirm_precision_landing: true
+  confirm_critical_mode_changes: true
+
+topics:
+  mavros_state: /mavros/state
+  attitude: /mavros/imu/data
+  local_odometry: /mavros/local_position/odom
+  global_position: /mavros/global_position/global
+  relative_altitude: /mavros/global_position/rel_alt
+  heading: /mavros/global_position/compass_hdg
+  battery: /mavros/battery
+  satellites: /mavros/global_position/raw/satellites
+
+  px4_vehicle_attitude: /fmu/out/vehicle_attitude
+  px4_vehicle_local_position: /fmu/out/vehicle_local_position
+  px4_vehicle_global_position: /fmu/out/vehicle_global_position
+  px4_vehicle_status: /fmu/out/vehicle_status
+  px4_battery_status: /fmu/out/battery_status
+  px4_sensor_gps: /fmu/out/vehicle_gps_position
+
+  horizontal_scan: /scan_slam
+  vertical_scan: /scan_vertical
+  occupancy_grid: /map
+  point_cloud: /mapping/global_cloud
+  octomap_occupied_cells: /occupied_cells_vis_array
+  local_obstacle_cloud: /mapping/local_obstacle_cloud
+  path: /mavros/trajectory_3d
+  mapping_status: /mapping/status
+  spatial_awareness_status: /mapping/spatial_awareness/status
+
+  camera_image: /image_raw
+  camera_info: /camera_info
+  april_tag_pose: /precision_landing/tag_pose_camera
+  april_tag_corners: /precision_landing/tag_corners
+  april_tag_metadata: /precision_landing/tag_detection
+  precision_landing_status: /precision_landing/state
+  recording_status: /rosbag/status
+
+services:
+  activate_precision_landing: /precision_landing/activate
+  cancel_precision_landing: /precision_landing/cancel
+  abort_precision_landing: /precision_landing/abort
+  start_lidar_odometry: /ground_control/start_lidar_odometry
+  start_2d_mapping: /ground_control/start_2d_mapping
+  start_3d_mapping: /ground_control/start_3d_mapping
+
+commands:
+  mavros_set_mode_service: /mavros/set_mode
+  local_setpoint_topic: /mavros/setpoint_position/local
+  setpoint_rate_hz: 10.0
+  offboard_prestream_sec: 1.0
+  local_frame_id: odom
+  maximum_horizontal_step_m: 25.0
+  minimum_altitude_m: -2.0
+  maximum_altitude_m: 20.0
+
+navigation:
+  gps_map_enabled: true
+  gps_map_opacity: 0.50
+  gps_tile_url: https://tile.openstreetmap.org/{z}/{x}/{y}.png
+  gps_tile_zoom: 19
+  gps_tile_max_visible: 9
+  gps_tile_memory_tiles: 32
+  gps_tile_cache_mb: 64
+  gps_tile_user_agent: "MiniGroundControl/0.1 (+https://github.com/Vaderplayz/3D-Environment-construction-for-PX4-drone-with-2D-lidar-and-obstacle-avoidance)"
+
+timeouts:
+  px4: 1.0
+  attitude: 0.4
+  local_position: 0.6
+  global_position: 2.5
+  battery: 3.0
+  camera: 0.7
+  horizontal_lidar: 0.7
+  vertical_lidar: 0.7
+  mapping: 2.0
+  point_cloud: 2.0
+  octomap: 2.0
+  path: 2.0
+  april_tag: 0.5
+  precision_landing: 1.0
+  recording: 2.0
+
+visualization:
+  map_update_hz: 10.0
+  lidar_update_hz: 15.0
+  point_cloud_update_hz: 5.0
+  camera_update_hz: 30.0
+  lidar_fixed_range_m: 12.0
+  point_cloud_max_points: 80000
+  point_cloud_radius_m: 18.0
+  octomap_resolution_m: 0.12
+  octomap_max_voxels: 30000
+  octomap_minimum_hits: 1
+  trajectory_max_points: 5000
+  vertical_blocked_regions_deg: []
+  target_sync_tolerance_sec: 0.12
+  target_stale_display_sec: 1.0
+  landing_alignment_tolerance_px: 35.0
+
+health_items:
+  horizontal_lidar: horizontal_lidar
+  vertical_lidar: vertical_lidar
+  camera: camera
+  imu: attitude
+  local_position: local_position
+  global_position: global_position
+  mapping_node: mapping_status
+  slam_node: occupancy_grid
+  precision_landing: precision_landing
+  april_tag_detector: april_tag
+  recording: recording
+
+mock:
+  publish_rate_hz: 30.0
+  image_width: 640
+  image_height: 480
+  tag_visible: true

@@ -16,6 +16,7 @@ find_package(tf2_geometry_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(diagnostic_msgs REQUIRED)
+find_package(std_msgs REQUIRED)
 
 
 if(BUILD_TESTING)
@@ -69,9 +70,21 @@ target_link_libraries(local_planner_mode_a PUBLIC
   ${sensor_msgs_TARGETS}
   sensor_msgs::sensor_msgs_library
   ${nav_msgs_TARGETS}
+  ${std_msgs_TARGETS}
   tf2::tf2
 )
 install(TARGETS local_planner_mode_a DESTINATION lib/${PROJECT_NAME})
+
+add_executable(spatial_command_guard_node src/spatial_command_guard_node.cpp)
+target_include_directories(spatial_command_guard_node PUBLIC include)
+target_link_libraries(spatial_command_guard_node PUBLIC
+  rclcpp::rclcpp
+  ${geometry_msgs_TARGETS}
+  ${nav_msgs_TARGETS}
+  ${diagnostic_msgs_TARGETS}
+  tf2::tf2
+)
+install(TARGETS spatial_command_guard_node DESTINATION lib/${PROJECT_NAME})
 
 add_executable(real_slam_command_console src/real_slam_command_console.cpp)
 target_link_libraries(real_slam_command_console PUBLIC
@@ -185,5 +198,12 @@ install(DIRECTORY
   scripts
   DESTINATION share/${PROJECT_NAME}
 )
+install(DIRECTORY include/ DESTINATION include)
+
+if(BUILD_TESTING)
+  find_package(ament_cmake_gtest REQUIRED)
+  ament_add_gtest(spatial_command_guard_test test/spatial_command_guard_test.cpp)
+  target_include_directories(spatial_command_guard_test PRIVATE include)
+endif()
 
 ament_package()

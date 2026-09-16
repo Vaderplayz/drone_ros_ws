@@ -62,11 +62,15 @@ START_MAVROS="${START_MAVROS:-1}"
 START_CAMERA="${START_CAMERA:-0}"
 START_IMAGE_VIEW="${START_IMAGE_VIEW:-0}"
 START_SYSTEM_MONITOR="${START_SYSTEM_MONITOR:-1}"
+START_GROUND_CONTROL_SUPERVISOR="${START_GROUND_CONTROL_SUPERVISOR:-1}"
 DETECTOR_INPUT_SOURCE="${DETECTOR_INPUT_SOURCE:-device}"
 
 MAVROS_LAUNCH_FILE="${MAVROS_LAUNCH_FILE:-px4.launch}"
 FCU_URL="${FCU_URL:-serial:///dev/ttyACM0:115200}"
 MAVROS_RESPAWN="${MAVROS_RESPAWN:-true}"
+MAVROS_PROFILE="${MAVROS_PROFILE:-obstacle_ready}"
+MAVROS_PLUGINLISTS_FILE="${MAVROS_PLUGINLISTS_FILE:-}"
+MAVROS_CONFIG_FILE="${MAVROS_CONFIG_FILE:-/opt/ros/jazzy/share/mavros/launch/px4_config.yaml}"
 
 VIDEO_DEVICE_INPUT="${VIDEO_DEVICE_INPUT:-${VIDEO_DEVICE:-/dev/video0}}"
 VIDEO_DEVICE="${VIDEO_DEVICE_INPUT}"
@@ -83,7 +87,7 @@ DETECTOR_PUBLISH_IMAGE_STREAM="${DETECTOR_PUBLISH_IMAGE_STREAM:-false}"
 V4L2_CONTROLS="${V4L2_CONTROLS:-}"
 
 TAG_DICTIONARY="${TAG_DICTIONARY:-36h11}"
-TAG_SIZE_M="${TAG_SIZE_M:-0.115}"
+TAG_SIZE_M="${TAG_SIZE_M:-0.117}"
 TARGET_TAG_ID="${TARGET_TAG_ID:-0}"
 MIN_TAG_AREA_PX="${MIN_TAG_AREA_PX:-500.0}"
 TAG_POSE_TOPIC="${TAG_POSE_TOPIC:-/precision_landing/tag_pose_camera}"
@@ -111,6 +115,7 @@ LANDING_LOG="${LANDING_LOG:-/tmp/apriltag_landing_target.log}"
 IMAGE_VIEW_LOG="${IMAGE_VIEW_LOG:-/tmp/rqt_image_view_apriltag.log}"
 CAMERA_CAPABILITIES_LOG="${CAMERA_CAPABILITIES_LOG:-/tmp/apriltag_v4l2_capabilities.log}"
 SYSTEM_MONITOR_LOG="${SYSTEM_MONITOR_LOG:-/tmp/apriltag_system_monitor.log}"
+GROUND_CONTROL_SUPERVISOR_LOG="${GROUND_CONTROL_SUPERVISOR_LOG:-/tmp/ground_control_pipeline_supervisor.log}"
 
 PIDS=()
 NAMES=()
@@ -141,14 +146,23 @@ kill_existing_stack() {
   kill_if_running "ros2 run apriltag_precision_landing apriltag_precision_landing_node"
   kill_if_running "ros2 run rqt_image_view rqt_image_view"
   kill_if_running "monitor_real_pipeline_system.sh"
+  kill_if_running "pipeline_supervisor --workspace"
 }
 
 start_mavros() {
   echo "[run] MAVROS -> ${MAVROS_LOG}"
-  ros2 launch mavros "${MAVROS_LAUNCH_FILE}" \
-    fcu_url:="${FCU_URL}" \
-    respawn_mavros:="${MAVROS_RESPAWN}" \
-    use_sim_time:=false >"${MAVROS_LOG}" 2>&1 &
+  if [[ "${MAVROS_PROFILE}" == "obstacle_ready" ]]; then
+    ros2 launch apriltag_precision_landing mavros_obstacle_ready.launch.xml \
+      fcu_url:="${FCU_URL}" \
+      pluginlists_yaml:="${MAVROS_PLUGINLISTS_FILE}" \
+      config_yaml:="${MAVROS_CONFIG_FILE}" \
+      use_sim_time:=false >"${MAVROS_LOG}" 2>&1 &
+  else
+    ros2 launch mavros "${MAVROS_LAUNCH_FILE}" \
+      fcu_url:="${FCU_URL}" \
+      respawn_mavros:="${MAVROS_RESPAWN}" \
+      use_sim_time:=false >"${MAVROS_LOG}" 2>&1 &
+  fi
   add_process "$!" "mavros"
 }
 
@@ -250,6 +264,13 @@ start_system_monitor() {
   add_process "$!" "pipeline_system_monitor"
 }
 
+start_ground_control_supervisor() {
+  echo "[run] ground-control pipeline supervisor -> ${GROUND_CONTROL_SUPERVISOR_LOG}"
+  ros2 run mini_ground_control pipeline_supervisor --workspace "${ROS_WS}" \
+    >"${GROUND_CONTROL_SUPERVISOR_LOG}" 2>&1 &
+  add_process "$!" "ground_control_pipeline_supervisor"
+}
+
 resolve_video_device() {
   if [[ ! -e "${VIDEO_DEVICE_INPUT}" ]]; then
     echo "[error] configured camera path does not exist on this Raspberry Pi: ${VIDEO_DEVICE_INPUT}" >&2
@@ -288,10 +309,28 @@ main() {
   if [[ -z "${APRILTAG_CONFIG}" ]]; then
     APRILTAG_CONFIG="$(ros2 pkg prefix apriltag_precision_landing)/share/apriltag_precision_landing/config/apriltag_precision_landing.yaml"
   fi
+  if [[ -z "${MAVROS_PLUGINLISTS_FILE}" ]]; then
+    MAVROS_PLUGINLISTS_FILE="$(ros2 pkg prefix apriltag_precision_landing)/share/apriltag_precision_landing/config/mavros_obstacle_ready_pluginlists.yaml"
+  fi
   if [[ ! -f "${APRILTAG_CONFIG}" ]]; then
     echo "[error] apriltag config not found: ${APRILTAG_CONFIG}" >&2
     exit 1
   fi
+  case "${MAVROS_PROFILE}" in
+    obstacle_ready)
+      if [[ ! -f "${MAVROS_PLUGINLISTS_FILE}" || ! -f "${MAVROS_CONFIG_FILE}" ]]; then
+        echo "[error] MAVROS obstacle-ready profile files are missing." >&2
+        echo "        pluginlist=${MAVROS_PLUGINLISTS_FILE}" >&2
+        echo "        config=${MAVROS_CONFIG_FILE}" >&2
+        exit 1
+      fi
+      ;;
+    full) ;;
+    *)
+      echo "[error] MAVROS_PROFILE must be obstacle_ready or full" >&2
+      exit 1
+      ;;
+  esac
 
   if is_true "${START_MAVROS}" && ! ros2 pkg prefix mavros >/dev/null 2>&1; then
     echo "[warn] mavros package not found in overlay; continuing without starting MAVROS." >&2
@@ -311,6 +350,11 @@ main() {
   if is_true "${START_IMAGE_VIEW}" && ! ros2 pkg prefix rqt_image_view >/dev/null 2>&1; then
     echo "[warn] rqt_image_view package not found; continuing without image viewer." >&2
     START_IMAGE_VIEW="0"
+  fi
+
+  if is_true "${START_GROUND_CONTROL_SUPERVISOR}" && ! ros2 pkg prefix mini_ground_control >/dev/null 2>&1; then
+    echo "[warn] mini_ground_control package not found; quick pipeline services are disabled." >&2
+    START_GROUND_CONTROL_SUPERVISOR="0"
   fi
 
   if [[ "${KILL_BEFORE_LAUNCH}" == "1" ]]; then
@@ -362,6 +406,10 @@ main() {
     start_system_monitor
   fi
 
+  if is_true "${START_GROUND_CONTROL_SUPERVISOR}"; then
+    start_ground_control_supervisor
+  fi
+
   if is_true "${START_CAMERA}"; then
     start_camera
   fi
@@ -375,7 +423,8 @@ main() {
 
   echo "[ok] apriltag precision-landing pipeline started"
   echo "[info] startup mode: non-blocking best-effort (no topic wait gates)"
-  echo "[info] START_MAVROS=${START_MAVROS} START_CAMERA=${START_CAMERA} START_IMAGE_VIEW=${START_IMAGE_VIEW} START_SYSTEM_MONITOR=${START_SYSTEM_MONITOR}"
+  echo "[info] START_MAVROS=${START_MAVROS} START_CAMERA=${START_CAMERA} START_IMAGE_VIEW=${START_IMAGE_VIEW} START_SYSTEM_MONITOR=${START_SYSTEM_MONITOR} START_GROUND_CONTROL_SUPERVISOR=${START_GROUND_CONTROL_SUPERVISOR}"
+  echo "[info] MAVROS_PROFILE=${MAVROS_PROFILE} FCU_URL=${FCU_URL}"
   echo "[info] detector_input_source=${DETECTOR_INPUT_SOURCE}"
   echo "[info] camera: input=${VIDEO_DEVICE_INPUT} resolved_device=${VIDEO_DEVICE} image=${IMAGE_TOPIC} info=${CAMERA_INFO_TOPIC}"
   echo "[info] capture: latest_only buffer_request=${DETECTOR_CAPTURE_BUFFER_SIZE} publish_image_stream=${DETECTOR_PUBLISH_IMAGE_STREAM} image_view=${START_IMAGE_VIEW}"
@@ -397,6 +446,9 @@ main() {
   fi
   if is_true "${START_SYSTEM_MONITOR}"; then
     echo "  - ${SYSTEM_MONITOR_LOG}"
+  fi
+  if is_true "${START_GROUND_CONTROL_SUPERVISOR}"; then
+    echo "  - ${GROUND_CONTROL_SUPERVISOR_LOG}"
   fi
 
   set +e

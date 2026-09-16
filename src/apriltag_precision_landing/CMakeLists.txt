@@ -8,6 +8,7 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(cv_bridge REQUIRED)
+find_package(diagnostic_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(tf2_msgs REQUIRED)
@@ -20,6 +21,7 @@ add_executable(apriltag_camera_detector_node src/apriltag_camera_detector_node.c
 target_link_libraries(apriltag_camera_detector_node PUBLIC
   rclcpp::rclcpp
   cv_bridge::cv_bridge
+  ${diagnostic_msgs_TARGETS}
   ${geometry_msgs_TARGETS}
   ${sensor_msgs_TARGETS}
   opencv_core
