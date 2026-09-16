@@ -1,0 +1,18 @@
+[2026-07-23T22:46:39+0700] Real lidar2 3D mapping startup
+[2026-07-23T22:46:39+0700] Workspace=/home/pi5drone/drone_ros_ws; lidar2=/dev/ttyUSB1@460800; target_frame=map
+[2026-07-23T22:46:39+0700] This launcher will not manage lidar1, RF2O, 2D SLAM, MAVROS, or flight control
+[2026-07-23T22:46:43+0700] Waiting for /mavros/local_position/odom; elapsed=4s deadline=90s
+[2026-07-23T22:46:47+0700] Waiting for /mavros/local_position/odom; elapsed=8s deadline=90s
+[2026-07-23T22:46:51+0700] Waiting for /mavros/local_position/odom; elapsed=12s deadline=90s
+[2026-07-23T22:46:55+0700] Waiting for /mavros/local_position/odom; elapsed=16s deadline=90s
+[2026-07-23T22:47:00+0700] Waiting for /mavros/local_position/odom; elapsed=21s deadline=90s
+[2026-07-23T22:47:04+0700] Waiting for /mavros/local_position/odom; elapsed=25s deadline=90s
+[2026-07-23T22:47:12+0700] Waiting for /mavros/local_position/odom; elapsed=33s deadline=90s
+[2026-07-23T22:47:17+0700] Waiting for /mavros/local_position/odom; elapsed=38s deadline=90s
+[2026-07-23T22:47:21+0700] Waiting for /mavros/local_position/odom; elapsed=42s deadline=90s
+[2026-07-23T22:47:25+0700] Waiting for /mavros/local_position/odom; elapsed=46s deadline=90s
+[2026-07-23T22:47:30+0700] Waiting for /mavros/local_position/odom; elapsed=51s deadline=90s
+[2026-07-23T22:47:34+0700] Waiting for /mavros/local_position/odom; elapsed=55s deadline=90s
+[2026-07-23T22:47:38+0700] Shutdown reason: received signal TERM; launcher_exit=130
+[2026-07-23T22:47:39+0700] WARNING 3D map autosave skipped because /vertical_lidar_mapper/save_pcd is unavailable
+[2026-07-23T22:47:39+0700] lidar1, RF2O, 2D SLAM, MAVROS, camera, AprilTag, planner, and flight control were not stopped

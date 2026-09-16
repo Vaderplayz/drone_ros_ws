@@ -1,0 +1,16 @@
+[WARN] [1784907576.047693168] [rcl.logging_rosout]: Publisher already registered for node name: 'rf2o_laser_odometry'. If this is due to multiple nodes with the same name then all logs for the logger named 'rf2o_laser_odometry' will go out over the existing publisher. As soon as any node with that name is destructed it will unregister the publisher, preventing any further logs for that name from being published on the rosout topic.
+[INFO] [1784907576.277936823] [rf2o_laser_odometry]: Initializing RF2O node...
+[WARN] [1784907576.742810772] [rf2o_laser_odometry]: Waiting for qualified laser scans
+[INFO] [1784907576.954410654] [rf2o_laser_odometry]: RF2O canonical scan qualification: 1/5
+[INFO] [1784907577.442990618] [rf2o_laser_odometry]: Got first Laser Scan .... Configuring node
+[WARN] [1784907581.845192743] [rf2o_laser_odometry]: Waiting for qualified laser scans
+[WARN] [1784907587.244815869] [rf2o_laser_odometry]: Waiting for qualified laser scans
+[WARN] [1784907592.642938842] [rf2o_laser_odometry]: Waiting for qualified laser scans
+[WARN] [1784907597.645000399] [rf2o_laser_odometry]: Waiting for qualified laser scans
+[WARN] [1784907602.744119343] [rf2o_laser_odometry]: Waiting for qualified laser scans
+[WARN] [1784907607.747527588] [rf2o_laser_odometry]: Waiting for qualified laser scans
+[WARN] [1784907612.843332691] [rf2o_laser_odometry]: Waiting for qualified laser scans
+[WARN] [1784907617.845403181] [rf2o_laser_odometry]: Waiting for qualified laser scans
+[WARN] [1784907622.845851152] [rf2o_laser_odometry]: Waiting for qualified laser scans
+[WARN] [1784907628.245649318] [rf2o_laser_odometry]: Waiting for qualified laser scans
+[INFO] [1784907630.104253750] [rclcpp]: signal_handler(SIGINT/SIGTERM)

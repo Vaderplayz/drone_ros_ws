@@ -1,0 +1,24 @@
+[INFO] [1785074039.301463615] [vertical_lidar_mapper]: vertical_lidar_mapper started. scan_topic='/scan_vertical' target_frame='odom' local_voxel=0.100 global_voxel=0.080 global_cap=400000 global_publish=3.0Hz revoxel_every=10
+[INFO] [1785074039.302307578] [vertical_lidar_mapper]: Global integration mode: keyframe (keyframe_min_translation=0.030m keyframe_min_yaw=0.025rad keyframe_max_interval=0.100s max_keyframes=10000).
+[INFO] [1785074039.302371226] [vertical_lidar_mapper]: Full-pose deskew: enabled (required=true odom_topic='/mavros/local_position/odom' odom_frame='odom' stamp_reference='start' pose_gap<=0.100s wait_timeout=0.350s queue=30 poll=100.0Hz output='/vertical_points_deskewed').
+[INFO] [1785074039.302397318] [vertical_lidar_mapper]: Stable integration gate: enabled (odom_age<=0.200s |yaw_rate|<=0.700rad/s |vertical_speed|<=0.400m/s tilt_rate<=0.450rad/s).
+[INFO] [1785074039.302426800] [vertical_lidar_mapper]: Map-rebase: disabled (map_frame='map' odom_frame='odom' trans_th=0.080m yaw_th=0.040rad)
+[INFO] [1785074039.302444503] [vertical_lidar_mapper]: Relative-pose gate: disabled (map='map' odom='odom' trans_err_th=0.080m yaw_err_th=0.060rad min_motion=0.030m max_map_step=0.250m max_map_yaw=0.150rad)
+[INFO] [1785074039.302463244] [vertical_lidar_mapper]: 3D scan matching: disabled (map_frame='vertical_map' max_rate=4.0Hz radius=4.00m voxel=0.12m corr_dist=0.45m overlap>=0.30 rmse<=0.18m correction<=0.30m/17.2deg drop_failure=true).
+[INFO] [1785074039.302491115] [vertical_lidar_mapper]: Map-rebase cooldown: 6 scans after correction.
+[INFO] [1785074039.302512577] [vertical_lidar_mapper]: Floor filter: disabled (drop z <= 0.10 m in 'odom' frame).
+[INFO] [1785074039.302532614] [vertical_lidar_mapper]: Floor stabilization: enabled (percentile=0.10 band=0.08m min_points=30 max_correction=2.00m drop_failure=false).
+[INFO] [1785074039.302561040] [vertical_lidar_mapper]: PCD export service: '/vertical_lidar_mapper/save_pcd' dir='/home/pi5drone/drone_ros_ws/maps/vertical_3d' binary=true
+[INFO] [1785074039.302575966] [vertical_lidar_mapper]: SLAM 2D map export on save: enabled (topic='/map' prefix='slam2d_map').
+[INFO] [1785074039.302589781] [vertical_lidar_mapper]: Structural GLB export on save: enabled (prefix='lidar2_structural_environment' auto_height=true ceiling=false grid_cap=2000000).
+[INFO] [1785074039.302697503] [vertical_lidar_mapper]: Loop-closure dedup-only mode: disabled
+[INFO] [1785074039.302729170] [vertical_lidar_mapper]: Global rebuild service: '/vertical_lidar_mapper/rebuild_global' (rebuild_on_map_correction=false corr_trans_th=0.080m corr_yaw_th=0.040rad freeze_scans=6).
+[WARN] [1785074042.081597100] [vertical_lidar_mapper]: Dropping vertical scan after waiting 0.354s for odometry through its final beam (remaining lag 0.000s).
+[WARN] [1785074043.871623316] [vertical_lidar_mapper]: Dropping vertical scan: pose history starts 0.385s after the first beam.
+[INFO] [1785074043.962949727] [vertical_lidar_mapper]: Initialized floor stabilization reference at z=-1.416m in frame 'odom'.
+[WARN] [1785074070.192304506] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.400s): only 75.5% of valid beams had interpolated poses
+[WARN] [1785074076.760815871] [vertical_lidar_mapper]: Dropped unstable global scan: odom_age=0.262s (max 0.200), |yaw|=0.001 (max 0.700), |vz|=0.002 (max 0.400), tilt_rate=0.002 (max 0.450).
+[WARN] [1785074114.282868223] [vertical_lidar_mapper]: Dropped unstable global scan: odom_age=0.116s (max 0.200), |yaw|=0.142 (max 0.700), |vz|=0.023 (max 0.400), tilt_rate=0.481 (max 0.450).
+[WARN] [1785074246.953152394] [vertical_lidar_mapper]: Dropped unstable global scan: odom_age=0.108s (max 0.200), |yaw|=0.953 (max 0.700), |vz|=0.065 (max 0.400), tilt_rate=0.192 (max 0.450).
+[INFO] [1785074301.041988322] [vertical_lidar_mapper]: Saved PCD: /home/pi5drone/drone_ros_ws/maps/vertical_3d/lidar2_vertical_global_map_1785074300_959122383.pcd | 2D map: /home/pi5drone/drone_ros_ws/maps/vertical_3d/lidar2_vertical_map2d_1785074300_959122383.pgm (yaml: /home/pi5drone/drone_ros_ws/maps/vertical_3d/lidar2_vertical_map2d_1785074300_959122383.yaml) | slam2d: /home/pi5drone/drone_ros_ws/maps/vertical_3d/slam2d_map_1785074300_959122383.pgm (yaml: /home/pi5drone/drone_ros_ws/maps/vertical_3d/slam2d_map_1785074300_959122383.yaml) | trajectory: /home/pi5drone/drone_ros_ws/maps/vertical_3d/lidar2_vertical_trajectory_1785074300_959122383.csv | structural GLB: /home/pi5drone/drone_ros_ws/maps/vertical_3d/lidar2_structural_environment_1785074300_959122383.glb
+[INFO] [1785074301.496196886] [rclcpp]: signal_handler(SIGINT/SIGTERM)

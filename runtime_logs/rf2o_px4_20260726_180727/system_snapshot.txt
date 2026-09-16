@@ -1,0 +1,337 @@
+timestamp=2026-07-26T18:08:52+0700
+workspace=/home/pi5drone/drone_ros_ws
+use_sim_time=false
+rplidar_port=/dev/ttyUSB0
+deskew_enabled=false
+deskew_stamp_policy=end
+
+-- /scan --
+Type: sensor_msgs/msg/LaserScan
+
+Publisher count: 1
+
+Node name: rplidar_node
+Node namespace: /
+Topic type: sensor_msgs/msg/LaserScan
+Topic type hash: RIHS01_64c191398013af96509d518dac71d5164f9382553fce5c1f8cca5be7924bd828
+Endpoint type: PUBLISHER
+GID: 01.0f.45.d4.82.14.9a.75.00.00.00.00.00.00.14.03
+QoS profile:
+  Reliability: RELIABLE
+  History (Depth): UNKNOWN
+  Durability: VOLATILE
+  Lifespan: Infinite
+  Deadline: Infinite
+  Liveliness: AUTOMATIC
+  Liveliness lease duration: Infinite
+
+Subscription count: 2
+
+Node name: laser_scan_canonicalizer
+Node namespace: /
+Topic type: sensor_msgs/msg/LaserScan
+Topic type hash: RIHS01_64c191398013af96509d518dac71d5164f9382553fce5c1f8cca5be7924bd828
+Endpoint type: SUBSCRIPTION
+GID: 01.0f.45.d4.82.18.ad.72.00.00.00.00.00.00.1c.04
+QoS profile:
+  Reliability: BEST_EFFORT
+  History (Depth): UNKNOWN
+  Durability: VOLATILE
+  Lifespan: Infinite
+  Deadline: Infinite
+  Liveliness: AUTOMATIC
+  Liveliness lease duration: Infinite
+
+Node name: laser_scan_stream_audit
+Node namespace: /
+Topic type: sensor_msgs/msg/LaserScan
+Topic type hash: RIHS01_64c191398013af96509d518dac71d5164f9382553fce5c1f8cca5be7924bd828
+Endpoint type: SUBSCRIPTION
+GID: 01.0f.45.d4.e1.17.0c.c1.00.00.00.00.00.00.15.04
+QoS profile:
+  Reliability: BEST_EFFORT
+  History (Depth): UNKNOWN
+  Durability: VOLATILE
+  Lifespan: Infinite
+  Deadline: Infinite
+  Liveliness: AUTOMATIC
+  Liveliness lease duration: Infinite
+
+
+-- /scan_rf2o --
+Type: sensor_msgs/msg/LaserScan
+
+Publisher count: 1
+
+Node name: laser_scan_canonicalizer
+Node namespace: /
+Topic type: sensor_msgs/msg/LaserScan
+Topic type hash: RIHS01_64c191398013af96509d518dac71d5164f9382553fce5c1f8cca5be7924bd828
+Endpoint type: PUBLISHER
+GID: 01.0f.45.d4.82.18.ad.72.00.00.00.00.00.00.1a.03
+QoS profile:
+  Reliability: BEST_EFFORT
+  History (Depth): UNKNOWN
+  Durability: VOLATILE
+  Lifespan: Infinite
+  Deadline: Infinite
+  Liveliness: AUTOMATIC
+  Liveliness lease duration: Infinite
+
+Subscription count: 3
+
+Node name: lidar_odom_monitor
+Node namespace: /
+Topic type: sensor_msgs/msg/LaserScan
+Topic type hash: RIHS01_64c191398013af96509d518dac71d5164f9382553fce5c1f8cca5be7924bd828
+Endpoint type: SUBSCRIPTION
+GID: 01.0f.45.d4.28.19.53.2d.00.00.00.00.00.00.16.04
+QoS profile:
+  Reliability: BEST_EFFORT
+  History (Depth): UNKNOWN
+  Durability: VOLATILE
+  Lifespan: Infinite
+  Deadline: Infinite
+  Liveliness: AUTOMATIC
+  Liveliness lease duration: Infinite
+
+Node name: rf2o_laser_odometry
+Node namespace: /
+Topic type: sensor_msgs/msg/LaserScan
+Topic type hash: RIHS01_64c191398013af96509d518dac71d5164f9382553fce5c1f8cca5be7924bd828
+Endpoint type: SUBSCRIPTION
+GID: 01.0f.45.d4.4c.19.09.0c.00.00.00.00.00.00.2c.04
+QoS profile:
+  Reliability: BEST_EFFORT
+  History (Depth): UNKNOWN
+  Durability: VOLATILE
+  Lifespan: Infinite
+  Deadline: Infinite
+  Liveliness: AUTOMATIC
+  Liveliness lease duration: Infinite
+
+Node name: lidar_odom_px4_bridge
+Node namespace: /
+Topic type: sensor_msgs/msg/LaserScan
+Topic type hash: RIHS01_64c191398013af96509d518dac71d5164f9382553fce5c1f8cca5be7924bd828
+Endpoint type: SUBSCRIPTION
+GID: 01.0f.45.d4.f9.19.b4.df.00.00.00.00.00.00.1a.04
+QoS profile:
+  Reliability: BEST_EFFORT
+  History (Depth): UNKNOWN
+  Durability: VOLATILE
+  Lifespan: Infinite
+  Deadline: Infinite
+  Liveliness: AUTOMATIC
+  Liveliness lease duration: Infinite
+
+
+-- /lidar/odom_raw --
+Type: nav_msgs/msg/Odometry
+
+Publisher count: 1
+
+Node name: rf2o_laser_odometry
+Node namespace: /
+Topic type: nav_msgs/msg/Odometry
+Topic type hash: RIHS01_3cc97dc7fb7502f8714462c526d369e35b603cfc34d946e3f2eda2766dfec6e0
+Endpoint type: PUBLISHER
+GID: 01.0f.45.d4.4c.19.09.0c.00.00.00.00.00.00.2b.03
+QoS profile:
+  Reliability: RELIABLE
+  History (Depth): UNKNOWN
+  Durability: VOLATILE
+  Lifespan: Infinite
+  Deadline: Infinite
+  Liveliness: AUTOMATIC
+  Liveliness lease duration: Infinite
+
+Subscription count: 1
+
+Node name: lidar_odom_monitor
+Node namespace: /
+Topic type: nav_msgs/msg/Odometry
+Topic type hash: RIHS01_3cc97dc7fb7502f8714462c526d369e35b603cfc34d946e3f2eda2766dfec6e0
+Endpoint type: SUBSCRIPTION
+GID: 01.0f.45.d4.28.19.53.2d.00.00.00.00.00.00.18.04
+QoS profile:
+  Reliability: BEST_EFFORT
+  History (Depth): UNKNOWN
+  Durability: VOLATILE
+  Lifespan: Infinite
+  Deadline: Infinite
+  Liveliness: AUTOMATIC
+  Liveliness lease duration: Infinite
+
+
+-- /lidar/odom --
+Type: nav_msgs/msg/Odometry
+
+Publisher count: 1
+
+Node name: lidar_odom_monitor
+Node namespace: /
+Topic type: nav_msgs/msg/Odometry
+Topic type hash: RIHS01_3cc97dc7fb7502f8714462c526d369e35b603cfc34d946e3f2eda2766dfec6e0
+Endpoint type: PUBLISHER
+GID: 01.0f.45.d4.28.19.53.2d.00.00.00.00.00.00.14.03
+QoS profile:
+  Reliability: RELIABLE
+  History (Depth): UNKNOWN
+  Durability: VOLATILE
+  Lifespan: Infinite
+  Deadline: Infinite
+  Liveliness: AUTOMATIC
+  Liveliness lease duration: Infinite
+
+Subscription count: 1
+
+Node name: lidar_odom_px4_bridge
+Node namespace: /
+Topic type: nav_msgs/msg/Odometry
+Topic type hash: RIHS01_3cc97dc7fb7502f8714462c526d369e35b603cfc34d946e3f2eda2766dfec6e0
+Endpoint type: SUBSCRIPTION
+GID: 01.0f.45.d4.f9.19.b4.df.00.00.00.00.00.00.16.04
+QoS profile:
+  Reliability: BEST_EFFORT
+  History (Depth): UNKNOWN
+  Durability: VOLATILE
+  Lifespan: Infinite
+  Deadline: Infinite
+  Liveliness: AUTOMATIC
+  Liveliness lease duration: Infinite
+
+
+-- /mavros/odometry/out --
+Type: nav_msgs/msg/Odometry
+
+Publisher count: 1
+
+Node name: lidar_odom_px4_bridge
+Node namespace: /
+Topic type: nav_msgs/msg/Odometry
+Topic type hash: RIHS01_3cc97dc7fb7502f8714462c526d369e35b603cfc34d946e3f2eda2766dfec6e0
+Endpoint type: PUBLISHER
+GID: 01.0f.45.d4.f9.19.b4.df.00.00.00.00.00.00.14.03
+QoS profile:
+  Reliability: RELIABLE
+  History (Depth): UNKNOWN
+  Durability: VOLATILE
+  Lifespan: Infinite
+  Deadline: Infinite
+  Liveliness: AUTOMATIC
+  Liveliness lease duration: Infinite
+
+Subscription count: 1
+
+Node name: odometry
+Node namespace: /mavros
+Topic type: nav_msgs/msg/Odometry
+Topic type hash: RIHS01_3cc97dc7fb7502f8714462c526d369e35b603cfc34d946e3f2eda2766dfec6e0
+Endpoint type: SUBSCRIPTION
+GID: 01.0f.45.d4.d1.05.1d.1c.00.00.00.00.00.03.2d.04
+QoS profile:
+  Reliability: RELIABLE
+  History (Depth): UNKNOWN
+  Durability: VOLATILE
+  Lifespan: Infinite
+  Deadline: Infinite
+  Liveliness: AUTOMATIC
+  Liveliness lease duration: Infinite
+
+
+-- LiDAR odometry diagnostics --
+header:
+  stamp:
+    sec: 1785064138
+    nanosec: 546927849
+  frame_id: ''
+status:
+- level: "\0"
+  name: lidar_odom_monitor
+  message: OK
+  hardware_id: rf2o_laser_odometry
+  values:
+  - key: valid
+    value: 'true'
+  - key: state
+    value: OK
+  - key: scan_age_sec
+    value: '0.039193'
+  - key: odom_age_sec
+    value: '0.020995'
+  - key: scan_rate_hz
+    value: '7.620409'
+  - key: rf2o_rate_hz
+    value: '9.040715'
+  - key: scan_length
+    value: '720'
+  - key: angular_coverage_ratio
+    value: '0.997222'
+  - key: finite_return_ratio
+    value: '0.897222'
+  - key: consecutive_valid_odom
+    value: '207'
+  - key: delta_translation_m
+    value: '0.000264'
+  - key: delta_yaw_deg
+    value: '0.268341'
+  - key: translation_speed_mps
+    value: '0.001953'
+  - key: yaw_rate_degps
+    value: '1.986084'
+  - key: roll_deg
+    value: '2.284173'
+  - key: pitch_deg
+    value: '-0.305627'
+---
+
+-- PX4 bridge diagnostics --
+header:
+  stamp:
+    sec: 1785064141
+    nanosec: 178503856
+  frame_id: ''
+status:
+- level: "\0"
+  name: lidar_odom_px4_bridge
+  message: OK
+  hardware_id: rplidar_rf2o_px4
+  values:
+  - key: mavros_connected
+    value: 'true'
+  - key: px4_armed
+    value: 'false'
+  - key: px4_mode
+    value: AUTO.LOITER
+  - key: alignment_complete
+    value: 'true'
+  - key: rf2o_valid
+    value: 'true'
+  - key: rf2o_age_sec
+    value: '0.049592'
+  - key: scan_age_sec
+    value: '0.042664'
+  - key: publishing_to_px4
+    value: 'true'
+  - key: rejection_reason
+    value: none
+  - key: output_frame
+    value: odom
+  - key: output_child_frame
+    value: base_link
+  - key: horizontal_position_stddev_m
+    value: '0.300000'
+  - key: yaw_stddev_rad
+    value: '0.200000'
+  - key: unused_axis_variance
+    value: '1000000.000000'
+  - key: alignment_x
+    value: '0.059090'
+  - key: alignment_y
+    value: '-0.096509'
+  - key: alignment_yaw_rad
+    value: '-1.071227'
+  - key: alignment_time
+    value: '1785064120.178665'
+---

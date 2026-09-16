@@ -1,0 +1,21 @@
+[WARN] [1785677736.044096251] [lidar_odom_px4_bridge]: Bridge state: waiting_for_inputs
+[INFO] [1785677736.044276288] [lidar_odom_px4_bridge]: LiDAR external odometry bridge: /lidar/odom -> /mavros/odometry/out (odom -> base_link)
+[INFO] [1785677736.044309288] [lidar_odom_px4_bridge]: Covariance: xy_stddev=0.300 m yaw_stddev=0.200 rad unused_variance=1000000.0
+[WARN] [1785677736.144047658] [lidar_odom_px4_bridge]: Bridge state: mavros_disconnected
+[INFO] [1785677736.944349084] [lidar_odom_px4_bridge]: Alignment complete while disarmed: x=-9.3245 y=8.9860 yaw=-150.540 deg
+[WARN] [1785677736.944708010] [lidar_odom_px4_bridge]: Bridge state: none
+[WARN] [1785677922.540928325] [lidar_odom_px4_bridge]: Bridge state: monitor_diagnostics_stale
+[WARN] [1785677922.544957325] [lidar_odom_px4_bridge]: Bridge state: none
+[WARN] [1785677934.565866170] [lidar_odom_px4_bridge]: Bridge state: lidar_odom_stale
+[WARN] [1785677934.644962336] [lidar_odom_px4_bridge]: Bridge state: none
+[WARN] [1785677935.144033503] [lidar_odom_px4_bridge]: Bridge state: lidar_odom_stale
+[ERROR] [1785677935.294875651] [lidar_odom_px4_bridge]: External odometry stopped; disarmed re-alignment required: rf2o_monitor_LOW_ANGULAR_COVERAGE
+[WARN] [1785677935.294949317] [lidar_odom_px4_bridge]: Bridge state: rf2o_monitor_LOW_ANGULAR_COVERAGE
+[WARN] [1785677935.344021651] [lidar_odom_px4_bridge]: Bridge state: lidar_odom_stale
+[WARN] [1785677936.248515706] [lidar_odom_px4_bridge]: Bridge state: rf2o_monitor_LOW_ANGULAR_COVERAGE
+[INFO] [1785677936.347375113] [lidar_odom_px4_bridge]: Alignment complete while disarmed: x=-9.3065 y=9.0105 yaw=-49.648 deg
+[WARN] [1785677936.353050780] [lidar_odom_px4_bridge]: Bridge state: none
+[WARN] [1785678058.145570133] [lidar_odom_px4_bridge]: Bridge state: lidar_odom_stale
+[ERROR] [1785678058.292941633] [lidar_odom_px4_bridge]: External odometry stopped; disarmed re-alignment required: rf2o_monitor_TRANSLATION_JUMP
+[WARN] [1785678058.293021911] [lidar_odom_px4_bridge]: Bridge state: rf2o_monitor_TRANSLATION_JUMP
+[WARN] [1785678058.344009911] [lidar_odom_px4_bridge]: Bridge state: lidar_odom_stale

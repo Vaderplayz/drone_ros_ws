@@ -1,0 +1,33 @@
+[WARN] [1784907724.371535696] [lidar_odom_monitor]: RF2O monitor state: WAITING_FOR_SCAN
+[INFO] [1784907724.371695103] [lidar_odom_monitor]: Monitoring coherent scan /scan_rf2o and RF2O /lidar/odom_raw -> /lidar/odom
+[WARN] [1784907727.371657482] [lidar_odom_monitor]: RF2O monitor state: WAITING_FOR_ODOM
+[INFO] [1784907728.371666133] [lidar_odom_monitor]: RF2O monitor state: OK
+[WARN] [1784907985.371644577] [lidar_odom_monitor]: RF2O monitor state: LOW_ANGULAR_COVERAGE
+[INFO] [1784907986.371926779] [lidar_odom_monitor]: RF2O monitor state: OK
+[WARN] [1784908282.371666178] [lidar_odom_monitor]: RF2O monitor state: WAITING_FOR_ODOM
+[INFO] [1784908283.371874254] [lidar_odom_monitor]: RF2O monitor state: OK
+[WARN] [1784908374.371769595] [lidar_odom_monitor]: RF2O monitor state: YAW_JUMP
+[WARN] [1784908379.371613792] [lidar_odom_monitor]: RF2O monitor state: TRANSLATION_JUMP
+[WARN] [1784908384.371681934] [lidar_odom_monitor]: RF2O monitor state: YAW_JUMP
+[WARN] [1784908387.371643094] [lidar_odom_monitor]: RF2O monitor state: EXCESSIVE_ROLL
+[WARN] [1784908388.371655876] [lidar_odom_monitor]: RF2O monitor state: TRANSLATION_JUMP
+[WARN] [1784908389.372849419] [lidar_odom_monitor]: RF2O monitor state: EXCESSIVE_ROLL
+[WARN] [1784908390.371709437] [lidar_odom_monitor]: RF2O monitor state: TRANSLATION_JUMP
+[WARN] [1784908394.371664749] [lidar_odom_monitor]: RF2O monitor state: EXCESSIVE_ROLL
+[WARN] [1784908395.371662886] [lidar_odom_monitor]: RF2O monitor state: TRANSLATION_JUMP
+[WARN] [1784908688.371668009] [lidar_odom_monitor]: RF2O monitor state: EXCESSIVE_PITCH
+[WARN] [1784908692.371668892] [lidar_odom_monitor]: RF2O monitor state: TRANSLATION_JUMP
+[WARN] [1784908740.372010247] [lidar_odom_monitor]: RF2O monitor state: STALE_SCAN
+[WARN] [1784908741.371723427] [lidar_odom_monitor]: RF2O monitor state: LOW_ANGULAR_COVERAGE
+[WARN] [1784908742.371656496] [lidar_odom_monitor]: RF2O monitor state: TRANSLATION_JUMP
+[WARN] [1784908751.687134092] [lidar_odom_monitor]: RF2O monitor state: STALE_SCAN
+[WARN] [1784908752.371678085] [lidar_odom_monitor]: RF2O monitor state: TRANSLATION_JUMP
+[WARN] [1784908766.409555691] [lidar_odom_monitor]: RF2O monitor state: STALE_SCAN
+[WARN] [1784908767.371886140] [lidar_odom_monitor]: RF2O monitor state: TRANSLATION_JUMP
+[WARN] [1784908975.371661889] [lidar_odom_monitor]: RF2O monitor state: LOW_ANGULAR_COVERAGE
+[WARN] [1784908976.371882894] [lidar_odom_monitor]: RF2O monitor state: TRANSLATION_JUMP
+[WARN] [1784909116.371703692] [lidar_odom_monitor]: RF2O monitor state: LOW_ANGULAR_COVERAGE
+[WARN] [1784909117.371666111] [lidar_odom_monitor]: RF2O monitor state: TRANSLATION_JUMP
+[WARN] [1784909217.371627061] [lidar_odom_monitor]: RF2O monitor state: LOW_ANGULAR_COVERAGE
+[WARN] [1784909218.371666864] [lidar_odom_monitor]: RF2O monitor state: TRANSLATION_JUMP
+[INFO] [1784909663.846566078] [rclcpp]: signal_handler(SIGINT/SIGTERM)

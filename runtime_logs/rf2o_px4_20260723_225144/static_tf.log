@@ -1,0 +1,5 @@
+[INFO] [1784821925.815586814] [static_transform_publisher_QXHNnqs1Go6m36qc]: Spinning until stopped - publishing transform
+translation: ('0.000000', '0.000000', '0.100000')
+rotation: ('0.000000', '0.000000', '0.000000', '1.000000')
+from 'base_footprint' to 'laser_frame'
+[INFO] [1784821996.746085347] [rclcpp]: signal_handler(SIGINT/SIGTERM)

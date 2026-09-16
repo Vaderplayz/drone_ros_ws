@@ -1,0 +1,20 @@
+[WARN] [1785071500.184711745] [lidar_odom_monitor]: RF2O monitor state: WAITING_FOR_SCAN
+[INFO] [1785071500.184881224] [lidar_odom_monitor]: Monitoring coherent scan /scan_rf2o and RF2O /lidar/odom_raw -> /lidar/odom
+[WARN] [1785071502.184874816] [lidar_odom_monitor]: RF2O monitor state: LOW_ANGULAR_COVERAGE
+[WARN] [1785071503.184885311] [lidar_odom_monitor]: RF2O monitor state: WAITING_FOR_ODOM
+[WARN] [1785071504.184819024] [lidar_odom_monitor]: RF2O monitor state: LOW_ANGULAR_COVERAGE
+[INFO] [1785071505.184896119] [lidar_odom_monitor]: RF2O monitor state: OK
+[WARN] [1785071616.184831541] [lidar_odom_monitor]: RF2O monitor state: LOW_ANGULAR_COVERAGE
+[INFO] [1785071617.184834426] [lidar_odom_monitor]: RF2O monitor state: OK
+[WARN] [1785073232.184836686] [lidar_odom_monitor]: RF2O monitor state: LOW_ANGULAR_COVERAGE
+[INFO] [1785073233.184871319] [lidar_odom_monitor]: RF2O monitor state: OK
+[WARN] [1785073900.184868657] [lidar_odom_monitor]: RF2O monitor state: LOW_ANGULAR_COVERAGE
+[INFO] [1785073901.184815057] [lidar_odom_monitor]: RF2O monitor state: OK
+[WARN] [1785074017.188412075] [lidar_odom_monitor]: RF2O monitor state: LOW_ANGULAR_COVERAGE
+[INFO] [1785074018.187286780] [lidar_odom_monitor]: RF2O monitor state: OK
+[WARN] [1785074304.220064125] [lidar_odom_monitor]: RF2O monitor state: STALE_SCAN
+[INFO] [1785074305.184831219] [lidar_odom_monitor]: RF2O monitor state: OK
+[WARN] [1785074385.184840649] [lidar_odom_monitor]: RF2O monitor state: STALE_SCAN
+[INFO] [1785074386.184878933] [lidar_odom_monitor]: RF2O monitor state: OK
+[WARN] [1785074709.184765242] [lidar_odom_monitor]: RF2O monitor state: STALE_SCAN
+[INFO] [1785074710.184793522] [lidar_odom_monitor]: RF2O monitor state: OK

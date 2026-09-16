@@ -1,0 +1,5 @@
+[INFO] [1784908587.523963183] [static_transform_publisher_FNDLWT1TH3ofWfkj]: Spinning until stopped - publishing transform
+translation: ('0.000000', '0.000000', '0.700000')
+rotation: ('0.500000', '0.500000', '0.500000', '0.500000')
+from 'base_footprint' to 'lidar_vert_link'
+[INFO] [1784908946.408727085] [rclcpp]: signal_handler(SIGINT/SIGTERM)

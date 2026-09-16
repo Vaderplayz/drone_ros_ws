@@ -1,0 +1,22 @@
+[WARN] [1784822211.331035449] [mapping_scan_deskew]: Canonical scan state: INITIALIZING
+[INFO] [1784822211.331218677] [mapping_scan_deskew]: Canonicalizing /scan_rf2o to /scan_slam with 720 bins in per_message_full_scan mode
+[INFO] [1784822213.130152199] [mapping_scan_deskew]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1784822286.998989906] [mapping_scan_deskew]: Canonical scan state: INCOMPLETE_REVOLUTION
+[WARN] [1784822286.999125540] [mapping_scan_deskew]: Canonical output rate limit suppressed this revolution
+[INFO] [1784822287.132533944] [mapping_scan_deskew]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1784822298.736107433] [mapping_scan_deskew]: Canonical scan state: INCOMPLETE_REVOLUTION
+[WARN] [1784822298.736194621] [mapping_scan_deskew]: Canonical output rate limit suppressed this revolution
+[INFO] [1784822298.860339957] [mapping_scan_deskew]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1784822299.220498779] [mapping_scan_deskew]: Canonical scan state: INCOMPLETE_REVOLUTION
+[INFO] [1784822299.274270517] [mapping_scan_deskew]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1784822299.894139568] [mapping_scan_deskew]: Canonical scan state: INCOMPLETE_REVOLUTION
+[INFO] [1784822300.029294225] [mapping_scan_deskew]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1784822302.169402603] [mapping_scan_deskew]: Canonical scan state: INCOMPLETE_REVOLUTION
+[INFO] [1784822302.256872412] [mapping_scan_deskew]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1784822312.808948838] [mapping_scan_deskew]: Canonical scan state: INCOMPLETE_REVOLUTION
+[WARN] [1784822312.809064749] [mapping_scan_deskew]: Canonical output rate limit suppressed this revolution
+[INFO] [1784822312.959723597] [mapping_scan_deskew]: Canonical scan state: OK_FULL_SCAN
+[WARN] [1784822353.291902973] [mapping_scan_deskew]: Canonical scan state: INCOMPLETE_REVOLUTION
+[WARN] [1784822353.292013168] [mapping_scan_deskew]: Canonical output rate limit suppressed this revolution
+[INFO] [1784822353.386881998] [mapping_scan_deskew]: Canonical scan state: OK_FULL_SCAN
+[INFO] [1784822563.676241398] [rclcpp]: signal_handler(SIGINT/SIGTERM)

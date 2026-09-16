@@ -1,0 +1,187 @@
+[INFO] [1785061380.989334042] [vertical_lidar_mapper]: vertical_lidar_mapper started. scan_topic='/scan_vertical' target_frame='odom' local_voxel=0.100 global_voxel=0.080 global_cap=400000 global_publish=3.0Hz revoxel_every=10
+[INFO] [1785061380.989584894] [vertical_lidar_mapper]: Global integration mode: keyframe (keyframe_min_translation=0.030m keyframe_min_yaw=0.025rad keyframe_max_interval=0.100s max_keyframes=10000).
+[INFO] [1785061380.989615023] [vertical_lidar_mapper]: Full-pose deskew: enabled (required=true odom_topic='/mavros/local_position/odom' odom_frame='odom' stamp_reference='start' pose_gap<=0.100s wait_timeout=0.350s queue=30 poll=100.0Hz output='/vertical_points_deskewed').
+[INFO] [1785061380.989637505] [vertical_lidar_mapper]: Stable integration gate: enabled (odom_age<=0.200s |yaw_rate|<=0.700rad/s |vertical_speed|<=0.400m/s tilt_rate<=0.450rad/s).
+[INFO] [1785061380.989653116] [vertical_lidar_mapper]: Map-rebase: disabled (map_frame='map' odom_frame='odom' trans_th=0.080m yaw_th=0.040rad)
+[INFO] [1785061380.989667968] [vertical_lidar_mapper]: Relative-pose gate: disabled (map='map' odom='odom' trans_err_th=0.080m yaw_err_th=0.060rad min_motion=0.030m max_map_step=0.250m max_map_yaw=0.150rad)
+[INFO] [1785061380.989686467] [vertical_lidar_mapper]: 3D scan matching: enabled (map_frame='vertical_map' max_rate=4.0Hz radius=4.00m voxel=0.12m corr_dist=0.45m overlap>=0.30 rmse<=0.18m correction<=0.30m/17.2deg drop_failure=true).
+[INFO] [1785061380.989707153] [vertical_lidar_mapper]: Map-rebase cooldown: 6 scans after correction.
+[INFO] [1785061380.989720578] [vertical_lidar_mapper]: Floor filter: disabled (drop z <= 0.10 m in 'odom' frame).
+[INFO] [1785061380.989734875] [vertical_lidar_mapper]: Floor stabilization: enabled (percentile=0.10 band=0.08m min_points=30 max_correction=0.25m drop_failure=true).
+[INFO] [1785061380.989754615] [vertical_lidar_mapper]: PCD export service: '/vertical_lidar_mapper/save_pcd' dir='/home/pi5drone/drone_ros_ws/maps/vertical_3d' binary=true
+[INFO] [1785061380.989768375] [vertical_lidar_mapper]: SLAM 2D map export on save: enabled (topic='/map' prefix='slam2d_map').
+[INFO] [1785061380.989781671] [vertical_lidar_mapper]: Structural GLB export on save: enabled (prefix='lidar2_structural_environment' auto_height=true ceiling=false grid_cap=2000000).
+[INFO] [1785061380.989796208] [vertical_lidar_mapper]: Loop-closure dedup-only mode: disabled
+[INFO] [1785061380.989815689] [vertical_lidar_mapper]: Global rebuild service: '/vertical_lidar_mapper/rebuild_global' (rebuild_on_map_correction=false corr_trans_th=0.080m corr_yaw_th=0.040rad freeze_scans=6).
+[WARN] [1785061381.759476742] [vertical_lidar_mapper]: Dropping vertical scan after waiting 0.358s for odometry through its final beam (remaining lag 0.000s).
+[WARN] [1785061383.489670353] [vertical_lidar_mapper]: Dropping vertical scan: pose history starts 0.338s after the first beam.
+[INFO] [1785061383.630795899] [vertical_lidar_mapper]: Initialized floor stabilization reference at z=-1.378m in frame 'odom'.
+[WARN] [1785061384.362279124] [vertical_lidar_mapper]: Dropped unstable global scan: odom_age=0.342s (max 0.200), |yaw|=0.001 (max 0.700), |vz|=0.003 (max 0.400), tilt_rate=0.003 (max 0.450).
+[WARN] [1785061385.023946492] [vertical_lidar_mapper]: 3D scan matching rejected keyframe: insufficient scan or submap geometry (source=58 submap=101 overlap=0.00 rmse=0.000m correction=0.000m/0.00deg).
+[WARN] [1785061386.126815358] [vertical_lidar_mapper]: 3D scan matching rejected keyframe: insufficient scan or submap geometry (source=62 submap=118 overlap=0.00 rmse=0.000m correction=0.000m/0.00deg).
+[WARN] [1785061387.311768358] [vertical_lidar_mapper]: 3D scan matching rejected keyframe: insufficient scan or submap geometry (source=65 submap=112 overlap=0.00 rmse=0.000m correction=0.000m/0.00deg).
+[WARN] [1785061388.411827067] [vertical_lidar_mapper]: 3D scan matching rejected keyframe: insufficient scan or submap geometry (source=67 submap=117 overlap=0.00 rmse=0.000m correction=0.000m/0.00deg).
+[WARN] [1785061389.541451760] [vertical_lidar_mapper]: 3D scan matching rejected keyframe: insufficient scan or submap geometry (source=67 submap=130 overlap=0.00 rmse=0.000m correction=0.000m/0.00deg).
+[WARN] [1785061390.641236289] [vertical_lidar_mapper]: 3D scan matching rejected keyframe: insufficient scan or submap geometry (source=67 submap=159 overlap=0.00 rmse=0.000m correction=0.000m/0.00deg).
+[WARN] [1785061391.741550458] [vertical_lidar_mapper]: 3D scan matching rejected keyframe: insufficient scan or submap geometry (source=83 submap=190 overlap=0.00 rmse=0.000m correction=0.000m/0.00deg).
+[WARN] [1785061392.831689483] [vertical_lidar_mapper]: 3D scan matching rejected keyframe: insufficient scan or submap geometry (source=78 submap=195 overlap=0.00 rmse=0.000m correction=0.000m/0.00deg).
+[WARN] [1785061393.931522215] [vertical_lidar_mapper]: 3D scan matching rejected keyframe: insufficient scan or submap geometry (source=78 submap=192 overlap=0.00 rmse=0.000m correction=0.000m/0.00deg).
+[WARN] [1785061395.121352861] [vertical_lidar_mapper]: 3D scan matching rejected keyframe: insufficient scan or submap geometry (source=76 submap=193 overlap=0.00 rmse=0.000m correction=0.000m/0.00deg).
+[WARN] [1785061396.221153540] [vertical_lidar_mapper]: 3D scan matching rejected keyframe: insufficient scan or submap geometry (source=65 submap=189 overlap=0.00 rmse=0.000m correction=0.000m/0.00deg).
+[WARN] [1785061397.227201995] [vertical_lidar_mapper]: 3D scan matching rejected keyframe: insufficient scan or submap geometry (source=65 submap=197 overlap=0.00 rmse=0.000m correction=0.000m/0.00deg).
+[WARN] [1785061398.321308905] [vertical_lidar_mapper]: 3D scan matching rejected keyframe: insufficient scan or submap geometry (source=61 submap=225 overlap=0.00 rmse=0.000m correction=0.000m/0.00deg).
+[WARN] [1785061399.585495740] [vertical_lidar_mapper]: Dropped unstable global scan: odom_age=0.382s (max 0.200), |yaw|=0.007 (max 0.700), |vz|=0.002 (max 0.400), tilt_rate=0.007 (max 0.450).
+[WARN] [1785061399.611467569] [vertical_lidar_mapper]: 3D scan matching rejected keyframe: insufficient scan or submap geometry (source=62 submap=232 overlap=0.00 rmse=0.000m correction=0.000m/0.00deg).
+[WARN] [1785061400.711338078] [vertical_lidar_mapper]: 3D scan matching rejected keyframe: insufficient scan or submap geometry (source=66 submap=232 overlap=0.00 rmse=0.000m correction=0.000m/0.00deg).
+[WARN] [1785061401.814380981] [vertical_lidar_mapper]: 3D scan matching rejected keyframe: insufficient scan or submap geometry (source=67 submap=228 overlap=0.00 rmse=0.000m correction=0.000m/0.00deg).
+[WARN] [1785061402.905286360] [vertical_lidar_mapper]: 3D scan matching rejected keyframe: insufficient scan or submap geometry (source=66 submap=229 overlap=0.00 rmse=0.000m correction=0.000m/0.00deg).
+[WARN] [1785061404.001635052] [vertical_lidar_mapper]: 3D scan matching rejected keyframe: insufficient scan or submap geometry (source=65 submap=234 overlap=0.00 rmse=0.000m correction=0.000m/0.00deg).
+[WARN] [1785061405.091398945] [vertical_lidar_mapper]: 3D scan matching rejected keyframe: insufficient scan or submap geometry (source=66 submap=233 overlap=0.00 rmse=0.000m correction=0.000m/0.00deg).
+[WARN] [1785061406.091697153] [vertical_lidar_mapper]: 3D scan matching rejected keyframe: insufficient scan or submap geometry (source=64 submap=235 overlap=0.00 rmse=0.000m correction=0.000m/0.00deg).
+[WARN] [1785061407.133269953] [vertical_lidar_mapper]: 3D scan matching rejected keyframe: insufficient scan or submap geometry (source=64 submap=235 overlap=0.00 rmse=0.000m correction=0.000m/0.00deg).
+[WARN] [1785061408.221770064] [vertical_lidar_mapper]: 3D scan matching rejected keyframe: insufficient scan or submap geometry (source=63 submap=233 overlap=0.00 rmse=0.000m correction=0.000m/0.00deg).
+[WARN] [1785061409.381880350] [vertical_lidar_mapper]: 3D scan matching rejected keyframe: insufficient scan or submap geometry (source=61 submap=237 overlap=0.00 rmse=0.000m correction=0.000m/0.00deg).
+[WARN] [1785061410.411657440] [vertical_lidar_mapper]: 3D scan matching rejected keyframe: insufficient scan or submap geometry (source=64 submap=234 overlap=0.00 rmse=0.000m correction=0.000m/0.00deg).
+[WARN] [1785061411.611780088] [vertical_lidar_mapper]: 3D scan matching rejected keyframe: insufficient scan or submap geometry (source=62 submap=233 overlap=0.00 rmse=0.000m correction=0.000m/0.00deg).
+[WARN] [1785061412.701563571] [vertical_lidar_mapper]: 3D scan matching rejected keyframe: insufficient scan or submap geometry (source=61 submap=233 overlap=0.00 rmse=0.000m correction=0.000m/0.00deg).
+[WARN] [1785061413.701687273] [vertical_lidar_mapper]: 3D scan matching rejected keyframe: insufficient scan or submap geometry (source=66 submap=237 overlap=0.00 rmse=0.000m correction=0.000m/0.00deg).
+[WARN] [1785061414.901380594] [vertical_lidar_mapper]: 3D scan matching rejected keyframe: insufficient scan or submap geometry (source=62 submap=237 overlap=0.00 rmse=0.000m correction=0.000m/0.00deg).
+[WARN] [1785061415.901458776] [vertical_lidar_mapper]: 3D scan matching rejected keyframe: insufficient scan or submap geometry (source=61 submap=232 overlap=0.00 rmse=0.000m correction=0.000m/0.00deg).
+[WARN] [1785061416.991789844] [vertical_lidar_mapper]: 3D scan matching rejected keyframe: insufficient scan or submap geometry (source=65 submap=235 overlap=0.00 rmse=0.000m correction=0.000m/0.00deg).
+[WARN] [1785061418.091911542] [vertical_lidar_mapper]: 3D scan matching rejected keyframe: insufficient scan or submap geometry (source=66 submap=233 overlap=0.00 rmse=0.000m correction=0.000m/0.00deg).
+[WARN] [1785061419.291659698] [vertical_lidar_mapper]: 3D scan matching rejected keyframe: insufficient scan or submap geometry (source=67 submap=233 overlap=0.00 rmse=0.000m correction=0.000m/0.00deg).
+[WARN] [1785061420.424687279] [vertical_lidar_mapper]: 3D scan matching rejected keyframe: insufficient scan or submap geometry (source=64 submap=235 overlap=0.00 rmse=0.000m correction=0.000m/0.00deg).
+[WARN] [1785061421.481394082] [vertical_lidar_mapper]: 3D scan matching rejected keyframe: insufficient scan or submap geometry (source=65 submap=230 overlap=0.00 rmse=0.000m correction=0.000m/0.00deg).
+[WARN] [1785061422.582076586] [vertical_lidar_mapper]: 3D scan matching rejected keyframe: insufficient scan or submap geometry (source=63 submap=234 overlap=0.00 rmse=0.000m correction=0.000m/0.00deg).
+[WARN] [1785061423.671729535] [vertical_lidar_mapper]: 3D scan matching rejected keyframe: insufficient scan or submap geometry (source=64 submap=234 overlap=0.00 rmse=0.000m correction=0.000m/0.00deg).
+[WARN] [1785061424.771543484] [vertical_lidar_mapper]: 3D scan matching rejected keyframe: insufficient scan or submap geometry (source=66 submap=235 overlap=0.00 rmse=0.000m correction=0.000m/0.00deg).
+[WARN] [1785061425.801722010] [vertical_lidar_mapper]: 3D scan matching rejected keyframe: insufficient scan or submap geometry (source=64 submap=232 overlap=0.00 rmse=0.000m correction=0.000m/0.00deg).
+[WARN] [1785061426.971981824] [vertical_lidar_mapper]: 3D scan matching rejected keyframe: insufficient scan or submap geometry (source=63 submap=233 overlap=0.00 rmse=0.000m correction=0.000m/0.00deg).
+[WARN] [1785061427.992430088] [vertical_lidar_mapper]: 3D scan matching rejected keyframe: insufficient scan or submap geometry (source=61 submap=241 overlap=0.00 rmse=0.000m correction=0.000m/0.00deg).
+[WARN] [1785061429.091357743] [vertical_lidar_mapper]: 3D scan matching rejected keyframe: insufficient scan or submap geometry (source=65 submap=249 overlap=0.00 rmse=0.000m correction=0.000m/0.00deg).
+[WARN] [1785061430.091660731] [vertical_lidar_mapper]: 3D scan matching rejected keyframe: insufficient scan or submap geometry (source=68 submap=267 overlap=0.00 rmse=0.000m correction=0.000m/0.00deg).
+[WARN] [1785061431.192267863] [vertical_lidar_mapper]: 3D scan matching rejected keyframe: insufficient scan or submap geometry (source=64 submap=271 overlap=0.00 rmse=0.000m correction=0.000m/0.00deg).
+[WARN] [1785061432.381439140] [vertical_lidar_mapper]: 3D scan matching rejected keyframe: insufficient scan or submap geometry (source=62 submap=272 overlap=0.00 rmse=0.000m correction=0.000m/0.00deg).
+[WARN] [1785061433.481516273] [vertical_lidar_mapper]: 3D scan matching rejected keyframe: insufficient scan or submap geometry (source=60 submap=271 overlap=0.00 rmse=0.000m correction=0.000m/0.00deg).
+[WARN] [1785061434.581504611] [vertical_lidar_mapper]: 3D scan matching rejected keyframe: insufficient scan or submap geometry (source=60 submap=276 overlap=0.00 rmse=0.000m correction=0.000m/0.00deg).
+[WARN] [1785061435.773325505] [vertical_lidar_mapper]: 3D scan matching rejected keyframe: insufficient scan or submap geometry (source=64 submap=276 overlap=0.00 rmse=0.000m correction=0.000m/0.00deg).
+[WARN] [1785061436.971702947] [vertical_lidar_mapper]: 3D scan matching rejected keyframe: insufficient scan or submap geometry (source=68 submap=275 overlap=0.00 rmse=0.000m correction=0.000m/0.00deg).
+[WARN] [1785061438.071555654] [vertical_lidar_mapper]: 3D scan matching rejected keyframe: insufficient scan or submap geometry (source=71 submap=273 overlap=0.00 rmse=0.000m correction=0.000m/0.00deg).
+[WARN] [1785061439.161754047] [vertical_lidar_mapper]: 3D scan matching rejected keyframe: insufficient scan or submap geometry (source=68 submap=277 overlap=0.00 rmse=0.000m correction=0.000m/0.00deg).
+[WARN] [1785061440.261424091] [vertical_lidar_mapper]: 3D scan matching rejected keyframe: insufficient scan or submap geometry (source=65 submap=278 overlap=0.00 rmse=0.000m correction=0.000m/0.00deg).
+[WARN] [1785061441.391500172] [vertical_lidar_mapper]: 3D scan matching rejected keyframe: insufficient scan or submap geometry (source=70 submap=274 overlap=0.00 rmse=0.000m correction=0.000m/0.00deg).
+[WARN] [1785061442.451592885] [vertical_lidar_mapper]: 3D scan matching rejected keyframe: insufficient scan or submap geometry (source=66 submap=276 overlap=0.00 rmse=0.000m correction=0.000m/0.00deg).
+[WARN] [1785061443.491641769] [vertical_lidar_mapper]: 3D scan matching rejected keyframe: insufficient scan or submap geometry (source=75 submap=276 overlap=0.00 rmse=0.000m correction=0.000m/0.00deg).
+[WARN] [1785061444.551370120] [vertical_lidar_mapper]: 3D scan matching rejected keyframe: insufficient scan or submap geometry (source=70 submap=303 overlap=0.00 rmse=0.000m correction=0.000m/0.00deg).
+[WARN] [1785061445.140867529] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.296m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061446.170928338] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.844m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061447.171071969] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.960m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061448.271000929] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.984m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061449.271696789] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.992m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061450.362430401] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.978m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061451.460918153] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.989m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061452.460952326] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.992m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061453.552307984] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.896m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061454.650725284] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.954m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061455.650850120] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.966m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061456.750747681] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.184m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061457.840596842] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.926m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061458.840737490] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.153m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061459.940739286] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.751m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061461.040717122] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.138m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061462.132767772] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.624m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061463.233343892] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.732m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061464.260861032] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.796m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061465.320729603] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.836m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061466.350765930] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.833m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061467.350785144] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.812m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061468.350966735] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.811m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061469.440644672] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.748m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061470.440918239] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.723m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061471.540694461] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.713m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061472.540974597] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.671m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061473.632365273] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.630m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061474.731098424] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.571m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061475.732048560] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.605m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061476.820941782] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.637m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061477.921719906] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.662m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061478.950784131] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.678m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061480.010888882] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.645m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061481.040647934] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.614m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061482.040723155] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.618m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061483.040801774] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.619m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061484.131143703] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.607m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061485.230895785] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.600m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061486.331066039] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.606m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061487.421018083] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.556m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061488.421854237] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.490m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061489.521005016] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.382m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061490.611869190] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.231m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061491.710802095] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.234m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061492.710883453] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.372m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061493.711008578] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.357m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061494.300975304] [vertical_lidar_mapper]: Dropping vertical scan because a reliable floor band was not found.
+[WARN] [1785061494.800802084] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.571m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061495.831066281] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.054m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061496.890878970] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.981m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061497.931394493] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -1.077m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061499.021260178] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.922m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061500.120992606] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.819m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061501.220988577] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.817m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061502.311229489] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.944m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061503.410775663] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.948m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061504.411063452] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.901m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061505.501116001] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.913m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061506.600866645] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.919m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061507.600874500] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.894m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061508.700679087] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.892m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061509.790652542] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.878m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061510.791062943] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.889m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061511.890706317] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.913m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061512.920968623] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.900m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061513.981271785] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.913m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061515.011018798] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.910m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061516.111018096] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.881m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061517.201008615] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.783m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061518.300831711] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.646m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061519.301068860] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.781m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061520.391097778] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.812m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061521.392250148] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.745m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061522.491164806] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.495m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061523.590821173] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.435m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061524.681128167] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.510m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061525.781461624] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.996m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061526.881364020] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.856m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061527.981344536] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.755m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061529.000877969] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.719m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061530.001068318] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.701m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061531.061071680] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.720m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061532.161042219] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.690m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061533.190772834] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.984m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061534.191509707] [vertical_lidar_mapper]: Dropping vertical scan: floor correction -0.868m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061534.792150953] [vertical_lidar_mapper]: Dropped unstable global scan: odom_age=0.134s (max 0.200), |yaw|=0.370 (max 0.700), |vz|=0.657 (max 0.400), tilt_rate=0.069 (max 0.450).
+[WARN] [1785061535.250934023] [vertical_lidar_mapper]: Dropping vertical scan: floor correction 0.290m exceeds 0.250m. Check MAVROS altitude continuity.
+[WARN] [1785061535.881593013] [vertical_lidar_mapper]: Dropped unstable global scan: odom_age=0.132s (max 0.200), |yaw|=0.088 (max 0.700), |vz|=0.081 (max 0.400), tilt_rate=0.866 (max 0.450).
+[WARN] [1785061535.982058694] [vertical_lidar_mapper]: 3D scan matching rejected keyframe: insufficient scan or submap geometry (source=81 submap=390 overlap=0.00 rmse=0.000m correction=0.000m/0.00deg).
+[WARN] [1785061537.081837049] [vertical_lidar_mapper]: 3D scan matching rejected keyframe: insufficient scan or submap geometry (source=65 submap=571 overlap=0.00 rmse=0.000m correction=0.000m/0.00deg).
+[WARN] [1785061538.281733650] [vertical_lidar_mapper]: 3D scan matching rejected keyframe: insufficient scan or submap geometry (source=66 submap=668 overlap=0.00 rmse=0.000m correction=0.000m/0.00deg).
+[WARN] [1785061539.471783677] [vertical_lidar_mapper]: 3D scan matching rejected keyframe: insufficient scan or submap geometry (source=66 submap=651 overlap=0.00 rmse=0.000m correction=0.000m/0.00deg).
+[WARN] [1785061540.571838358] [vertical_lidar_mapper]: 3D scan matching rejected keyframe: insufficient scan or submap geometry (source=65 submap=660 overlap=0.00 rmse=0.000m correction=0.000m/0.00deg).
+[WARN] [1785061541.771802136] [vertical_lidar_mapper]: 3D scan matching rejected keyframe: insufficient scan or submap geometry (source=63 submap=670 overlap=0.00 rmse=0.000m correction=0.000m/0.00deg).
+[WARN] [1785061542.862754343] [vertical_lidar_mapper]: 3D scan matching rejected keyframe: insufficient scan or submap geometry (source=62 submap=671 overlap=0.00 rmse=0.000m correction=0.000m/0.00deg).
+[WARN] [1785061543.961831745] [vertical_lidar_mapper]: 3D scan matching rejected keyframe: insufficient scan or submap geometry (source=65 submap=667 overlap=0.00 rmse=0.000m correction=0.000m/0.00deg).
+[WARN] [1785061545.051917553] [vertical_lidar_mapper]: 3D scan matching rejected keyframe: insufficient scan or submap geometry (source=64 submap=667 overlap=0.00 rmse=0.000m correction=0.000m/0.00deg).
+[WARN] [1785061546.151836102] [vertical_lidar_mapper]: 3D scan matching rejected keyframe: insufficient scan or submap geometry (source=66 submap=671 overlap=0.00 rmse=0.000m correction=0.000m/0.00deg).
+[WARN] [1785061547.251919033] [vertical_lidar_mapper]: 3D scan matching rejected keyframe: insufficient scan or submap geometry (source=64 submap=669 overlap=0.00 rmse=0.000m correction=0.000m/0.00deg).
+[WARN] [1785061548.351876012] [vertical_lidar_mapper]: 3D scan matching rejected keyframe: insufficient scan or submap geometry (source=63 submap=669 overlap=0.00 rmse=0.000m correction=0.000m/0.00deg).
+[WARN] [1785061549.441672828] [vertical_lidar_mapper]: 3D scan matching rejected keyframe: insufficient scan or submap geometry (source=68 submap=669 overlap=0.00 rmse=0.000m correction=0.000m/0.00deg).
+[WARN] [1785061550.571985926] [vertical_lidar_mapper]: 3D scan matching rejected keyframe: insufficient scan or submap geometry (source=68 submap=669 overlap=0.00 rmse=0.000m correction=0.000m/0.00deg).
+[WARN] [1785061551.641619787] [vertical_lidar_mapper]: 3D scan matching rejected keyframe: insufficient scan or submap geometry (source=67 submap=672 overlap=0.00 rmse=0.000m correction=0.000m/0.00deg).
+[WARN] [1785061552.671742014] [vertical_lidar_mapper]: 3D scan matching rejected keyframe: insufficient scan or submap geometry (source=69 submap=670 overlap=0.00 rmse=0.000m correction=0.000m/0.00deg).
+[WARN] [1785061553.862096398] [vertical_lidar_mapper]: 3D scan matching rejected keyframe: insufficient scan or submap geometry (source=69 submap=668 overlap=0.00 rmse=0.000m correction=0.000m/0.00deg).
+[WARN] [1785061554.862410384] [vertical_lidar_mapper]: 3D scan matching rejected keyframe: insufficient scan or submap geometry (source=68 submap=670 overlap=0.00 rmse=0.000m correction=0.000m/0.00deg).
+[WARN] [1785061556.061739653] [vertical_lidar_mapper]: 3D scan matching rejected keyframe: insufficient scan or submap geometry (source=65 submap=671 overlap=0.00 rmse=0.000m correction=0.000m/0.00deg).
+[WARN] [1785061557.082888305] [vertical_lidar_mapper]: 3D scan matching rejected keyframe: insufficient scan or submap geometry (source=66 submap=672 overlap=0.00 rmse=0.000m correction=0.000m/0.00deg).
+[WARN] [1785061558.156578754] [vertical_lidar_mapper]: 3D scan matching rejected keyframe: insufficient scan or submap geometry (source=64 submap=673 overlap=0.00 rmse=0.000m correction=0.000m/0.00deg).
+[INFO] [1785061558.569349552] [vertical_lidar_mapper]: Saved PCD: /home/pi5drone/drone_ros_ws/maps/vertical_3d/lidar2_vertical_global_map_1785061558_555267379.pcd | 2D map: /home/pi5drone/drone_ros_ws/maps/vertical_3d/lidar2_vertical_map2d_1785061558_555267379.pgm (yaml: /home/pi5drone/drone_ros_ws/maps/vertical_3d/lidar2_vertical_map2d_1785061558_555267379.yaml) | slam2d: /home/pi5drone/drone_ros_ws/maps/vertical_3d/slam2d_map_1785061558_555267379.pgm (yaml: /home/pi5drone/drone_ros_ws/maps/vertical_3d/slam2d_map_1785061558_555267379.yaml) | trajectory: /home/pi5drone/drone_ros_ws/maps/vertical_3d/lidar2_vertical_trajectory_1785061558_555267379.csv | structural GLB: /home/pi5drone/drone_ros_ws/maps/vertical_3d/lidar2_structural_environment_1785061558_555267379.glb
+[INFO] [1785061559.030935505] [rclcpp]: signal_handler(SIGINT/SIGTERM)

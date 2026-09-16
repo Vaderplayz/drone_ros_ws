@@ -1,0 +1,3 @@
+[2026-07-24 22:46:57] [independent-3d] Independent 3D startup; expecting MAVROS and AprilTag to already be running
+[2026-07-24 22:47:00] [independent-3d] Shutdown reason: received signal INT; launcher_exit=130
+[2026-07-24 22:47:00] [independent-3d] Independent 3D mapping stopped; MAVROS and AprilTag were left running

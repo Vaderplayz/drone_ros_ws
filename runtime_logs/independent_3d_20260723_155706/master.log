@@ -1,0 +1,11 @@
+[2026-07-23 15:57:07] [independent-3d] Independent 3D startup; expecting MAVROS and AprilTag to already be running
+[2026-07-23 15:57:10] [independent-3d] Waiting for /mavros/local_position/odom; elapsed=3s deadline=90s
+[2026-07-23 15:57:19] [independent-3d] Waiting for /mavros/local_position/odom; elapsed=12s deadline=90s
+[2026-07-23 15:57:27] [independent-3d] Waiting for /mavros/local_position/odom; elapsed=20s deadline=90s
+[2026-07-23 15:57:40] [independent-3d] Waiting for /mavros/local_position/odom; elapsed=33s deadline=90s
+[2026-07-23 15:57:47] [independent-3d] Waiting for /mavros/local_position/odom; elapsed=40s deadline=90s
+[2026-07-23 15:58:00] [independent-3d] Waiting for /mavros/local_position/odom; elapsed=53s deadline=90s
+[2026-07-23 15:58:08] [independent-3d] Waiting for /mavros/local_position/odom; elapsed=61s deadline=90s
+[2026-07-23 15:58:17] [independent-3d] Waiting for /mavros/local_position/odom; elapsed=70s deadline=90s
+[2026-07-23 15:58:21] [independent-3d] Shutdown reason: received signal INT; launcher_exit=130
+[2026-07-23 15:58:21] [independent-3d] Independent 3D mapping stopped; MAVROS and AprilTag were left running

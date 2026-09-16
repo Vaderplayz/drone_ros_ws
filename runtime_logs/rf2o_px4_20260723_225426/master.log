@@ -1,0 +1,59 @@
+[2026-07-23T22:54:27+0700] Independent RF2O/PX4 odometry startup
+[2026-07-23T22:54:27+0700] Workspace=/home/pi5drone/drone_ros_ws; LiDAR=/dev/ttyUSB0; use_sim_time=false
+[2026-07-23T22:54:27+0700] This launcher will not manage MAVROS, the flight controller, camera, or AprilTag nodes
+[1;32m[2026-07-23T22:54:30+0700] STARTED existing MAVROS connected; vehicle disarmed[0m
+[1;32m[2026-07-23T22:54:35+0700] STARTED rplidar pid=8061[0m
+[2026-07-23T22:54:36+0700] Waiting for /scan; elapsed=1s deadline=60s
+[2026-07-23T22:54:41+0700] Waiting for /scan; elapsed=6s deadline=60s
+[1;32m[2026-07-23T22:54:44+0700] STARTED message stream /scan[0m
+[1;32m[2026-07-23T22:54:45+0700] STARTED odom_flatten pid=8338[0m
+[1;32m[2026-07-23T22:54:45+0700] STARTED static_lidar_tf pid=8341[0m
+[2026-07-23T22:54:47+0700] Waiting for TF odom -> base_footprint; elapsed=2s deadline=60s
+[1;32m[2026-07-23T22:54:50+0700] STARTED TF odom -> base_footprint[0m
+[1;32m[2026-07-23T22:54:52+0700] STARTED TF base_footprint -> laser_frame[0m
+[1;32m[2026-07-23T22:54:52+0700] STARTED scan_audit pid=8541[0m
+[2026-07-23T22:54:53+0700] Waiting for /scan_stream_audit/diagnostics classification_ready=true; elapsed=1s deadline=30s
+[1;32m[2026-07-23T22:54:57+0700] STARTED diagnostic /scan_stream_audit/diagnostics classification_ready=true[0m
+[1;32m[2026-07-23T22:54:57+0700] STARTED canonicalizer pid=8643[0m
+waiting for /scan_rf2o: 0/5
+waiting for /scan_rf2o: 1/5
+[2026-07-23T22:55:08+0700] Waiting for /scan_rf2o/diagnostics timestamp_monotonic=true; elapsed=3s deadline=15s
+[1;32m[2026-07-23T22:55:11+0700] STARTED diagnostic /scan_rf2o/diagnostics timestamp_monotonic=true[0m
+[1;32m[2026-07-23T22:55:11+0700] STARTED five coherent canonical scans[0m
+[1;32m[2026-07-23T22:55:11+0700] STARTED lidar_odom_monitor pid=8915[0m
+[1;32m[2026-07-23T22:55:12+0700] STARTED rf2o pid=8948[0m
+waiting for /lidar/odom_raw: 0/5
+[1;32m[2026-07-23T22:55:16+0700] STARTED RF2O raw odometry /lidar/odom_raw[0m
+waiting for /lidar/odom: 0/5
+[1;32m[2026-07-23T22:55:20+0700] STARTED health-gated LiDAR odometry /lidar/odom[0m
+[2026-07-23T22:55:23+0700] Waiting for existing MAVROS connection; elapsed=3s deadline=60s
+[2026-07-23T22:55:28+0700] Waiting for existing MAVROS connection; elapsed=8s deadline=60s
+[2026-07-23T22:55:32+0700] Waiting for existing MAVROS connection; elapsed=12s deadline=60s
+[1;32m[2026-07-23T22:55:35+0700] STARTED existing MAVROS connected; vehicle disarmed[0m
+[1;32m[2026-07-23T22:55:35+0700] STARTED lidar_odom_px4_bridge pid=9374[0m
+[2026-07-23T22:55:38+0700] Waiting for /mavros/odometry/out; elapsed=3s deadline=60s
+[2026-07-23T22:55:41+0700] Waiting for /mavros/odometry/out; elapsed=6s deadline=60s
+[1;32m[2026-07-23T22:55:44+0700] STARTED message stream /mavros/odometry/out[0m
+[1;32m[2026-07-23T22:55:45+0700] STARTED RF2O feed to PX4 via /mavros/odometry/out[0m
+
+[1;32m######################################################################
+#                                                                    #
+#                         ALL SYSTEM READY                           #
+#                                                                    #
+#             RF2O odometry is feeding PX4 through MAVROS            #
+#                                                                    #
+######################################################################
+[0m
+[2026-07-23T22:55:53+0700] ROS/MAVROS feed is ready; verify EKF2 external-vision aid flags before flight
+[2026-07-23T22:55:53+0700] No PX4 parameter, arm, mode, or movement command was sent
+[2026-07-23T22:55:53+0700] Runtime logs: /home/pi5drone/drone_ros_ws/runtime_logs/rf2o_px4_20260723_225426
+[2026-07-23T23:13:44+0700] Shutdown reason: received signal INT; launcher_exit=130
+[2026-07-23T23:13:44+0700] Stopping launcher-owned process group: lidar_odom_px4_bridge pgid=9374
+[2026-07-23T23:13:44+0700] Stopping launcher-owned process group: rf2o pgid=8948
+[2026-07-23T23:13:44+0700] Stopping launcher-owned process group: lidar_odom_monitor pgid=8915
+[2026-07-23T23:13:44+0700] Stopping launcher-owned process group: canonicalizer pgid=8643
+[2026-07-23T23:13:44+0700] Stopping launcher-owned process group: scan_audit pgid=8541
+[2026-07-23T23:13:44+0700] Stopping launcher-owned process group: static_lidar_tf pgid=8341
+[2026-07-23T23:13:44+0700] Stopping launcher-owned process group: odom_flatten pgid=8338
+[2026-07-23T23:13:45+0700] Stopping launcher-owned process group: rplidar pgid=8061
+[2026-07-23T23:13:46+0700] MAVROS, flight controller, camera, and AprilTag processes were not stopped

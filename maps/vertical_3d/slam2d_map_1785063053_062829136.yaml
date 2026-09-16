@@ -1,0 +1,6 @@
+image: slam2d_map_1785063053_062829136.pgm
+resolution: 0.050000
+origin: [-1.951321, -2.321148, 0.000000]
+negate: 0
+occupied_thresh: 0.65
+free_thresh: 0.196

@@ -1,0 +1,7 @@
+[INFO] [launch]: All log files can be found below /home/pi5drone/.ros/log/2026-07-24-22-43-28-234018-pi5drone-desktop-13156
+[INFO] [launch]: Default logging verbosity is set to INFO
+[INFO] [async_slam_toolbox_node-1]: process started with pid [13207]
+[async_slam_toolbox_node-1] [INFO] [1784907809.268283126] [slam_toolbox]: Node using stack size 40000000
+[async_slam_toolbox_node-1] [INFO] [1784907810.115672457] [slam_toolbox]: Configuring
+[async_slam_toolbox_node-1] [INFO] [1784907810.228759642] [slam_toolbox]: Using solver plugin solver_plugins::CeresSolver
+[async_slam_toolbox_node-1] [INFO] [1784907810.245936776] [slam_toolbox]: CeresSolver: Using SCHUR_JACOBI preconditioner.

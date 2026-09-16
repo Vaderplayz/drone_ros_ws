@@ -1,0 +1,1 @@
+[INFO] [1785677704.290030825] [px4_odom_flatten_node]: Subscribed to: /mavros/local_position/odom | Publishing TF: odom -> base_footprint

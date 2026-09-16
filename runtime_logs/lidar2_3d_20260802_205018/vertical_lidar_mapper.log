@@ -1,0 +1,55 @@
+[INFO] [1785678709.143385708] [vertical_lidar_mapper]: vertical_lidar_mapper started. scan_topic='/scan_vertical' target_frame='odom' local_voxel=0.100 global_voxel=0.080 global_cap=400000 global_publish=3.0Hz revoxel_every=10
+[INFO] [1785678709.144306504] [vertical_lidar_mapper]: Global integration mode: keyframe (keyframe_min_translation=0.030m keyframe_min_yaw=0.025rad keyframe_max_interval=0.100s max_keyframes=10000).
+[INFO] [1785678709.144375875] [vertical_lidar_mapper]: Full-pose deskew: enabled (required=true odom_topic='/mavros/local_position/odom' odom_frame='odom' stamp_reference='start' pose_gap<=0.100s wait_timeout=0.350s queue=30 poll=100.0Hz output='/vertical_points_deskewed').
+[INFO] [1785678709.144513319] [vertical_lidar_mapper]: Stable integration gate: enabled (odom_age<=0.200s |yaw_rate|<=0.700rad/s |vertical_speed|<=0.400m/s tilt_rate<=0.450rad/s).
+[INFO] [1785678709.144542949] [vertical_lidar_mapper]: Map-rebase: disabled (map_frame='map' odom_frame='odom' trans_th=0.080m yaw_th=0.040rad)
+[INFO] [1785678709.144561097] [vertical_lidar_mapper]: Relative-pose gate: disabled (map='map' odom='odom' trans_err_th=0.080m yaw_err_th=0.060rad min_motion=0.030m max_map_step=0.250m max_map_yaw=0.150rad)
+[INFO] [1785678709.144580819] [vertical_lidar_mapper]: 3D scan matching: disabled (map_frame='vertical_map' max_rate=4.0Hz radius=4.00m voxel=0.12m corr_dist=0.45m overlap>=0.30 rmse<=0.18m correction<=0.30m/17.2deg drop_failure=true).
+[INFO] [1785678709.144605226] [vertical_lidar_mapper]: Map-rebase cooldown: 6 scans after correction.
+[INFO] [1785678709.144618134] [vertical_lidar_mapper]: Floor filter: disabled (drop z <= 0.10 m in 'odom' frame).
+[INFO] [1785678709.144637078] [vertical_lidar_mapper]: Floor stabilization: enabled (percentile=0.10 band=0.08m min_points=30 target_z=0.00m max_correction=2.00m drop_failure=false).
+[INFO] [1785678709.144664838] [vertical_lidar_mapper]: PCD export service: '/vertical_lidar_mapper/save_pcd' dir='/home/pi5drone/drone_ros_ws/maps/vertical_3d' binary=true
+[INFO] [1785678709.144684634] [vertical_lidar_mapper]: SLAM 2D map export on save: enabled (topic='/map' prefix='slam2d_map').
+[INFO] [1785678709.144703004] [vertical_lidar_mapper]: Structural GLB export on save: enabled (prefix='lidar2_structural_environment' auto_height=true ceiling=false grid_cap=2000000).
+[INFO] [1785678709.144720060] [vertical_lidar_mapper]: Loop-closure dedup-only mode: disabled
+[INFO] [1785678709.144741004] [vertical_lidar_mapper]: Global rebuild service: '/vertical_lidar_mapper/rebuild_global' (rebuild_on_map_correction=false corr_trans_th=0.080m corr_yaw_th=0.040rad freeze_scans=6).
+[WARN] [1785678711.083977688] [vertical_lidar_mapper]: Dropping vertical scan after waiting 0.358s for odometry through its final beam (remaining lag 0.000s).
+[WARN] [1785678712.424881799] [vertical_lidar_mapper]: Dropping vertical scan: pose history starts 0.369s after the first beam.
+[INFO] [1785678712.565227391] [vertical_lidar_mapper]: Initialized floor stabilization target at z=0.000m in frame 'odom' (first observed floor z=-1.771m).
+[WARN] [1785678713.086759650] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.362s): only 38.4% of valid beams had interpolated poses
+[WARN] [1785678716.734063333] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.117s): no bracketing full-pose samples at scan reference timestamp
+[WARN] [1785678720.053200479] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.128s): only 2.4% of valid beams had interpolated poses
+[WARN] [1785678720.832093331] [vertical_lidar_mapper]: Dropped unstable global scan: odom_age=0.288s (max 0.200), |yaw|=0.004 (max 0.700), |vz|=0.003 (max 0.400), tilt_rate=0.008 (max 0.450).
+[WARN] [1785678725.946638568] [vertical_lidar_mapper]: Dropped unstable global scan: odom_age=0.343s (max 0.200), |yaw|=0.004 (max 0.700), |vz|=0.004 (max 0.400), tilt_rate=0.005 (max 0.450).
+[WARN] [1785678728.558294844] [vertical_lidar_mapper]: Dropped unstable global scan: odom_age=0.229s (max 0.200), |yaw|=0.003 (max 0.700), |vz|=0.003 (max 0.400), tilt_rate=0.004 (max 0.450).
+[WARN] [1785678728.558561085] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.158s): no bracketing full-pose samples at scan reference timestamp
+[WARN] [1785678730.198530362] [vertical_lidar_mapper]: Dropped unstable global scan: odom_age=0.375s (max 0.200), |yaw|=0.006 (max 0.700), |vz|=0.002 (max 0.400), tilt_rate=0.009 (max 0.450).
+[WARN] [1785678730.740144565] [vertical_lidar_mapper]: Dropping vertical scan after waiting 0.438s for odometry through its final beam (remaining lag 0.083s).
+[WARN] [1785678730.757203825] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.450s): no bracketing full-pose samples at scan reference timestamp
+[WARN] [1785678734.325669489] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.419s): only 22.0% of valid beams had interpolated poses
+[WARN] [1785678734.337300434] [vertical_lidar_mapper]: Dropped unstable global scan: odom_age=0.222s (max 0.200), |yaw|=0.004 (max 0.700), |vz|=0.000 (max 0.400), tilt_rate=0.007 (max 0.450).
+[WARN] [1785678738.989240783] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.391s): only 15.6% of valid beams had interpolated poses
+[WARN] [1785678744.234730354] [vertical_lidar_mapper]: Dropped unstable global scan: odom_age=0.271s (max 0.200), |yaw|=0.002 (max 0.700), |vz|=0.000 (max 0.400), tilt_rate=0.004 (max 0.450).
+[WARN] [1785678747.549093611] [vertical_lidar_mapper]: Dropped unstable global scan: odom_age=0.250s (max 0.200), |yaw|=0.001 (max 0.700), |vz|=0.001 (max 0.400), tilt_rate=0.007 (max 0.450).
+[WARN] [1785678747.549294241] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.131s): no bracketing full-pose samples at scan reference timestamp
+[WARN] [1785678748.833541981] [vertical_lidar_mapper]: Dropping vertical scan after waiting 0.351s for odometry through its final beam (remaining lag 0.037s).
+[WARN] [1785678749.285617110] [vertical_lidar_mapper]: Dropped unstable global scan: odom_age=0.287s (max 0.200), |yaw|=0.002 (max 0.700), |vz|=0.000 (max 0.400), tilt_rate=0.010 (max 0.450).
+[WARN] [1785678752.195101275] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.199s): only 1.9% of valid beams had interpolated poses
+[WARN] [1785678753.516604385] [vertical_lidar_mapper]: Dropped unstable global scan: odom_age=0.319s (max 0.200), |yaw|=0.004 (max 0.700), |vz|=0.002 (max 0.400), tilt_rate=0.006 (max 0.450).
+[WARN] [1785678756.534664846] [vertical_lidar_mapper]: Dropped unstable global scan: odom_age=0.242s (max 0.200), |yaw|=0.013 (max 0.700), |vz|=0.004 (max 0.400), tilt_rate=0.005 (max 0.450).
+[WARN] [1785678756.536197198] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.161s): no bracketing full-pose samples at scan reference timestamp
+[WARN] [1785678761.527204954] [vertical_lidar_mapper]: Dropped unstable global scan: odom_age=0.219s (max 0.200), |yaw|=0.014 (max 0.700), |vz|=0.002 (max 0.400), tilt_rate=0.007 (max 0.450).
+[WARN] [1785678761.527443029] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.156s): no bracketing full-pose samples at scan reference timestamp
+[WARN] [1785678762.714092398] [vertical_lidar_mapper]: Dropped unstable global scan: odom_age=0.227s (max 0.200), |yaw|=0.002 (max 0.700), |vz|=0.001 (max 0.400), tilt_rate=0.004 (max 0.450).
+[WARN] [1785678766.896567155] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.320s): only 25.6% of valid beams had interpolated poses
+[WARN] [1785678775.795262835] [vertical_lidar_mapper]: Dropped unstable global scan: odom_age=0.403s (max 0.200), |yaw|=0.005 (max 0.700), |vz|=0.001 (max 0.400), tilt_rate=0.006 (max 0.450).
+[WARN] [1785678775.795515705] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.333s): no bracketing full-pose samples at scan reference timestamp
+[WARN] [1785678779.463710444] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.110s): only 0.0% of valid beams had interpolated poses
+[WARN] [1785678784.605119070] [vertical_lidar_mapper]: Dropped unstable global scan: odom_age=0.237s (max 0.200), |yaw|=0.002 (max 0.700), |vz|=0.001 (max 0.400), tilt_rate=0.009 (max 0.450).
+[WARN] [1785678784.605311237] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.152s): no bracketing full-pose samples at scan reference timestamp
+[WARN] [1785678788.975854957] [vertical_lidar_mapper]: Dropped unstable global scan: odom_age=0.304s (max 0.200), |yaw|=0.014 (max 0.700), |vz|=0.002 (max 0.400), tilt_rate=0.003 (max 0.450).
+[WARN] [1785678788.976049568] [vertical_lidar_mapper]: Vertical scan deskew failed (scan_age=0.220s): no bracketing full-pose samples at scan reference timestamp
+[WARN] [1785678793.803866787] [vertical_lidar_mapper]: Dropping vertical scan after waiting 0.360s for odometry through its final beam (remaining lag 0.030s).
+[INFO] [1785678802.919910245] [vertical_lidar_mapper]: Saved PCD: /home/pi5drone/drone_ros_ws/maps/vertical_3d/lidar2_vertical_global_map_1785678802_903733059.pcd | 2D map: /home/pi5drone/drone_ros_ws/maps/vertical_3d/lidar2_vertical_map2d_1785678802_903733059.pgm (yaml: /home/pi5drone/drone_ros_ws/maps/vertical_3d/lidar2_vertical_map2d_1785678802_903733059.yaml) | slam2d: /home/pi5drone/drone_ros_ws/maps/vertical_3d/slam2d_map_1785678802_903733059.pgm (yaml: /home/pi5drone/drone_ros_ws/maps/vertical_3d/slam2d_map_1785678802_903733059.yaml) | trajectory: /home/pi5drone/drone_ros_ws/maps/vertical_3d/lidar2_vertical_trajectory_1785678802_903733059.csv | structural GLB: /home/pi5drone/drone_ros_ws/maps/vertical_3d/lidar2_structural_environment_1785678802_903733059.glb
+[WARN] [1785678803.394718726] [vertical_lidar_mapper]: Dropping vertical scan after waiting 0.359s for odometry through its final beam (remaining lag 0.044s).
+[INFO] [1785678803.439565133] [rclcpp]: signal_handler(SIGINT/SIGTERM)

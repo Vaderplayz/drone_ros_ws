@@ -1,0 +1,10 @@
+[INFO] [launch]: All log files can be found below /home/pi5drone/.ros/log/2026-08-02-21-05-06-845400-pi5drone-desktop-15323
+[INFO] [launch]: Default logging verbosity is set to INFO
+[INFO] [async_slam_toolbox_node-1]: process started with pid [15403]
+[async_slam_toolbox_node-1] [INFO] [1785679508.772248802] [slam_toolbox]: Node using stack size 40000000
+[async_slam_toolbox_node-1] [INFO] [1785679511.295116022] [slam_toolbox]: Configuring
+[async_slam_toolbox_node-1] [INFO] [1785679511.434147411] [slam_toolbox]: Using solver plugin solver_plugins::CeresSolver
+[async_slam_toolbox_node-1] [INFO] [1785679511.440638689] [slam_toolbox]: CeresSolver: Using SCHUR_JACOBI preconditioner.
+[INFO] [launch.user]: [LifecycleLaunch] Slamtoolbox node is activating.
+[async_slam_toolbox_node-1] [INFO] [1785679511.749393374] [slam_toolbox]: Activating
+[async_slam_toolbox_node-1] Registering sensor: [Custom Described Lidar]

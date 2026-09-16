@@ -1,0 +1,10 @@
+[INFO] [1785061350.424295881] [sllidar2_vertical]: SLLidar running on ROS2 package SLLidar.ROS2 SDK Version:1.0.1, SLLIDAR SDK Version:2.1.0
+[INFO] [1785061350.962086083] [sllidar2_vertical]: SLLidar S/N: 612EE0F8C2E29AD3C1819FF5929F4E1F
+[INFO] [1785061350.962166009] [sllidar2_vertical]: Firmware Ver: 1.02
+[INFO] [1785061350.962178120] [sllidar2_vertical]: Hardware Rev: 18
+[INFO] [1785061350.967016518] [sllidar2_vertical]: SLLidar health status : 0
+[INFO] [1785061350.967150518] [sllidar2_vertical]: SLLidar health status : OK.
+[INFO] [1785061351.302060330] [sllidar2_vertical]: current scan mode: Standard, sample rate: 5 Khz, max_distance: 16.0 m, scan frequency:10.0 Hz, 
+[INFO] [1785061559.040684273] [rclcpp]: signal_handler(SIGINT/SIGTERM)
+terminate called after throwing an instance of 'rclcpp::exceptions::RCLError'
+  what():  failed to create guard condition: the given context is not valid, either rcl_init() was not called or rcl_shutdown() was called., at ./src/rcl/guard_condition.c:67

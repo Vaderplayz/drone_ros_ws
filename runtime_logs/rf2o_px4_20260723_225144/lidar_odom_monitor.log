@@ -1,0 +1,5 @@
+[WARN] [1784821959.545838205] [lidar_odom_monitor]: RF2O monitor state: WAITING_FOR_SCAN
+[INFO] [1784821959.549898362] [lidar_odom_monitor]: Monitoring coherent scan /scan_rf2o and RF2O /lidar/odom_raw -> /lidar/odom
+[WARN] [1784821960.550072336] [lidar_odom_monitor]: RF2O monitor state: WAITING_FOR_ODOM
+[INFO] [1784821965.546474642] [lidar_odom_monitor]: RF2O monitor state: OK
+[INFO] [1784821996.679596952] [rclcpp]: signal_handler(SIGINT/SIGTERM)

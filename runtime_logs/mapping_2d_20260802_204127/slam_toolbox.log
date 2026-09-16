@@ -1,0 +1,8 @@
+[INFO] [launch]: All log files can be found below /home/pi5drone/.ros/log/2026-08-02-20-42-23-529728-pi5drone-desktop-15757
+[INFO] [launch]: Default logging verbosity is set to INFO
+[INFO] [async_slam_toolbox_node-1]: process started with pid [15840]
+[async_slam_toolbox_node-1] [INFO] [1785678145.343611988] [slam_toolbox]: Node using stack size 40000000
+[async_slam_toolbox_node-1] [INFO] [1785678146.211988395] [slam_toolbox]: Configuring
+[async_slam_toolbox_node-1] [INFO] [1785678146.232808914] [slam_toolbox]: Using solver plugin solver_plugins::CeresSolver
+[async_slam_toolbox_node-1] [INFO] [1785678146.234577599] [slam_toolbox]: CeresSolver: Using SCHUR_JACOBI preconditioner.
+[async_slam_toolbox_node-1] [WARN] [1785678146.868380247] [slam_toolbox.rclcpp]: failed to send response to /slam_toolbox/change_state (timeout): client will not receive response, at ./src/rmw_response.cpp:153, at ./src/rcl/service.c:400

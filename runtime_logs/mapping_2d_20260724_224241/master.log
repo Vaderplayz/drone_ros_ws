@@ -1,0 +1,39 @@
+[1;32m[2026-07-24T22:42:45+0700] STARTED launcher inputs and installed ROS interfaces validated[0m
+[2026-07-24T22:42:45+0700] Independent observer-only 2D mapping startup
+[2026-07-24T22:42:45+0700] This launcher will only start mapping scan deskew and slam_toolbox
+[2026-07-24T22:42:45+0700] It will not manage RF2O/PX4 fusion, MAVROS, LiDAR, camera, AprilTag, planner, or flight control
+[1;32m[2026-07-24T22:42:56+0700] STARTED live input /scan_rf2o[0m
+[2026-07-24T22:42:59+0700] Waiting for /mavros/local_position/odom; elapsed=3s deadline=60s
+[1;32m[2026-07-24T22:43:03+0700] STARTED live input /mavros/local_position/odom[0m
+[1;32m[2026-07-24T22:43:08+0700] STARTED live scan and odometry timestamps share one clock domain[0m
+[1;32m[2026-07-24T22:43:12+0700] STARTED TF odom -> base_footprint[0m
+[1;32m[2026-07-24T22:43:15+0700] STARTED TF base_footprint -> laser_frame[0m
+[1;32m[2026-07-24T22:43:15+0700] STARTED mapping_scan_deskew pgid=12898[0m
+[1;32m[2026-07-24T22:43:18+0700] STARTED live input /scan_slam[0m
+[1;32m[2026-07-24T22:43:20+0700] STARTED diagnostic /scan_slam/diagnostics deskew_applied=true[0m
+[1;32m[2026-07-24T22:43:21+0700] STARTED mapping scan deskew active on /scan_slam[0m
+[1;32m[2026-07-24T22:43:27+0700] STARTED live scan and odometry timestamps share one clock domain[0m
+[1;32m[2026-07-24T22:43:27+0700] STARTED slam_toolbox pgid=13156[0m
+[2026-07-24T22:43:30+0700] Waiting for /map; elapsed=3s deadline=120s
+[2026-07-24T22:43:35+0700] Waiting for /map; elapsed=8s deadline=120s
+[2026-07-24T22:43:39+0700] Waiting for /map; elapsed=12s deadline=120s
+[2026-07-24T22:43:43+0700] Waiting for /map; elapsed=16s deadline=120s
+[2026-07-24T22:43:48+0700] Waiting for /map; elapsed=21s deadline=120s
+[2026-07-24T22:43:52+0700] Waiting for /map; elapsed=25s deadline=120s
+[2026-07-24T22:44:01+0700] Waiting for /map; elapsed=34s deadline=120s
+[2026-07-24T22:44:05+0700] Waiting for /map; elapsed=38s deadline=120s
+[2026-07-24T22:44:10+0700] Waiting for /map; elapsed=43s deadline=120s
+[2026-07-24T22:44:14+0700] Waiting for /map; elapsed=47s deadline=120s
+[2026-07-24T22:44:18+0700] Waiting for /map; elapsed=51s deadline=120s
+[2026-07-24T22:44:23+0700] Waiting for /map; elapsed=56s deadline=120s
+[2026-07-24T22:44:27+0700] Waiting for /map; elapsed=60s deadline=120s
+[2026-07-24T22:44:32+0700] Waiting for /map; elapsed=65s deadline=120s
+[2026-07-24T22:44:40+0700] Waiting for /map; elapsed=73s deadline=120s
+[2026-07-24T22:44:45+0700] Waiting for /map; elapsed=78s deadline=120s
+[2026-07-24T22:44:49+0700] Waiting for /map; elapsed=82s deadline=120s
+[2026-07-24T22:44:53+0700] Waiting for /map; elapsed=86s deadline=120s
+[2026-07-24T22:44:57+0700] Shutdown reason: received signal INT; launcher_exit=130
+[1;33m[2026-07-24T22:45:03+0700] WARNING 2D map autosave skipped because /map has no readable map[0m
+[2026-07-24T22:45:03+0700] Stopping mapping-owned process group: slam_toolbox pgid=13156
+[2026-07-24T22:45:03+0700] Stopping mapping-owned process group: mapping_scan_deskew pgid=12898
+[2026-07-24T22:45:03+0700] RF2O/PX4 fusion, MAVROS, LiDAR, camera, AprilTag, and flight control were not stopped

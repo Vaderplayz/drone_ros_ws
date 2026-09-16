@@ -1,0 +1,130 @@
+[2026-07-23 22:44:23] [all-mapping] Starting complete real-drone mapping stack
+[2026-07-23 22:44:23] [all-mapping] MAVROS and the boot AprilTag pipeline remain externally managed
+[2026-07-23 22:44:23] [all-mapping] Starting RF2O/PX4 fusion: /home/pi5drone/drone_ros_ws/src/master_scripts/start_rf2o_px4_fusion.sh
+[2026-07-23T22:44:24+0700] Independent RF2O/PX4 odometry startup
+[2026-07-23T22:44:24+0700] Workspace=/home/pi5drone/drone_ros_ws; LiDAR=/dev/ttyUSB0; use_sim_time=false
+[2026-07-23T22:44:24+0700] This launcher will not manage MAVROS, the flight controller, camera, or AprilTag nodes
+[2026-07-23T22:44:28+0700] STARTED existing MAVROS connected; vehicle disarmed
+[2026-07-23T22:44:33+0700] STARTED rplidar pid=17907
+[2026-07-23T22:44:34+0700] Waiting for /scan; elapsed=1s deadline=60s
+[2026-07-23T22:44:39+0700] STARTED message stream /scan
+[2026-07-23T22:44:40+0700] STARTED odom_flatten pid=18074
+[2026-07-23T22:44:40+0700] STARTED static_lidar_tf pid=18076
+[2026-07-23T22:44:42+0700] STARTED TF odom -> base_footprint
+[2026-07-23T22:44:44+0700] STARTED TF base_footprint -> laser_frame
+[2026-07-23T22:44:44+0700] STARTED scan_audit pid=18224
+[2026-07-23T22:44:45+0700] Waiting for /scan_stream_audit/diagnostics classification_ready=true; elapsed=1s deadline=30s
+[2026-07-23T22:44:50+0700] STARTED diagnostic /scan_stream_audit/diagnostics classification_ready=true
+[2026-07-23T22:44:50+0700] STARTED canonicalizer pid=18381
+waiting for /scan_rf2o: 0/5
+[2026-07-23 22:44:59] [all-mapping] Ready: message stream /scan_rf2o
+[2026-07-23T22:44:59+0700] STARTED diagnostic /scan_rf2o/diagnostics timestamp_monotonic=true
+[2026-07-23T22:44:59+0700] STARTED five coherent canonical scans
+[2026-07-23T22:44:59+0700] STARTED lidar_odom_monitor pid=18594
+[2026-07-23T22:45:00+0700] STARTED rf2o pid=18639
+[2026-07-23 22:45:01] [all-mapping] Ready: message stream /mavros/local_position/odom
+waiting for /lidar/odom_raw: 0/5
+[2026-07-23T22:45:05+0700] STARTED RF2O raw odometry /lidar/odom_raw
+waiting for /lidar/odom: 0/5
+[2026-07-23T22:45:09+0700] STARTED health-gated LiDAR odometry /lidar/odom
+[2026-07-23 22:45:09] [all-mapping] Ready: TF odom -> base_footprint
+[2026-07-23 22:45:09] [all-mapping] Starting 2D mapping: /home/pi5drone/drone_ros_ws/src/master_scripts/start_2d_mapping_only.sh
+[2026-07-23T22:45:12+0700] STARTED existing MAVROS connected; vehicle disarmed
+[2026-07-23T22:45:12+0700] STARTED lidar_odom_px4_bridge pid=18954
+[2026-07-23T22:45:14+0700] Waiting for /mavros/odometry/out; elapsed=2s deadline=60s
+[2026-07-23T22:45:14+0700] STARTED launcher inputs and installed ROS interfaces validated
+[2026-07-23T22:45:14+0700] Independent observer-only 2D mapping startup
+[2026-07-23T22:45:14+0700] This launcher will only start mapping scan deskew and slam_toolbox
+[2026-07-23T22:45:14+0700] It will not manage RF2O/PX4 fusion, MAVROS, LiDAR, camera, AprilTag, planner, or flight control
+[2026-07-23T22:45:18+0700] Waiting for /mavros/odometry/out; elapsed=6s deadline=60s
+[2026-07-23T22:45:24+0700] Waiting for /mavros/odometry/out; elapsed=12s deadline=60s
+[2026-07-23T22:45:28+0700] Waiting for /mavros/odometry/out; elapsed=16s deadline=60s
+[2026-07-23T22:45:29+0700] STARTED live input /scan_rf2o
+[2026-07-23T22:45:32+0700] STARTED live input /mavros/local_position/odom
+[2026-07-23T22:45:32+0700] Waiting for /mavros/odometry/out; elapsed=20s deadline=60s
+[2026-07-23T22:45:38+0700] STARTED live scan and odometry timestamps share one clock domain
+[2026-07-23T22:45:38+0700] Waiting for /mavros/odometry/out; elapsed=26s deadline=60s
+[2026-07-23 22:45:40] [all-mapping] Waiting for /map; elapsed=30s deadline=180s
+[2026-07-23T22:45:41+0700] STARTED TF odom -> base_footprint
+[2026-07-23T22:45:42+0700] Waiting for /mavros/odometry/out; elapsed=30s deadline=60s
+[2026-07-23T22:45:45+0700] Waiting for TF base_footprint -> laser_frame; elapsed=4s deadline=60s
+[2026-07-23T22:45:49+0700] Waiting for /mavros/odometry/out; elapsed=37s deadline=60s
+[2026-07-23T22:45:49+0700] STARTED TF base_footprint -> laser_frame
+[2026-07-23T22:45:49+0700] STARTED mapping_scan_deskew pgid=19984
+[2026-07-23 22:45:50] [all-mapping] Waiting for /map; elapsed=40s deadline=180s
+[2026-07-23T22:45:52+0700] Waiting for /mavros/odometry/out; elapsed=40s deadline=60s
+[2026-07-23T22:45:53+0700] Waiting for /scan_slam; elapsed=4s deadline=60s
+[2026-07-23T22:45:56+0700] STARTED live input /scan_slam
+[2026-07-23T22:45:59+0700] STARTED diagnostic /scan_slam/diagnostics deskew_applied=true
+[2026-07-23T22:45:59+0700] Waiting for /mavros/odometry/out; elapsed=47s deadline=60s
+[2026-07-23T22:46:00+0700] STARTED mapping scan deskew active on /scan_slam
+[2026-07-23T22:46:03+0700] Waiting for /mavros/odometry/out; elapsed=51s deadline=60s
+[2026-07-23T22:46:07+0700] STARTED live scan and odometry timestamps share one clock domain
+[2026-07-23T22:46:07+0700] STARTED slam_toolbox pgid=20478
+[2026-07-23T22:46:09+0700] Waiting for /map; elapsed=2s deadline=120s
+[2026-07-23T22:46:09+0700] Waiting for /mavros/odometry/out; elapsed=57s deadline=60s
+[2026-07-23T22:46:14+0700] ERROR no message on /mavros/odometry/out after 60s
+[WARN] [1784821512.804791977] [lidar_odom_px4_bridge]: Bridge state: waiting_for_inputs
+[INFO] [1784821512.805683450] [lidar_odom_px4_bridge]: LiDAR external odometry bridge: /lidar/odom -> /mavros/odometry/out (odom -> base_link)
+[INFO] [1784821512.805730599] [lidar_odom_px4_bridge]: Covariance: xy_stddev=0.300 m yaw_stddev=0.200 rad unused_variance=1000000.0
+[WARN] [1784821512.906095167] [lidar_odom_px4_bridge]: Bridge state: mavros_disconnected
+[INFO] [1784821517.804855342] [lidar_odom_px4_bridge]: Alignment complete while disarmed: x=0.7691 y=-0.3359 yaw=72.535 deg
+[WARN] [1784821517.807198751] [lidar_odom_px4_bridge]: Bridge state: none
+[2026-07-23T22:46:14+0700] Shutdown reason: normal exit; launcher_exit=12
+[2026-07-23T22:46:14+0700] Stopping launcher-owned process group: lidar_odom_px4_bridge pgid=18954
+[2026-07-23T22:46:14+0700] Stopping launcher-owned process group: rf2o pgid=18639
+[2026-07-23T22:46:14+0700] Stopping launcher-owned process group: lidar_odom_monitor pgid=18594
+[2026-07-23T22:46:14+0700] Stopping launcher-owned process group: canonicalizer pgid=18381
+[2026-07-23T22:46:14+0700] Stopping launcher-owned process group: scan_audit pgid=18224
+[2026-07-23T22:46:14+0700] Stopping launcher-owned process group: static_lidar_tf pgid=18076
+[2026-07-23T22:46:14+0700] Stopping launcher-owned process group: odom_flatten pgid=18074
+[2026-07-23T22:46:14+0700] Stopping launcher-owned process group: rplidar pgid=17907
+[2026-07-23T22:46:15+0700] MAVROS, flight controller, camera, and AprilTag processes were not stopped
+[2026-07-23T22:46:16+0700] Waiting for /map; elapsed=9s deadline=120s
+[2026-07-23T22:46:20+0700] Waiting for /map; elapsed=13s deadline=120s
+[2026-07-23T22:46:24+0700] STARTED 2D occupancy map /map
+[2026-07-23T22:46:27+0700] STARTED TF map -> odom
+[2026-07-23T22:46:30+0700] Waiting for TF map -> laser_frame; elapsed=3s deadline=60s
+[2026-07-23 22:46:30] [all-mapping] Waiting for /map; elapsed=80s deadline=180s
+[2026-07-23 22:46:34] [all-mapping] Ready: message stream /map
+[2026-07-23T22:46:34+0700] Waiting for TF map -> laser_frame; elapsed=7s deadline=60s
+[2026-07-23 22:46:37] [all-mapping] Ready: TF map -> odom
+[2026-07-23 22:46:37] [all-mapping] Starting 3D mapping: /home/pi5drone/drone_ros_ws/src/master_scripts/start_real_3d_mapping_lidar2.sh
+[2026-07-23T22:46:38+0700] Waiting for TF map -> laser_frame; elapsed=11s deadline=60s
+[2026-07-23T22:46:39+0700] Real lidar2 3D mapping startup
+[2026-07-23T22:46:39+0700] Workspace=/home/pi5drone/drone_ros_ws; lidar2=/dev/ttyUSB1@460800; target_frame=map
+[2026-07-23T22:46:39+0700] This launcher will not manage lidar1, RF2O, 2D SLAM, MAVROS, or flight control
+[2026-07-23T22:46:42+0700] Waiting for TF map -> laser_frame; elapsed=15s deadline=60s
+[2026-07-23T22:46:43+0700] Waiting for /mavros/local_position/odom; elapsed=4s deadline=90s
+[2026-07-23T22:46:47+0700] Waiting for TF map -> laser_frame; elapsed=20s deadline=60s
+[2026-07-23T22:46:47+0700] Waiting for /mavros/local_position/odom; elapsed=8s deadline=90s
+[2026-07-23T22:46:51+0700] Waiting for /mavros/local_position/odom; elapsed=12s deadline=90s
+[2026-07-23T22:46:55+0700] Waiting for TF map -> laser_frame; elapsed=28s deadline=60s
+[2026-07-23T22:46:55+0700] Waiting for /mavros/local_position/odom; elapsed=16s deadline=90s
+[2026-07-23T22:46:59+0700] Waiting for TF map -> laser_frame; elapsed=32s deadline=60s
+[2026-07-23T22:47:00+0700] Waiting for /mavros/local_position/odom; elapsed=21s deadline=90s
+[2026-07-23T22:47:03+0700] Waiting for TF map -> laser_frame; elapsed=36s deadline=60s
+[2026-07-23T22:47:04+0700] Waiting for /mavros/local_position/odom; elapsed=25s deadline=90s
+[2026-07-23T22:47:07+0700] Waiting for TF map -> laser_frame; elapsed=40s deadline=60s
+[2026-07-23T22:47:12+0700] Waiting for /mavros/local_position/odom; elapsed=33s deadline=90s
+[2026-07-23T22:47:16+0700] Waiting for TF map -> laser_frame; elapsed=49s deadline=60s
+[2026-07-23T22:47:17+0700] Waiting for /mavros/local_position/odom; elapsed=38s deadline=90s
+[2026-07-23T22:47:20+0700] Waiting for TF map -> laser_frame; elapsed=53s deadline=60s
+[2026-07-23T22:47:21+0700] Waiting for /mavros/local_position/odom; elapsed=42s deadline=90s
+[2026-07-23T22:47:24+0700] Waiting for TF map -> laser_frame; elapsed=57s deadline=60s
+[2026-07-23T22:47:25+0700] Waiting for /mavros/local_position/odom; elapsed=46s deadline=90s
+[2026-07-23T22:47:28+0700] ERROR missing required TF map -> laser_frame after 60s
+[2026-07-23T22:47:28+0700] Shutdown reason: normal exit; launcher_exit=1
+[2026-07-23T22:47:30+0700] Waiting for /mavros/local_position/odom; elapsed=51s deadline=90s
+[2026-07-23T22:47:30+0700] Autosaving 2D map to /home/pi5drone/drone_ros_ws/maps/indoor_map_20260723_224509.yaml/.pgm
+[2026-07-23T22:47:32+0700] 2D map autosaved: /home/pi5drone/drone_ros_ws/maps/indoor_map_20260723_224509.yaml, /home/pi5drone/drone_ros_ws/maps/indoor_map_20260723_224509.pgm, /home/pi5drone/drone_ros_ws/maps/indoor_map_20260723_224509.png
+[2026-07-23T22:47:32+0700] Stopping mapping-owned process group: slam_toolbox pgid=20478
+[2026-07-23T22:47:32+0700] Stopping mapping-owned process group: mapping_scan_deskew pgid=19984
+[2026-07-23T22:47:32+0700] RF2O/PX4 fusion, MAVROS, LiDAR, camera, AprilTag, and flight control were not stopped
+[2026-07-23T22:47:34+0700] Waiting for /mavros/local_position/odom; elapsed=55s deadline=90s
+[2026-07-23 22:47:37] [all-mapping] Shutdown reason: received signal INT; launcher_exit=130
+[2026-07-23 22:47:37] [all-mapping] Stopping 3D mapping launcher pid=21248
+[2026-07-23T22:47:38+0700] Shutdown reason: received signal TERM; launcher_exit=130
+[2026-07-23T22:47:39+0700] WARNING 3D map autosave skipped because /vertical_lidar_mapper/save_pcd is unavailable
+[2026-07-23T22:47:39+0700] lidar1, RF2O, 2D SLAM, MAVROS, camera, AprilTag, planner, and flight control were not stopped
+[2026-07-23 22:47:39] [all-mapping] Combined mapping stack stopped; individual autosave handlers have completed

@@ -1,0 +1,344 @@
+timestamp=2026-07-23T23:03:59+0700
+workspace=/home/pi5drone/drone_ros_ws
+use_sim_time=false
+source_scan_topic=/scan_rf2o
+deskewed_scan_topic=/scan_slam
+deskew_stamp_policy=end
+map_topic=/map
+frames=map->odom->base_footprint->laser_frame
+
+-- deskew node --
+/mapping_scan_deskew
+  Subscribers:
+    /parameter_events: rcl_interfaces/msg/ParameterEvent
+    /scan_rf2o: sensor_msgs/msg/LaserScan
+  Publishers:
+    /parameter_events: rcl_interfaces/msg/ParameterEvent
+    /rosout: rcl_interfaces/msg/Log
+    /scan_slam: sensor_msgs/msg/LaserScan
+    /scan_slam/diagnostics: diagnostic_msgs/msg/DiagnosticArray
+  Service Servers:
+    /mapping_scan_deskew/describe_parameters: rcl_interfaces/srv/DescribeParameters
+    /mapping_scan_deskew/get_parameter_types: rcl_interfaces/srv/GetParameterTypes
+    /mapping_scan_deskew/get_parameters: rcl_interfaces/srv/GetParameters
+    /mapping_scan_deskew/get_type_description: type_description_interfaces/srv/GetTypeDescription
+    /mapping_scan_deskew/list_parameters: rcl_interfaces/srv/ListParameters
+    /mapping_scan_deskew/set_parameters: rcl_interfaces/srv/SetParameters
+    /mapping_scan_deskew/set_parameters_atomically: rcl_interfaces/srv/SetParametersAtomically
+  Service Clients:
+
+  Action Servers:
+
+  Action Clients:
+
+
+-- source scan topic --
+Type: sensor_msgs/msg/LaserScan
+
+Publisher count: 1
+
+Node name: laser_scan_canonicalizer
+Node namespace: /
+Topic type: sensor_msgs/msg/LaserScan
+Topic type hash: RIHS01_64c191398013af96509d518dac71d5164f9382553fce5c1f8cca5be7924bd828
+Endpoint type: PUBLISHER
+GID: 01.0f.45.d4.d8.21.09.e5.00.00.00.00.00.00.1a.03
+QoS profile:
+  Reliability: BEST_EFFORT
+  History (Depth): UNKNOWN
+  Durability: VOLATILE
+  Lifespan: Infinite
+  Deadline: Infinite
+  Liveliness: AUTOMATIC
+  Liveliness lease duration: Infinite
+
+Subscription count: 5
+
+Node name: rviz
+Node namespace: /
+Topic type: sensor_msgs/msg/LaserScan
+Topic type hash: RIHS01_64c191398013af96509d518dac71d5164f9382553fce5c1f8cca5be7924bd828
+Endpoint type: SUBSCRIPTION
+GID: 01.0f.28.36.e1.3e.1f.3f.00.00.00.00.00.00.30.04
+QoS profile:
+  Reliability: BEST_EFFORT
+  History (Depth): UNKNOWN
+  Durability: VOLATILE
+  Lifespan: Infinite
+  Deadline: Infinite
+  Liveliness: AUTOMATIC
+  Liveliness lease duration: Infinite
+
+Node name: rf2o_laser_odometry
+Node namespace: /
+Topic type: sensor_msgs/msg/LaserScan
+Topic type hash: RIHS01_64c191398013af96509d518dac71d5164f9382553fce5c1f8cca5be7924bd828
+Endpoint type: SUBSCRIPTION
+GID: 01.0f.45.d4.08.23.2b.68.00.00.00.00.00.00.2c.04
+QoS profile:
+  Reliability: BEST_EFFORT
+  History (Depth): UNKNOWN
+  Durability: VOLATILE
+  Lifespan: Infinite
+  Deadline: Infinite
+  Liveliness: AUTOMATIC
+  Liveliness lease duration: Infinite
+
+Node name: lidar_odom_px4_bridge
+Node namespace: /
+Topic type: sensor_msgs/msg/LaserScan
+Topic type hash: RIHS01_64c191398013af96509d518dac71d5164f9382553fce5c1f8cca5be7924bd828
+Endpoint type: SUBSCRIPTION
+GID: 01.0f.45.d4.b3.24.10.85.00.00.00.00.00.00.1a.04
+QoS profile:
+  Reliability: BEST_EFFORT
+  History (Depth): UNKNOWN
+  Durability: VOLATILE
+  Lifespan: Infinite
+  Deadline: Infinite
+  Liveliness: AUTOMATIC
+  Liveliness lease duration: Infinite
+
+Node name: lidar_odom_monitor
+Node namespace: /
+Topic type: sensor_msgs/msg/LaserScan
+Topic type hash: RIHS01_64c191398013af96509d518dac71d5164f9382553fce5c1f8cca5be7924bd828
+Endpoint type: SUBSCRIPTION
+GID: 01.0f.45.d4.d8.22.d2.39.00.00.00.00.00.00.16.04
+QoS profile:
+  Reliability: BEST_EFFORT
+  History (Depth): UNKNOWN
+  Durability: VOLATILE
+  Lifespan: Infinite
+  Deadline: Infinite
+  Liveliness: AUTOMATIC
+  Liveliness lease duration: Infinite
+
+Node name: mapping_scan_deskew
+Node namespace: /
+Topic type: sensor_msgs/msg/LaserScan
+Topic type hash: RIHS01_64c191398013af96509d518dac71d5164f9382553fce5c1f8cca5be7924bd828
+Endpoint type: SUBSCRIPTION
+GID: 01.0f.45.d4.e9.44.1e.ac.00.00.00.00.00.00.1c.04
+QoS profile:
+  Reliability: BEST_EFFORT
+  History (Depth): UNKNOWN
+  Durability: VOLATILE
+  Lifespan: Infinite
+  Deadline: Infinite
+  Liveliness: AUTOMATIC
+  Liveliness lease duration: Infinite
+
+
+-- deskew diagnostics --
+header:
+  stamp:
+    sec: 1784822644
+    nanosec: 921486331
+  frame_id: ''
+status:
+- level: "\0"
+  name: laser_scan_canonicalizer
+  message: OK_FULL_SCAN
+  hardware_id: rplidar_a1m8
+  values:
+  - key: state
+    value: OK_FULL_SCAN
+  - key: last_success_state
+    value: OK_FULL_SCAN
+  - key: processing_mode
+    value: per_message_full_scan
+  - key: input_messages
+    value: '318'
+  - key: output_messages
+    value: '312'
+  - key: discarded_messages
+    value: '6'
+  - key: completed_revolutions
+    value: '318'
+  - key: discarded_revolutions
+    value: '6'
+  - key: input_array_length
+    value: '720'
+  - key: raw_length_min
+    value: '720'
+  - key: raw_length_max
+    value: '720'
+  - key: output_array_length
+    value: '720'
+  - key: declared_input_span_rad
+    value: '6.274459'
+  - key: indexed_input_span_rad
+    value: '6.274459'
+  - key: angular_observation_coverage_ratio
+    value: '0.883333'
+  - key: finite_return_ratio
+    value: '0.883333'
+  - key: malformed_sample_ratio
+    value: '0.000000'
+  - key: accumulated_segment_count
+    value: '1'
+  - key: revolution_duration_sec
+    value: '0.134032'
+  - key: input_rate_hz
+    value: '7.835055'
+  - key: output_rate_hz
+    value: '7.518512'
+  - key: timestamp_monotonic
+    value: 'true'
+  - key: deskew_enabled
+    value: 'true'
+  - key: deskew_applied
+    value: 'true'
+  - key: deskew_stamp_policy
+    value: end
+  - key: deskewed_scans
+    value: '318'
+  - key: deskew_fallbacks
+    value: '0'
+  - key: deskew_status
+    value: applied
+  - key: publisher_count
+    value: '1'
+  - key: last_rejection_reason
+    value: none
+---
+
+-- slam node --
+/slam_toolbox
+  Subscribers:
+    /map: nav_msgs/msg/OccupancyGrid
+    /parameter_events: rcl_interfaces/msg/ParameterEvent
+    /scan_slam: sensor_msgs/msg/LaserScan
+    /slam_toolbox/feedback: visualization_msgs/msg/InteractiveMarkerFeedback
+  Publishers:
+    /map: nav_msgs/msg/OccupancyGrid
+    /map_metadata: nav_msgs/msg/MapMetaData
+    /parameter_events: rcl_interfaces/msg/ParameterEvent
+    /pose: geometry_msgs/msg/PoseWithCovarianceStamped
+    /rosout: rcl_interfaces/msg/Log
+    /slam_toolbox/graph_visualization: visualization_msgs/msg/MarkerArray
+    /slam_toolbox/scan_visualization: sensor_msgs/msg/LaserScan
+    /slam_toolbox/transition_event: lifecycle_msgs/msg/TransitionEvent
+    /slam_toolbox/update: visualization_msgs/msg/InteractiveMarkerUpdate
+    /tf: tf2_msgs/msg/TFMessage
+  Service Servers:
+    /slam_toolbox/change_state: lifecycle_msgs/srv/ChangeState
+    /slam_toolbox/clear_changes: slam_toolbox/srv/Clear
+    /slam_toolbox/describe_parameters: rcl_interfaces/srv/DescribeParameters
+    /slam_toolbox/deserialize_map: slam_toolbox/srv/DeserializePoseGraph
+    /slam_toolbox/dynamic_map: nav_msgs/srv/GetMap
+    /slam_toolbox/get_available_states: lifecycle_msgs/srv/GetAvailableStates
+    /slam_toolbox/get_available_transitions: lifecycle_msgs/srv/GetAvailableTransitions
+    /slam_toolbox/get_interactive_markers: visualization_msgs/srv/GetInteractiveMarkers
+    /slam_toolbox/get_parameter_types: rcl_interfaces/srv/GetParameterTypes
+    /slam_toolbox/get_parameters: rcl_interfaces/srv/GetParameters
+    /slam_toolbox/get_state: lifecycle_msgs/srv/GetState
+    /slam_toolbox/get_transition_graph: lifecycle_msgs/srv/GetAvailableTransitions
+    /slam_toolbox/get_type_description: type_description_interfaces/srv/GetTypeDescription
+    /slam_toolbox/list_parameters: rcl_interfaces/srv/ListParameters
+    /slam_toolbox/manual_loop_closure: slam_toolbox/srv/LoopClosure
+    /slam_toolbox/pause_new_measurements: slam_toolbox/srv/Pause
+    /slam_toolbox/reset: slam_toolbox/srv/Reset
+    /slam_toolbox/save_map: slam_toolbox/srv/SaveMap
+    /slam_toolbox/serialize_map: slam_toolbox/srv/SerializePoseGraph
+    /slam_toolbox/set_parameters: rcl_interfaces/srv/SetParameters
+    /slam_toolbox/set_parameters_atomically: rcl_interfaces/srv/SetParametersAtomically
+    /slam_toolbox/toggle_interactive_mode: slam_toolbox/srv/ToggleInteractive
+  Service Clients:
+
+  Action Servers:
+
+  Action Clients:
+
+
+-- map topic --
+Type: nav_msgs/msg/OccupancyGrid
+
+Publisher count: 1
+
+Node name: slam_toolbox
+Node namespace: /
+Topic type: nav_msgs/msg/OccupancyGrid
+Topic type hash: RIHS01_8d348150c12913a31ee0ec170fbf25089e4745d17035792a1ba94d6f0bc0cfc7
+Endpoint type: PUBLISHER
+GID: 01.0f.45.d4.19.46.36.52.00.00.00.00.00.00.37.03
+QoS profile:
+  Reliability: RELIABLE
+  History (Depth): UNKNOWN
+  Durability: TRANSIENT_LOCAL
+  Lifespan: Infinite
+  Deadline: Infinite
+  Liveliness: AUTOMATIC
+  Liveliness lease duration: Infinite
+
+Subscription count: 2
+
+Node name: rviz
+Node namespace: /
+Topic type: nav_msgs/msg/OccupancyGrid
+Topic type hash: RIHS01_8d348150c12913a31ee0ec170fbf25089e4745d17035792a1ba94d6f0bc0cfc7
+Endpoint type: SUBSCRIPTION
+GID: 01.0f.28.36.e1.3e.1f.3f.00.00.00.00.00.00.2e.04
+QoS profile:
+  Reliability: RELIABLE
+  History (Depth): UNKNOWN
+  Durability: VOLATILE
+  Lifespan: Infinite
+  Deadline: Infinite
+  Liveliness: AUTOMATIC
+  Liveliness lease duration: Infinite
+
+Node name: slam_toolbox
+Node namespace: /
+Topic type: nav_msgs/msg/OccupancyGrid
+Topic type hash: RIHS01_8d348150c12913a31ee0ec170fbf25089e4745d17035792a1ba94d6f0bc0cfc7
+Endpoint type: SUBSCRIPTION
+GID: 01.0f.45.d4.19.46.36.52.00.00.00.00.00.00.28.04
+QoS profile:
+  Reliability: RELIABLE
+  History (Depth): UNKNOWN
+  Durability: VOLATILE
+  Lifespan: Infinite
+  Deadline: Infinite
+  Liveliness: AUTOMATIC
+  Liveliness lease duration: Infinite
+
+
+-- scan topic --
+Type: sensor_msgs/msg/LaserScan
+
+Publisher count: 1
+
+Node name: mapping_scan_deskew
+Node namespace: /
+Topic type: sensor_msgs/msg/LaserScan
+Topic type hash: RIHS01_64c191398013af96509d518dac71d5164f9382553fce5c1f8cca5be7924bd828
+Endpoint type: PUBLISHER
+GID: 01.0f.45.d4.e9.44.1e.ac.00.00.00.00.00.00.1a.03
+QoS profile:
+  Reliability: BEST_EFFORT
+  History (Depth): UNKNOWN
+  Durability: VOLATILE
+  Lifespan: Infinite
+  Deadline: Infinite
+  Liveliness: AUTOMATIC
+  Liveliness lease duration: Infinite
+
+Subscription count: 1
+
+Node name: slam_toolbox
+Node namespace: /
+Topic type: sensor_msgs/msg/LaserScan
+Topic type hash: RIHS01_64c191398013af96509d518dac71d5164f9382553fce5c1f8cca5be7924bd828
+Endpoint type: SUBSCRIPTION
+GID: 01.0f.45.d4.19.46.36.52.00.00.00.00.00.00.43.04
+QoS profile:
+  Reliability: BEST_EFFORT
+  History (Depth): UNKNOWN
+  Durability: VOLATILE
+  Lifespan: Infinite
+  Deadline: Infinite
+  Liveliness: AUTOMATIC
+  Liveliness lease duration: Infinite
+
