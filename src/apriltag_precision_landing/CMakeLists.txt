@@ -53,6 +53,7 @@ install(TARGETS
 install(PROGRAMS
   scripts/start_real_apriltag_pipeline.sh
   scripts/monitor_real_pipeline_system.sh
+  scripts/replay_multi_tag_landing.sh
   DESTINATION lib/${PROJECT_NAME}
 )
 
@@ -61,5 +62,7 @@ install(DIRECTORY
   config
   DESTINATION share/${PROJECT_NAME}
 )
+
+install(FILES README.md DESTINATION share/${PROJECT_NAME})
 
 ament_package()

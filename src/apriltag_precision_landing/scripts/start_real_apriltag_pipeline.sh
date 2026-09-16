@@ -436,7 +436,7 @@ main() {
   echo "[info] detector_input_source=${DETECTOR_INPUT_SOURCE}"
   echo "[info] camera: input=${VIDEO_DEVICE_INPUT} resolved_device=${VIDEO_DEVICE} image=${IMAGE_TOPIC} info=${CAMERA_INFO_TOPIC}"
   echo "[info] capture: latest_only buffer_request=${DETECTOR_CAPTURE_BUFFER_SIZE} publish_image_stream=${DETECTOR_PUBLISH_IMAGE_STREAM} image_view=${START_IMAGE_VIEW}"
-  echo "[info] tag: dict=${TAG_DICTIONARY} tag_size_m=${TAG_SIZE_M} target_tag_id=${TARGET_TAG_ID} min_area_px=${MIN_TAG_AREA_PX}"
+  echo "[info] tag: dict=${TAG_DICTIONARY} pad_config=${APRILTAG_CONFIG} fallback_size_m=${TAG_SIZE_M} fallback_id=${TARGET_TAG_ID} min_area_px=${MIN_TAG_AREA_PX}"
   echo "[info] timing: use_sim_time=false input_timeout_sec=${INPUT_TIMEOUT_SEC}"
   echo "[info] transform: camera_offset=[${CAMERA_OFFSET_X},${CAMERA_OFFSET_Y},${CAMERA_OFFSET_Z}] rpy=[${CAMERA_ROLL},${CAMERA_PITCH},${CAMERA_YAW}]"
   echo "[info] topics: tag_pose=${TAG_POSE_TOPIC} landing_target=${LANDING_TARGET_TOPIC} drone_pose=${DRONE_POSE_TOPIC}"

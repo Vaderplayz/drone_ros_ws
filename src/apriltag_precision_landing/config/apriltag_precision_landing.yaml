@@ -42,10 +42,32 @@ apriltag_camera_detector:
     tag_corners_topic: /precision_landing/tag_corners
     tag_metadata_topic: /precision_landing/tag_detection
     dictionary: 36h11
-    # Measured black-square tag side length.
-    tag_size_m: 0.117
+    # Backward-compatible single-tag fallback. Multi-tag entries below take precedence.
+    tag_size_m: 0.110
     target_tag_id: 0
     min_tag_area_px: 500.0
+
+    # 80 x 50 cm landing pad. Offsets are vectors from each tag centre to the
+    # common landing point, expressed in that tag's frame. All tags are printed
+    # with their top edge facing the same pad-forward direction.
+    reference_tag_id: 0
+    landing_tag_ids: [0, 1, 2, 3, 4]
+    landing_tag_sizes_m: [0.110, 0.066, 0.066, 0.066, 0.066]
+    landing_tag_offset_x_m: [0.0, 0.068, -0.068, -0.068, 0.068]
+    landing_tag_offset_y_m: [0.0, 0.1105, 0.1105, -0.1105, -0.1105]
+    landing_tag_offset_z_m: [0.0, 0.0, 0.0, 0.0, 0.0]
+    landing_tag_yaw_rad: [0.0, 0.0, 0.0, 0.0, 0.0]
+
+    # Selection and continuity. A missing active tag switches immediately;
+    # opportunistic switches require several consecutive better observations.
+    switch_confirm_frames: 4
+    switch_score_ratio: 1.10
+    uncertainty_weight: 0.35
+    image_center_weight: 0.15
+    pose_filter_alpha: 0.45
+    switch_filter_alpha: 0.20
+    filter_reset_timeout_sec: 1.0
+    max_filtered_step_m: 0.12
 
 apriltag_precision_landing:
   ros__parameters:

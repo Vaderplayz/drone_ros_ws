@@ -3,9 +3,13 @@
 #include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <iomanip>
 #include <limits>
+#include <map>
 #include <memory>
 #include <mutex>
+#include <optional>
+#include <sstream>
 #include <string>
 #include <thread>
 #include <vector>
@@ -47,6 +51,65 @@ double pixelAreaToSquareMeters(double area_px, double z_m, double fx, double fy)
     return std::numeric_limits<double>::quiet_NaN();
   }
   return area_px * (z_m * z_m) / (fx * fy);
+}
+
+struct LandingTagConfig {
+  int id{-1};
+  double size_m{0.0};
+  // Translation from this tag's centre to the common landing point, expressed
+  // in the tag frame. Tags are expected to lie flat and share the same axes.
+  cv::Vec3d tag_to_landing{0.0, 0.0, 0.0};
+  double yaw_rad{0.0};
+};
+
+struct TagCandidate {
+  int id{-1};
+  size_t detection_index{0};
+  double area_px{0.0};
+  double reprojection_rmse_px{std::numeric_limits<double>::infinity()};
+  double centre_distance_norm{std::numeric_limits<double>::infinity()};
+  double score{0.0};
+  cv::Vec3d landing_tvec{0.0, 0.0, 0.0};
+  cv::Matx33d landing_rotation{cv::Matx33d::eye()};
+};
+
+struct PreviewTagOverlay {
+  int id{-1};
+  bool active{false};
+  std::vector<cv::Point2f> corners;
+};
+
+cv::Vec4d rotationToQuaternion(const cv::Matx33d &r) {
+  const double trace = r(0, 0) + r(1, 1) + r(2, 2);
+  cv::Vec4d q;
+  if (trace > 0.0) {
+    const double s = std::sqrt(trace + 1.0) * 2.0;
+    q = {(r(2, 1) - r(1, 2)) / s, (r(0, 2) - r(2, 0)) / s,
+         (r(1, 0) - r(0, 1)) / s, 0.25 * s};
+  } else if (r(0, 0) > r(1, 1) && r(0, 0) > r(2, 2)) {
+    const double s = std::sqrt(1.0 + r(0, 0) - r(1, 1) - r(2, 2)) * 2.0;
+    q = {0.25 * s, (r(0, 1) + r(1, 0)) / s, (r(0, 2) + r(2, 0)) / s,
+         (r(2, 1) - r(1, 2)) / s};
+  } else if (r(1, 1) > r(2, 2)) {
+    const double s = std::sqrt(1.0 + r(1, 1) - r(0, 0) - r(2, 2)) * 2.0;
+    q = {(r(0, 1) + r(1, 0)) / s, 0.25 * s, (r(1, 2) + r(2, 1)) / s,
+         (r(0, 2) - r(2, 0)) / s};
+  } else {
+    const double s = std::sqrt(1.0 + r(2, 2) - r(0, 0) - r(1, 1)) * 2.0;
+    q = {(r(0, 2) + r(2, 0)) / s, (r(1, 2) + r(2, 1)) / s, 0.25 * s,
+         (r(1, 0) - r(0, 1)) / s};
+  }
+  const double norm = cv::norm(q);
+  return norm > 1e-12 ? q / norm : cv::Vec4d(0.0, 0.0, 0.0, 1.0);
+}
+
+cv::Vec4d blendQuaternion(const cv::Vec4d &from, cv::Vec4d to, double alpha) {
+  if (from.dot(to) < 0.0) {
+    to = -to;
+  }
+  cv::Vec4d result = from * (1.0 - alpha) + to * alpha;
+  const double norm = cv::norm(result);
+  return norm > 1e-12 ? result / norm : to;
 }
 }  // namespace
 
@@ -104,6 +167,30 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
     target_tag_id_ = declare_parameter<int>("target_tag_id", -1);
     min_tag_area_px_ = declare_parameter<double>("min_tag_area_px", 80.0);
     dictionary_name_ = declare_parameter<std::string>("dictionary", "36h11");
+    reference_tag_id_ = declare_parameter<int>("reference_tag_id", 0);
+    landing_tag_ids_ = declare_parameter<std::vector<int64_t>>(
+        "landing_tag_ids", std::vector<int64_t>{});
+    landing_tag_sizes_m_ = declare_parameter<std::vector<double>>(
+        "landing_tag_sizes_m", std::vector<double>{});
+    landing_tag_offset_x_m_ = declare_parameter<std::vector<double>>(
+        "landing_tag_offset_x_m", std::vector<double>{});
+    landing_tag_offset_y_m_ = declare_parameter<std::vector<double>>(
+        "landing_tag_offset_y_m", std::vector<double>{});
+    landing_tag_offset_z_m_ = declare_parameter<std::vector<double>>(
+        "landing_tag_offset_z_m", std::vector<double>{});
+    landing_tag_yaw_rad_ = declare_parameter<std::vector<double>>(
+        "landing_tag_yaw_rad", std::vector<double>{});
+    switch_confirm_frames_ = static_cast<int>(
+        std::max<int64_t>(1, declare_parameter<int64_t>("switch_confirm_frames", 4)));
+    switch_score_ratio_ = std::max(1.0, declare_parameter<double>("switch_score_ratio", 1.10));
+    pose_filter_alpha_ = std::clamp(declare_parameter<double>("pose_filter_alpha", 0.45), 0.01, 1.0);
+    switch_filter_alpha_ = std::clamp(declare_parameter<double>("switch_filter_alpha", 0.20), 0.01, 1.0);
+    filter_reset_timeout_sec_ = std::max(0.0, declare_parameter<double>("filter_reset_timeout_sec", 1.0));
+    max_filtered_step_m_ = std::max(0.0, declare_parameter<double>("max_filtered_step_m", 0.12));
+    uncertainty_weight_ = std::max(0.0, declare_parameter<double>("uncertainty_weight", 0.35));
+    image_center_weight_ = std::max(0.0, declare_parameter<double>("image_center_weight", 0.15));
+
+    loadLandingPadConfiguration();
 
     detector_dict_ = cv::aruco::getPredefinedDictionary(dictionaryFromString(dictionary_name_));
     detector_params_ = cv::aruco::DetectorParameters::create();
@@ -138,11 +225,6 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
           response->message = "camera preview disabled";
         });
 
-    if (!std::isfinite(tag_size_m_) || tag_size_m_ <= 0.0) {
-      RCLCPP_FATAL(get_logger(), "tag_size_m must be provided and > 0.0");
-      throw std::runtime_error("invalid tag_size_m");
-    }
-
     if (input_source_ == "ros_topics") {
       initRosTopicMode();
     } else if (input_source_ == "device") {
@@ -157,8 +239,8 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
         std::bind(&AprilTagCameraDetectorNode::publishDiagnostics, this));
 
     RCLCPP_INFO(get_logger(),
-                "apriltag_camera_detector started source=%s dict=%s tag_size=%.3f target_id=%d min_area_px=%.1f out=%s use_sim_time=%s",
-                input_source_.c_str(), dictionary_name_.c_str(), tag_size_m_, target_tag_id_,
+                "apriltag_camera_detector started source=%s dict=%s tags=%zu reference_id=%d min_area_px=%.1f out=%s use_sim_time=%s",
+                input_source_.c_str(), dictionary_name_.c_str(), landing_tags_.size(), reference_tag_id_,
                 min_tag_area_px_, tag_pose_topic_.c_str(), useSimTime() ? "true" : "false");
   }
 
@@ -176,6 +258,46 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
   }
 
  private:
+  void loadLandingPadConfiguration() {
+    if (landing_tag_ids_.empty()) {
+      if (!std::isfinite(tag_size_m_) || tag_size_m_ <= 0.0) {
+        throw std::runtime_error("tag_size_m must be provided and > 0.0");
+      }
+      const int id = target_tag_id_ >= 0 ? target_tag_id_ : reference_tag_id_;
+      landing_tags_[id] = LandingTagConfig{id, tag_size_m_, {0.0, 0.0, 0.0}, 0.0};
+      reference_tag_id_ = id;
+      return;
+    }
+
+    const size_t count = landing_tag_ids_.size();
+    const auto require_count = [count](const auto &values, const char *name) {
+      if (values.size() != count) {
+        throw std::runtime_error(std::string(name) + " must match landing_tag_ids length");
+      }
+    };
+    require_count(landing_tag_sizes_m_, "landing_tag_sizes_m");
+    require_count(landing_tag_offset_x_m_, "landing_tag_offset_x_m");
+    require_count(landing_tag_offset_y_m_, "landing_tag_offset_y_m");
+    if (landing_tag_offset_z_m_.empty()) landing_tag_offset_z_m_.assign(count, 0.0);
+    if (landing_tag_yaw_rad_.empty()) landing_tag_yaw_rad_.assign(count, 0.0);
+    require_count(landing_tag_offset_z_m_, "landing_tag_offset_z_m");
+    require_count(landing_tag_yaw_rad_, "landing_tag_yaw_rad");
+
+    for (size_t i = 0; i < count; ++i) {
+      const int id = static_cast<int>(landing_tag_ids_[i]);
+      if (landing_tag_sizes_m_[i] <= 0.0 || landing_tags_.count(id) != 0) {
+        throw std::runtime_error("landing tag IDs must be unique and sizes must be positive");
+      }
+      landing_tags_[id] = LandingTagConfig{
+          id, landing_tag_sizes_m_[i],
+          {landing_tag_offset_x_m_[i], landing_tag_offset_y_m_[i], landing_tag_offset_z_m_[i]},
+          landing_tag_yaw_rad_[i]};
+    }
+    if (landing_tags_.count(reference_tag_id_) == 0) {
+      throw std::runtime_error("reference_tag_id is not present in landing_tag_ids");
+    }
+  }
+
   void initRosTopicMode() {
     const auto qos_sensor = rclcpp::SensorDataQoS();
     sub_camera_info_ = create_subscription<sensor_msgs::msg::CameraInfo>(
@@ -185,6 +307,8 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
     sub_image_ = create_subscription<sensor_msgs::msg::Image>(
         image_topic_, qos_sensor,
         std::bind(&AprilTagCameraDetectorNode::imageCb, this, std::placeholders::_1));
+    capture_running_.store(true);
+    preview_thread_ = std::thread(&AprilTagCameraDetectorNode::previewLoop, this);
 
     RCLCPP_INFO(get_logger(), "ROS-topic mode image=%s camera_info=%s",
                 image_topic_.c_str(), camera_info_topic_.c_str());
@@ -460,11 +584,52 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
     if (preview.channels() == 1) {
       cv::cvtColor(preview, bgr, cv::COLOR_GRAY2BGR);
     } else if (preview.channels() == 3) {
-      bgr = preview;
+      bgr = preview.clone();
     } else if (preview.channels() == 4) {
       cv::cvtColor(preview, bgr, cv::COLOR_BGRA2BGR);
     } else {
       return;
+    }
+
+    std::vector<PreviewTagOverlay> overlays;
+    std::optional<cv::Point2f> landing_point;
+    int active_id = -1;
+    double confidence = 0.0;
+    int source_width = frame.cols;
+    int source_height = frame.rows;
+    {
+      std::lock_guard<std::mutex> lock(preview_overlay_mutex_);
+      overlays = preview_overlays_;
+      landing_point = preview_landing_point_;
+      active_id = preview_active_tag_id_;
+      confidence = preview_confidence_;
+      source_width = std::max(1, preview_source_width_);
+      source_height = std::max(1, preview_source_height_);
+    }
+    const float sx = static_cast<float>(bgr.cols) / source_width;
+    const float sy = static_cast<float>(bgr.rows) / source_height;
+    for (const auto &overlay : overlays) {
+      std::vector<cv::Point> polygon;
+      for (const auto &point : overlay.corners) {
+        polygon.emplace_back(cvRound(point.x * sx), cvRound(point.y * sy));
+      }
+      const cv::Scalar color = overlay.active ? cv::Scalar(40, 220, 40) : cv::Scalar(0, 210, 255);
+      if (polygon.size() == 4) cv::polylines(bgr, polygon, true, color, overlay.active ? 2 : 1);
+      if (!polygon.empty()) {
+        cv::putText(bgr, "ID " + std::to_string(overlay.id), polygon.front(),
+                    cv::FONT_HERSHEY_SIMPLEX, 0.45, color, 1, cv::LINE_AA);
+      }
+    }
+    if (landing_point.has_value()) {
+      const cv::Point point(cvRound(landing_point->x * sx), cvRound(landing_point->y * sy));
+      cv::drawMarker(bgr, point, cv::Scalar(0, 0, 255), cv::MARKER_CROSS, 18, 2);
+    }
+    if (active_id >= 0) {
+      std::ostringstream text;
+      text << "ACTIVE ID " << active_id << "  CONF " << std::fixed << std::setprecision(2)
+           << confidence;
+      cv::putText(bgr, text.str(), cv::Point(8, bgr.rows - 10), cv::FONT_HERSHEY_SIMPLEX,
+                  0.45, cv::Scalar(40, 220, 40), 1, cv::LINE_AA);
     }
 
     std_msgs::msg::Header header;
@@ -546,6 +711,160 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
     ++camera_info_count_;
   }
 
+  bool estimateCandidate(
+      int id, size_t detection_index, const std::vector<cv::Point2f> &corners,
+      int image_width, int image_height, TagCandidate &candidate) const {
+    const auto config_it = landing_tags_.find(id);
+    if (config_it == landing_tags_.end()) return false;
+    const auto &config = config_it->second;
+    const double area = quadArea(corners);
+    if (area < min_tag_area_px_) return false;
+
+    std::vector<std::vector<cv::Point2f>> one_marker{corners};
+    std::vector<cv::Vec3d> rvecs;
+    std::vector<cv::Vec3d> tvecs;
+    cv::aruco::estimatePoseSingleMarkers(
+        one_marker, static_cast<float>(config.size_m), camera_matrix_, dist_coeffs_, rvecs, tvecs);
+    if (rvecs.empty() || tvecs.empty()) return false;
+    const cv::Vec3d &rvec = rvecs.front();
+    const cv::Vec3d &tvec = tvecs.front();
+    for (int axis = 0; axis < 3; ++axis) {
+      if (!std::isfinite(rvec[axis]) || !std::isfinite(tvec[axis])) return false;
+    }
+
+    cv::Mat rotation_mat;
+    cv::Rodrigues(rvec, rotation_mat);
+    cv::Matx33d tag_rotation;
+    for (int row = 0; row < 3; ++row) {
+      for (int col = 0; col < 3; ++col) {
+        tag_rotation(row, col) = rotation_mat.at<double>(row, col);
+      }
+    }
+    const double c = std::cos(config.yaw_rad);
+    const double s = std::sin(config.yaw_rad);
+    const cv::Matx33d tag_to_landing_rotation(c, -s, 0.0, s, c, 0.0, 0.0, 0.0, 1.0);
+
+    const double half = config.size_m * 0.5;
+    const std::vector<cv::Point3f> object_points{
+        {-static_cast<float>(half), static_cast<float>(half), 0.0F},
+        {static_cast<float>(half), static_cast<float>(half), 0.0F},
+        {static_cast<float>(half), -static_cast<float>(half), 0.0F},
+        {-static_cast<float>(half), -static_cast<float>(half), 0.0F}};
+    std::vector<cv::Point2f> projected;
+    cv::projectPoints(object_points, rvec, tvec, camera_matrix_, dist_coeffs_, projected);
+    double squared_error = 0.0;
+    for (size_t i = 0; i < corners.size(); ++i) {
+      const cv::Point2f delta = projected[i] - corners[i];
+      squared_error += delta.dot(delta);
+    }
+    const double rmse = std::sqrt(squared_error / 4.0);
+    const cv::Point2f centre = 0.25F * (corners[0] + corners[1] + corners[2] + corners[3]);
+    const double centre_distance = std::hypot(
+        centre.x - image_width * 0.5, centre.y - image_height * 0.5) /
+        std::max(1.0, 0.5 * std::hypot(image_width, image_height));
+
+    candidate.id = id;
+    candidate.detection_index = detection_index;
+    candidate.area_px = area;
+    candidate.reprojection_rmse_px = rmse;
+    candidate.centre_distance_norm = centre_distance;
+    candidate.score = area /
+                      ((1.0 + uncertainty_weight_ * rmse) *
+                       (1.0 + image_center_weight_ * centre_distance));
+    candidate.landing_tvec = tvec + tag_rotation * config.tag_to_landing;
+    candidate.landing_rotation = tag_rotation * tag_to_landing_rotation;
+    return candidate.landing_tvec[2] > 0.0;
+  }
+
+  const TagCandidate *selectCandidate(const std::vector<TagCandidate> &candidates, bool &switched) {
+    switched = false;
+    if (candidates.empty()) return nullptr;
+    const auto best_it = std::max_element(
+        candidates.begin(), candidates.end(),
+        [](const TagCandidate &a, const TagCandidate &b) { return a.score < b.score; });
+    const TagCandidate *active = nullptr;
+    for (const auto &candidate : candidates) {
+      visible_streaks_[candidate.id] += 1;
+      if (candidate.id == active_tag_id_) active = &candidate;
+    }
+    for (auto &[id, streak] : visible_streaks_) {
+      const bool visible = std::any_of(candidates.begin(), candidates.end(),
+                                       [id](const TagCandidate &c) { return c.id == id; });
+      if (!visible) streak = 0;
+    }
+
+    if (active == nullptr) {
+      const int previous_id = active_tag_id_;
+      switched = previous_id >= 0 && previous_id != best_it->id;
+      active_tag_id_ = best_it->id;
+      if (switched) ++tag_switch_count_;
+      return &*best_it;
+    }
+    if (best_it->id != active_tag_id_ &&
+        best_it->score >= active->score * switch_score_ratio_ &&
+        visible_streaks_[best_it->id] >= switch_confirm_frames_) {
+      active_tag_id_ = best_it->id;
+      switched = true;
+      ++tag_switch_count_;
+      return &*best_it;
+    }
+    return active;
+  }
+
+  void filterLandingPose(
+      const TagCandidate &candidate, const rclcpp::Time &stamp, bool switched,
+      cv::Vec3d &position, cv::Vec4d &orientation) {
+    const cv::Vec4d raw_orientation = rotationToQuaternion(candidate.landing_rotation);
+    const bool reset = !filter_initialized_ ||
+                       (last_filter_stamp_.nanoseconds() != 0 &&
+                        (stamp - last_filter_stamp_).seconds() > filter_reset_timeout_sec_);
+    if (reset) {
+      filtered_position_ = candidate.landing_tvec;
+      filtered_orientation_ = raw_orientation;
+      filter_initialized_ = true;
+    } else {
+      const double alpha = switched ? switch_filter_alpha_ : pose_filter_alpha_;
+      cv::Vec3d correction = (candidate.landing_tvec - filtered_position_) * alpha;
+      const double correction_norm = cv::norm(correction);
+      if (max_filtered_step_m_ > 0.0 && correction_norm > max_filtered_step_m_) {
+        correction *= max_filtered_step_m_ / correction_norm;
+        ++filter_step_limit_count_;
+      }
+      filtered_position_ += correction;
+      filtered_orientation_ = blendQuaternion(filtered_orientation_, raw_orientation, alpha);
+    }
+    last_filter_stamp_ = stamp;
+    position = filtered_position_;
+    orientation = filtered_orientation_;
+  }
+
+  void updatePreviewOverlay(
+      const std::vector<int> &ids, const std::vector<std::vector<cv::Point2f>> &corners,
+      int active_id, const cv::Vec3d *landing_point, double confidence,
+      int image_width, int image_height) {
+    std::lock_guard<std::mutex> lock(preview_overlay_mutex_);
+    preview_overlays_.clear();
+    for (size_t i = 0; i < ids.size(); ++i) {
+      if (landing_tags_.count(ids[i]) != 0) {
+        preview_overlays_.push_back({ids[i], ids[i] == active_id, corners[i]});
+      }
+    }
+    preview_active_tag_id_ = active_id;
+    preview_confidence_ = confidence;
+    preview_source_width_ = image_width;
+    preview_source_height_ = image_height;
+    preview_landing_point_.reset();
+    if (landing_point != nullptr && (*landing_point)[2] > 1e-6) {
+      std::vector<cv::Point3f> point{{static_cast<float>((*landing_point)[0]),
+                                     static_cast<float>((*landing_point)[1]),
+                                     static_cast<float>((*landing_point)[2])}};
+      std::vector<cv::Point2f> projected;
+      cv::projectPoints(point, cv::Vec3d::all(0.0), cv::Vec3d::all(0.0),
+                        camera_matrix_, dist_coeffs_, projected);
+      if (!projected.empty()) preview_landing_point_ = projected.front();
+    }
+  }
+
   void detectAndPublish(const cv::Mat &image, const rclcpp::Time &stamp, const std::string &frame_id) {
     const auto processing_start = std::chrono::steady_clock::now();
     const double image_age_start_ms = std::max(0.0, (now() - stamp).seconds() * 1000.0);
@@ -580,104 +899,66 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
     std::vector<std::vector<cv::Point2f>> rejected;
     cv::aruco::detectMarkers(gray, detector_dict_, corners, ids, detector_params_, rejected);
 
-    if (ids.empty()) {
-      ++no_marker_count_;
-      record_processing();
-      return;
-    }
-
-    int best_idx = -1;
-    double best_area_px = 0.0;
-    bool target_id_seen = false;
+    std::vector<TagCandidate> candidates;
     double target_max_area_px = 0.0;
-
+    bool configured_id_seen = false;
     for (size_t i = 0; i < ids.size(); ++i) {
-      if (target_tag_id_ >= 0 && ids[i] != target_tag_id_) {
-        continue;
-      }
-
-      target_id_seen = true;
-      const double area_px = quadArea(corners[i]);
-      target_max_area_px = std::max(target_max_area_px, area_px);
-      if (area_px < min_tag_area_px_) {
-        continue;
-      }
-
-      if (best_idx < 0 || area_px > best_area_px) {
-        best_idx = static_cast<int>(i);
-        best_area_px = area_px;
+      if (landing_tags_.count(ids[i]) == 0) continue;
+      configured_id_seen = true;
+      target_max_area_px = std::max(target_max_area_px, quadArea(corners[i]));
+      TagCandidate candidate;
+      if (estimateCandidate(ids[i], i, corners[i], image.cols, image.rows, candidate)) {
+        candidates.push_back(candidate);
       }
     }
-
     window_max_candidate_area_px_ = std::max(window_max_candidate_area_px_, target_max_area_px);
-
-    if (best_idx < 0) {
-      if (target_id_seen) {
-        ++below_area_count_;
-      } else {
-        ++wrong_id_count_;
-      }
+    if (candidates.empty()) {
+      if (ids.empty()) ++no_marker_count_;
+      else if (configured_id_seen) ++below_area_count_;
+      else ++wrong_id_count_;
+      for (auto &[id, streak] : visible_streaks_) streak = 0;
+      updatePreviewOverlay(ids, corners, -1, nullptr, 0.0, image.cols, image.rows);
       record_processing();
       return;
     }
 
-    std::vector<std::vector<cv::Point2f>> picked_corners{corners[best_idx]};
-    std::vector<cv::Vec3d> rvecs, tvecs;
-    cv::aruco::estimatePoseSingleMarkers(
-        picked_corners,
-        static_cast<float>(tag_size_m_),
-        camera_matrix_,
-        dist_coeffs_,
-        rvecs,
-        tvecs);
-
-    if (rvecs.empty() || tvecs.empty()) {
+    bool switched = false;
+    const TagCandidate *selected = selectCandidate(candidates, switched);
+    if (selected == nullptr) {
       ++pose_fail_count_;
       record_processing();
       return;
     }
 
-    const cv::Vec3d rvec = rvecs[0];
-    const cv::Vec3d tvec = tvecs[0];
-    if (!std::isfinite(rvec[0]) || !std::isfinite(rvec[1]) || !std::isfinite(rvec[2]) ||
-        !std::isfinite(tvec[0]) || !std::isfinite(tvec[1]) || !std::isfinite(tvec[2])) {
-      ++pose_fail_count_;
-      record_processing();
-      return;
-    }
-
-    const double angle = std::sqrt(rvec[0] * rvec[0] + rvec[1] * rvec[1] + rvec[2] * rvec[2]);
-    double qx = 0.0;
-    double qy = 0.0;
-    double qz = 0.0;
-    double qw = 1.0;
-    if (angle > 1e-9) {
-      const double ax = rvec[0] / angle;
-      const double ay = rvec[1] / angle;
-      const double az = rvec[2] / angle;
-      const double s = std::sin(angle * 0.5);
-      qx = ax * s;
-      qy = ay * s;
-      qz = az * s;
-      qw = std::cos(angle * 0.5);
-    }
+    cv::Vec3d filtered_position;
+    cv::Vec4d filtered_orientation;
+    filterLandingPose(*selected, stamp, switched, filtered_position, filtered_orientation);
+    const size_t best_idx = selected->detection_index;
+    const double best_area_px = selected->area_px;
+    const double confidence = std::clamp(
+        best_area_px / std::max(1.0, image.cols * image.rows * 0.10) /
+            (1.0 + selected->reprojection_rmse_px),
+        0.0, 1.0);
 
     geometry_msgs::msg::PoseStamped out;
     out.header.stamp = stamp;
     out.header.frame_id = frame_id.empty() ? camera_frame_id_ : frame_id;
 
-    out.pose.position.x = tvec[0];
-    out.pose.position.y = tvec[1];
-    out.pose.position.z = tvec[2];
-    out.pose.orientation.x = qx;
-    out.pose.orientation.y = qy;
-    out.pose.orientation.z = qz;
-    out.pose.orientation.w = qw;
+    out.pose.position.x = filtered_position[0];
+    out.pose.position.y = filtered_position[1];
+    out.pose.position.z = filtered_position[2];
+    out.pose.orientation.x = filtered_orientation[0];
+    out.pose.orientation.y = filtered_orientation[1];
+    out.pose.orientation.z = filtered_orientation[2];
+    out.pose.orientation.w = filtered_orientation[3];
 
     pub_tag_pose_->publish(out);
     publishDetectionMetadata(
-        out.header, picked_corners[0], ids[best_idx], image.cols, image.rows,
-        best_area_px, out.pose.position.x, out.pose.position.y, out.pose.position.z);
+        out.header, corners[best_idx], selected->id, image.cols, image.rows,
+        best_area_px, out.pose.position.x, out.pose.position.y, out.pose.position.z,
+        candidates.size(), selected->reprojection_rmse_px, confidence, switched);
+    updatePreviewOverlay(
+        ids, corners, selected->id, &filtered_position, confidence, image.cols, image.rows);
     ++detector_output_count_;
     if (last_detection_stamp_.nanoseconds() != 0 && stamp > last_detection_stamp_) {
       longest_detection_gap_sec_ = std::max(
@@ -686,7 +967,7 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
     last_detection_stamp_ = stamp;
     last_detection_area_px_ = best_area_px;
     last_edge_distance_px_ = std::numeric_limits<double>::infinity();
-    for (const auto &point : picked_corners[0]) {
+    for (const auto &point : corners[best_idx]) {
       last_edge_distance_px_ = std::min(
           last_edge_distance_px_,
           std::min({static_cast<double>(point.x), static_cast<double>(point.y),
@@ -702,9 +983,10 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
     const double area_m2 = pixelAreaToSquareMeters(best_area_px, z_abs, fx, fy);
 
     RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 1000,
-                         "Tag detected id=%d pos_cam=[%.2f %.2f %.2f] area_m2=%.6f",
-                         ids[best_idx], out.pose.position.x, out.pose.position.y,
-                         out.pose.position.z, area_m2);
+                         "Landing target active_id=%d visible=%zu switched=%s pos_cam=[%.2f %.2f %.2f] rmse=%.2fpx area_m2=%.6f",
+                         selected->id, candidates.size(), switched ? "true" : "false",
+                         out.pose.position.x, out.pose.position.y, out.pose.position.z,
+                         selected->reprojection_rmse_px, area_m2);
   }
 
   bool useSimTime() const {
@@ -722,7 +1004,11 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
       double area_px,
       double target_x,
       double target_y,
-      double target_z) {
+      double target_z,
+      size_t visible_tag_count,
+      double reprojection_rmse_px,
+      double confidence,
+      bool switched) {
     if (corners.size() != 4) {
       return;
     }
@@ -752,8 +1038,6 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
     status.name = "apriltag_detection";
     status.hardware_id = video_device_;
     status.message = "TARGET_DETECTED";
-    const double image_area = std::max(1.0, static_cast<double>(image_width * image_height));
-    const double quality = std::clamp(area_px / (image_area * 0.10), 0.0, 1.0);
     const auto add_value = [&status](const std::string &key, const std::string &value) {
       diagnostic_msgs::msg::KeyValue item;
       item.key = key;
@@ -761,7 +1045,12 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
       status.values.push_back(item);
     };
     add_value("tag_id", std::to_string(tag_id));
-    add_value("quality", std::to_string(quality));
+    add_value("quality", std::to_string(confidence));
+    add_value("active_tag_id", std::to_string(tag_id));
+    add_value("reference_tag_id", std::to_string(reference_tag_id_));
+    add_value("visible_tag_count", std::to_string(visible_tag_count));
+    add_value("tag_switched", switched ? "true" : "false");
+    add_value("reprojection_rmse_px", std::to_string(reprojection_rmse_px));
     add_value("tag_area_px", std::to_string(area_px));
     add_value("center_x_px", std::to_string(center_x));
     add_value("center_y_px", std::to_string(center_y));
@@ -805,6 +1094,7 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
         get_logger(),
         "DETECTOR_DIAG use_sim_time=%s camera_hz=%llu info_hz=%llu detect_hz=%llu output_hz=%llu "
         "expected_tag_detected=%s visibility_pct=%.1f visibility_total_pct=%.1f "
+        "active_tag_id=%d configured_tags=%zu tag_switches=%llu filter_step_limits=%llu "
         "last_detection_age_s=%.3f longest_detection_gap_s=%.3f last_stamp_ns=%lld last_area_px=%.1f window_max_area_px=%.1f "
         "edge_px[last=%.1f,window_min=%.1f] latency_ms[last=%.1f,avg=%.1f,max=%.1f,image_age_start=%.1f,max_image_age_start=%.1f] "
         "capture_gap_max_ms=%.1f queue=latest_only drop_total[read=%llu,replaced=%llu,no_new=%llu,no_marker=%llu,wrong_id=%llu,below_area=%llu,pose=%llu,no_info=%llu,convert=%llu,stamp=%llu]",
@@ -814,6 +1104,9 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
         static_cast<unsigned long long>(input_delta),
         static_cast<unsigned long long>(output_delta),
         output_delta > 0 ? "true" : "false", visible_percent, total_visible_percent,
+        active_tag_id_, landing_tags_.size(),
+        static_cast<unsigned long long>(tag_switch_count_),
+        static_cast<unsigned long long>(filter_step_limit_count_),
         last_age, longest_detection_gap_sec_,
         static_cast<long long>(last_detection_stamp_.nanoseconds()),
         last_detection_area_px_, window_max_candidate_area_px_,
@@ -880,6 +1173,30 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
   double tag_size_m_{0.16};
   int target_tag_id_{-1};
   double min_tag_area_px_{80.0};
+  int reference_tag_id_{0};
+  std::vector<int64_t> landing_tag_ids_;
+  std::vector<double> landing_tag_sizes_m_;
+  std::vector<double> landing_tag_offset_x_m_;
+  std::vector<double> landing_tag_offset_y_m_;
+  std::vector<double> landing_tag_offset_z_m_;
+  std::vector<double> landing_tag_yaw_rad_;
+  std::map<int, LandingTagConfig> landing_tags_;
+  int switch_confirm_frames_{4};
+  double switch_score_ratio_{1.10};
+  double pose_filter_alpha_{0.45};
+  double switch_filter_alpha_{0.20};
+  double filter_reset_timeout_sec_{1.0};
+  double max_filtered_step_m_{0.12};
+  double uncertainty_weight_{0.35};
+  double image_center_weight_{0.15};
+  int active_tag_id_{-1};
+  std::map<int, int> visible_streaks_;
+  bool filter_initialized_{false};
+  cv::Vec3d filtered_position_{0.0, 0.0, 0.0};
+  cv::Vec4d filtered_orientation_{0.0, 0.0, 0.0, 1.0};
+  rclcpp::Time last_filter_stamp_{0, 0, RCL_ROS_TIME};
+  uint64_t tag_switch_count_{0};
+  uint64_t filter_step_limit_count_{0};
 
   bool got_camera_info_{false};
   int last_frame_width_{0};
@@ -900,6 +1217,13 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
   uint64_t latest_frame_sequence_{0};
   uint64_t processed_frame_sequence_{0};
   double longest_capture_gap_ms_{0.0};
+  std::mutex preview_overlay_mutex_;
+  std::vector<PreviewTagOverlay> preview_overlays_;
+  std::optional<cv::Point2f> preview_landing_point_;
+  int preview_active_tag_id_{-1};
+  double preview_confidence_{0.0};
+  int preview_source_width_{1};
+  int preview_source_height_{1};
 
   std::atomic<uint64_t> camera_frame_count_{0};
   uint64_t camera_info_count_{0};
