@@ -11,6 +11,7 @@ find_package(cv_bridge REQUIRED)
 find_package(diagnostic_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
+find_package(std_srvs REQUIRED)
 find_package(tf2_msgs REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
@@ -24,6 +25,7 @@ target_link_libraries(apriltag_camera_detector_node PUBLIC
   ${diagnostic_msgs_TARGETS}
   ${geometry_msgs_TARGETS}
   ${sensor_msgs_TARGETS}
+  ${std_srvs_TARGETS}
   opencv_core
   opencv_imgproc
   opencv_calib3d

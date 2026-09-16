@@ -47,12 +47,21 @@ services:
   activate_precision_landing: /precision_landing/activate
   cancel_precision_landing: /precision_landing/cancel
   abort_precision_landing: /precision_landing/abort
+  start_camera_preview: /precision_landing/preview/start
+  stop_camera_preview: /precision_landing/preview/stop
   start_lidar_odometry: /ground_control/start_lidar_odometry
   start_2d_mapping: /ground_control/start_2d_mapping
   start_3d_mapping: /ground_control/start_3d_mapping
+  start_camera_tag_detection: /ground_control/start_camera_tag_detection
 
 commands:
   mavros_set_mode_service: /mavros/set_mode
+  # Use PX4's native precision-land mode when no optional Trigger-service
+  # controller owns /precision_landing/{activate,cancel,abort}.
+  precision_landing_native_fallback: true
+  precision_landing_activate_mode: AUTO.PRECLAND
+  precision_landing_cancel_mode: POSCTL
+  precision_landing_abort_mode: POSCTL
   local_setpoint_topic: /mavros/setpoint_position/local
   setpoint_rate_hz: 10.0
   offboard_prestream_sec: 1.0

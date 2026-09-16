@@ -37,6 +37,11 @@ class PipelineSupervisor(Node):
                 "lidar2_3d_mapping",
                 "/ground_control/start_3d_mapping",
             ),
+            "start_camera_tag_detection": (
+                "start_camera_tag_detection.sh",
+                "camera_tag_detection",
+                "/ground_control/start_camera_tag_detection",
+            ),
         }
         for action, (_, _, default_service) in self._actions.items():
             parameter = f"{action}_service"
@@ -50,6 +55,35 @@ class PipelineSupervisor(Node):
         def launch(request: Trigger.Request, response: Trigger.Response) -> Trigger.Response:
             del request
             script_name, state_name, _ = self._actions[action]
+            if action == "start_camera_tag_detection":
+                running_nodes = self._running_nodes()
+                components = {
+                    "camera detector": (
+                        "/apriltag_camera_detector" in running_nodes,
+                        "apriltag_camera_detector_node",
+                    ),
+                    "landing-target publisher": (
+                        "/apriltag_precision_landing" in running_nodes,
+                        "apriltag_precision_landing_node",
+                    ),
+                }
+                running_processes = self._running_process_commands()
+                available = {
+                    name
+                    for name, (node_running, process_token) in components.items()
+                    if node_running or any(process_token in command for command in running_processes)
+                }
+                if available == set(components):
+                    response.success = True
+                    response.message = "camera and AprilTag detection already running"
+                    return response
+                if available:
+                    response.success = False
+                    response.message = (
+                        "partial AprilTag stack is running; restart it before launching: "
+                        + ", ".join(sorted(available))
+                    )
+                    return response
             running_pid = self._running_owner_pid(state_name)
             child = self._children.get(action)
             if running_pid is not None or (child is not None and child.poll() is None):
@@ -88,6 +122,25 @@ class PipelineSupervisor(Node):
             return response
 
         return launch
+
+    def _running_nodes(self) -> set[str]:
+        nodes: set[str] = set()
+        for name, namespace in self.get_node_names_and_namespaces():
+            prefix = namespace.rstrip("/")
+            nodes.add(f"{prefix}/{name}" if prefix else f"/{name}")
+        return nodes
+
+    @staticmethod
+    def _running_process_commands() -> tuple[str, ...]:
+        commands: list[str] = []
+        for cmdline in Path("/proc").glob("[0-9]*/cmdline"):
+            try:
+                command = cmdline.read_bytes().replace(b"\0", b" ").decode(errors="replace")
+            except (FileNotFoundError, PermissionError, ProcessLookupError):
+                continue
+            if command:
+                commands.append(command)
+        return tuple(commands)
 
     def _state_roots(self, state_name: str) -> tuple[Path, ...]:
         uid = os.getuid()

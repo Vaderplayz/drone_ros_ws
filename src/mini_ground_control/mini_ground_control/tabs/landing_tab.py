@@ -17,10 +17,14 @@ class LandingTab(QWidget):
         controls = QHBoxLayout()
         self.activate = QPushButton("Activate Precision Landing")
         self.cancel = QPushButton("Cancel")
+        self.start_preview = QPushButton("Start Preview")
+        self.stop_preview = QPushButton("Stop Preview")
         self.abort = QPushButton("Emergency Abort")
         self.abort.setObjectName("abortButton")
         controls.addWidget(self.activate)
         controls.addWidget(self.cancel)
+        controls.addWidget(self.start_preview)
+        controls.addWidget(self.stop_preview)
         controls.addStretch(1)
         controls.addWidget(self.abort)
         self.camera = CameraWidget(
@@ -48,6 +52,8 @@ class LandingTab(QWidget):
         layout.addLayout(metrics)
         self.activate.clicked.connect(lambda: self.service_requested.emit("activate_precision_landing"))
         self.cancel.clicked.connect(lambda: self.service_requested.emit("cancel_precision_landing"))
+        self.start_preview.clicked.connect(lambda: self.service_requested.emit("start_camera_preview"))
+        self.stop_preview.clicked.connect(lambda: self.service_requested.emit("stop_camera_preview"))
         self.abort.clicked.connect(lambda: self.service_requested.emit("abort_precision_landing"))
 
     def set_frame(self, image: object, metadata: dict) -> None:

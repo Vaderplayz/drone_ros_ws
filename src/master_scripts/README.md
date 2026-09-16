@@ -7,9 +7,15 @@ launchers over ROS without SSH:
 - `/ground_control/start_lidar_odometry`
 - `/ground_control/start_2d_mapping`
 - `/ground_control/start_3d_mapping`
+- `/ground_control/start_camera_tag_detection`
 
 The supervisor accepts no paths or shell text from clients. Each service maps to one script
 in this directory and returns the launcher PID and log path.
+
+The camera action reuses the real AprilTag launcher without starting another MAVROS,
+system monitor, or supervisor. If both AprilTag nodes already exist, the action reports
+that the pipeline is running; a partial stack is rejected to avoid two processes
+contending for `/dev/video0`.
 
 ## Obstacle-avoidance readiness
 

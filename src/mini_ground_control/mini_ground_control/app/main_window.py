@@ -146,7 +146,7 @@ class MainWindow(QMainWindow):
             answer = QMessageBox.question(
                 self,
                 "Activate Precision Landing",
-                "Request activation of the existing precision-landing controller?",
+                "Request PX4 native precision landing now?",
                 QMessageBox.Yes | QMessageBox.No,
                 QMessageBox.No,
             )

@@ -30,7 +30,13 @@ apriltag_camera_detector:
     # Keep image transport off in flight unless explicitly enabled for a bench test.
     image_output_topic: /image_raw
     camera_info_output_topic: /camera_info
-    publish_image_stream: false
+    # Preview is explicitly enabled from Mini Ground Control. Detection always
+    # continues at full input resolution and is independent of this worker.
+    publish_image_stream: true
+    preview_start_enabled: false
+    preview_rate_hz: 5.0
+    preview_width: 320
+    preview_height: 240
 
     tag_pose_topic: /precision_landing/tag_pose_camera
     tag_corners_topic: /precision_landing/tag_corners

@@ -50,9 +50,10 @@ The Navigation tab accepts local ENU XYZ or a clicked occupancy-grid point. Map 
 TF-transformed into the MAVROS odometry frame before becoming setpoints. Waypoints outside
 configured altitude or horizontal-step limits are rejected.
 
-The Pi-side `pipeline_supervisor` exposes three fixed Trigger services for LiDAR odometry,
-2D mapping, and 3D mapping. It cannot execute arbitrary commands. Existing precision-landing
-Trigger clients still fail visibly when their controller services are unavailable.
+The Pi-side `pipeline_supervisor` exposes four fixed Trigger services for LiDAR odometry,
+2D mapping, 3D mapping, and camera/AprilTag detection. It cannot execute arbitrary commands.
+Precision-landing Trigger clients use their configured service when available and otherwise
+fall back to PX4 native `AUTO.PRECLAND`; cancel and abort fall back to `POSCTL`.
 
 ## Thread and queue model
 

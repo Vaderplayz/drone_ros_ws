@@ -58,9 +58,9 @@ ros2 launch mini_ground_control real_ground_control.launch.py \
 ## Quick actions and flight modes
 
 The Dashboard quick actions request the allowlisted onboard services for LiDAR odometry,
-2D mapping, and 3D mapping. The Pi-side supervisor starts automatically with the real
-AprilTag boot pipeline after `mini_ground_control` is installed in the Pi workspace. It
-can also be started directly:
+2D mapping, 3D mapping, and camera/AprilTag detection. The Pi-side supervisor starts
+automatically with the real AprilTag boot pipeline after `mini_ground_control` is installed
+in the Pi workspace. It can also be started directly:
 
 ```bash
 ros2 launch mini_ground_control pipeline_supervisor.launch.py \
@@ -72,6 +72,17 @@ Mode buttons request `ALTCTL`, `POSCTL`, `AUTO.LAND`, or `OFFBOARD` through
 the current fresh local ENU pose, publishes that hold point at 10 Hz for one second, and
 continues publishing while OFFBOARD remains active. OFFBOARD is rejected when local pose is
 stale or another publisher already owns `/mavros/setpoint_position/local`.
+
+The landing controls first use the configured `/precision_landing/*` Trigger services. If
+those optional services have no server, the real profile falls back to PX4's native modes:
+Activate requests `AUTO.PRECLAND`, while Cancel and Abort request `POSCTL`. A successful
+handoff stops the app's OFFBOARD position-setpoint stream so it cannot compete with PX4's
+precision-landing controller. This fallback can be disabled in `config/default.yaml`.
+
+The Precision Landing tab's camera preview is on demand. `Start Preview` enables a separate
+320x240, 5 Hz latest-frame publisher and `Stop Preview` disables it. Full-resolution camera
+capture and AprilTag detection continue independently at their configured rate; preview is
+off at startup and publishes nothing when it is not requested.
 
 ## Navigation
 

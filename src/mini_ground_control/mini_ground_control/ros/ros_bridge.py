@@ -241,7 +241,7 @@ class GroundControlNode(Node):
 
     def request_mode(self, mode: str) -> None:
         normalized = mode.strip().upper()
-        if normalized not in {"ALTCTL", "POSCTL", "AUTO.LAND", "OFFBOARD"}:
+        if normalized not in {"ALTCTL", "POSCTL", "AUTO.LAND", "AUTO.PRECLAND", "OFFBOARD"}:
             self.signals.command_result.emit("mode", False, f"unsupported mode: {mode}")
             return
         try:
@@ -262,6 +262,10 @@ class GroundControlNode(Node):
             return
         client = self._service_clients.get(action)
         if client is None or not client.service_is_ready():
+            native_mode = self._native_precision_landing_mode(action)
+            if native_mode:
+                self._call_set_mode(native_mode, service_action=action)
+                return
             self.signals.service_result.emit(action, False, "service unavailable")
             return
         future = client.call_async(Trigger.Request())
@@ -274,6 +278,22 @@ class GroundControlNode(Node):
                 self.signals.service_result.emit(requested_action, False, str(exc))
 
         future.add_done_callback(complete)
+
+    def _native_precision_landing_mode(self, action: str) -> str:
+        if not bool(self.commands.get("precision_landing_native_fallback", True)):
+            return ""
+        modes = {
+            "activate_precision_landing": str(
+                self.commands.get("precision_landing_activate_mode", "AUTO.PRECLAND")
+            ),
+            "cancel_precision_landing": str(
+                self.commands.get("precision_landing_cancel_mode", "POSCTL")
+            ),
+            "abort_precision_landing": str(
+                self.commands.get("precision_landing_abort_mode", "POSCTL")
+            ),
+        }
+        return modes.get(action, "").strip().upper()
 
     def _command_tick(self) -> None:
         try:
@@ -329,14 +349,23 @@ class GroundControlNode(Node):
             f"OFFBOARD pre-stream: holding local ENU ({pose.x:.2f}, {pose.y:.2f}, {pose.z:.2f})",
         )
 
-    def _call_set_mode(self, mode: str) -> None:
+    def _call_set_mode(self, mode: str, service_action: str = "") -> None:
+        def emit_result(success: bool, message: str) -> None:
+            if service_action:
+                self.signals.service_result.emit(service_action, success, message)
+            else:
+                self.signals.command_result.emit(mode, success, message)
+
         if self._mode_call_inflight:
-            self.signals.command_result.emit(mode, False, "another mode request is in progress")
+            emit_result(False, "another mode request is in progress")
+            return
+        if service_action and not self.store.snapshot()["flight"].px4_connected:
+            emit_result(False, "PX4 is not connected")
             return
         if self._set_mode_client is None or not self._set_mode_client.service_is_ready():
             if mode == "OFFBOARD":
                 self._offboard_streaming = False
-            self.signals.command_result.emit(mode, False, "/mavros/set_mode is unavailable")
+            emit_result(False, "/mavros/set_mode is unavailable")
             return
         self._mode_call_inflight = True
         request = SetMode.Request()
@@ -349,7 +378,7 @@ class GroundControlNode(Node):
             try:
                 response = done.result()
                 success = bool(response.mode_sent)
-                message = "mode request accepted" if success else "PX4 rejected mode request"
+                message = "mode request sent" if success else "MAVROS rejected mode request"
             except Exception as exc:
                 success = False
                 message = str(exc)
@@ -359,7 +388,9 @@ class GroundControlNode(Node):
             if requested_mode != "OFFBOARD" and success:
                 self._offboard_streaming = False
                 self._active_target = None
-            self.signals.command_result.emit(requested_mode, success, message)
+            if service_action:
+                message = f"native PX4 {requested_mode}: {message}"
+            emit_result(success, message)
 
         future.add_done_callback(complete)
 

@@ -30,16 +30,17 @@ class DashboardTab(QWidget):
         health_layout.addWidget(self.health)
         quick_group = QGroupBox("Quick Actions")
         quick_layout = QVBoxLayout(quick_group)
-        pipeline_row = QHBoxLayout()
+        pipeline_grid = QGridLayout()
         pipeline_actions = (
             ("Start LiDAR odometry", "start_lidar_odometry"),
             ("Start 2D scan", "start_2d_mapping"),
             ("Start 3D scan", "start_3d_mapping"),
+            ("Start Camera + Tags", "start_camera_tag_detection"),
         )
-        for label, action in pipeline_actions:
+        for index, (label, action) in enumerate(pipeline_actions):
             button = QPushButton(label)
             button.clicked.connect(lambda checked=False, selected=action: self.pipeline_requested.emit(selected))
-            pipeline_row.addWidget(button)
+            pipeline_grid.addWidget(button, index // 2, index % 2)
         mode_row = QHBoxLayout()
         self.mode_buttons: dict[str, QPushButton] = {}
         for label, mode in (("Alt Hold", "ALTCTL"), ("Pos Hold", "POSCTL"), ("Land", "AUTO.LAND"), ("OFFBOARD", "OFFBOARD")):
@@ -50,7 +51,7 @@ class DashboardTab(QWidget):
             mode_row.addWidget(button)
         self.quick_status = QLabel("No quick action requested")
         self.quick_status.setObjectName("valueLabel")
-        quick_layout.addLayout(pipeline_row)
+        quick_layout.addLayout(pipeline_grid)
         quick_layout.addLayout(mode_row)
         quick_layout.addWidget(self.quick_status)
         layout.addWidget(attitude_group, 0, 0)

@@ -37,8 +37,17 @@ class CameraWidget(QWidget):
             return
         image_rect = self._fit_rect(self.image.width(), self.image.height())
         painter.drawImage(image_rect, self.image)
-        source_width = float(self.image.width())
-        source_height = float(self.image.height())
+        landing = self.landing
+        source_width = float(
+            landing.image_width
+            if landing is not None and landing.image_width > 0
+            else self.image.width()
+        )
+        source_height = float(
+            landing.image_height
+            if landing is not None and landing.image_height > 0
+            else self.image.height()
+        )
         sx = image_rect.width() / source_width
         sy = image_rect.height() / source_height
         center = QPointF(image_rect.center())
@@ -49,7 +58,6 @@ class CameraWidget(QWidget):
         painter.setPen(QPen(QColor(68, 199, 103, 160), 1, Qt.DashLine))
         painter.drawEllipse(center, tolerance, tolerance)
 
-        landing = self.landing
         if landing is None or not landing.corners:
             self._draw_state_text(painter, image_rect, "NO TARGET", QColor("#ef5350"))
             return

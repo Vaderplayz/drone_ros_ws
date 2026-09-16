@@ -21,6 +21,7 @@
 #include "sensor_msgs/msg/camera_info.hpp"
 #include "sensor_msgs/msg/image.hpp"
 #include "std_msgs/msg/header.hpp"
+#include "std_srvs/srv/trigger.hpp"
 
 #include <opencv2/aruco.hpp>
 #include <opencv2/calib3d.hpp>
@@ -59,6 +60,14 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
     image_output_topic_ = declare_parameter<std::string>("image_output_topic", "/image_raw");
     camera_info_output_topic_ = declare_parameter<std::string>("camera_info_output_topic", "/camera_info");
     publish_image_stream_ = declare_parameter<bool>("publish_image_stream", true);
+    preview_start_enabled_ = declare_parameter<bool>("preview_start_enabled", false);
+    preview_rate_hz_ = declare_parameter<double>("preview_rate_hz", 5.0);
+    preview_width_ = declare_parameter<int>("preview_width", 320);
+    preview_height_ = declare_parameter<int>("preview_height", 240);
+    preview_start_service_ = declare_parameter<std::string>(
+        "preview_start_service", "/precision_landing/preview/start");
+    preview_stop_service_ = declare_parameter<std::string>(
+        "preview_stop_service", "/precision_landing/preview/stop");
     camera_frame_id_ = declare_parameter<std::string>("camera_frame_id", "camera_optical_frame");
 
     video_device_ = declare_parameter<std::string>("video_device", "/dev/video0");
@@ -106,6 +115,28 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
         tag_corners_topic_, qos_sensor);
     pub_tag_metadata_ = create_publisher<diagnostic_msgs::msg::DiagnosticArray>(
         tag_metadata_topic_, rclcpp::QoS(10).reliable());
+    preview_enabled_.store(preview_start_enabled_ && publish_image_stream_);
+    preview_start_server_ = create_service<std_srvs::srv::Trigger>(
+        preview_start_service_,
+        [this](const std::shared_ptr<std_srvs::srv::Trigger::Request>,
+               std::shared_ptr<std_srvs::srv::Trigger::Response> response) {
+          if (!publish_image_stream_) {
+            response->success = false;
+            response->message = "preview capability is disabled by configuration";
+            return;
+          }
+          preview_enabled_.store(true);
+          response->success = true;
+          response->message = "camera preview enabled";
+        });
+    preview_stop_server_ = create_service<std_srvs::srv::Trigger>(
+        preview_stop_service_,
+        [this](const std::shared_ptr<std_srvs::srv::Trigger::Request>,
+               std::shared_ptr<std_srvs::srv::Trigger::Response> response) {
+          preview_enabled_.store(false);
+          response->success = true;
+          response->message = "camera preview disabled";
+        });
 
     if (!std::isfinite(tag_size_m_) || tag_size_m_ <= 0.0) {
       RCLCPP_FATAL(get_logger(), "tag_size_m must be provided and > 0.0");
@@ -135,6 +166,9 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
     capture_running_.store(false);
     if (capture_thread_.joinable()) {
       capture_thread_.join();
+    }
+    if (preview_thread_.joinable()) {
+      preview_thread_.join();
     }
     if (cap_.isOpened()) {
       cap_.release();
@@ -193,6 +227,7 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
 
     capture_running_.store(true);
     capture_thread_ = std::thread(&AprilTagCameraDetectorNode::captureLoop, this);
+    preview_thread_ = std::thread(&AprilTagCameraDetectorNode::previewLoop, this);
 
     RCLCPP_INFO(get_logger(),
                 "Device mode video=%s requested=%dx%d@%.1f negotiated=%.0fx%.0f@%.1f buffer_request=%d accepted=%s capture=dedicated_thread queue=latest_only",
@@ -336,12 +371,11 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
       return;
     }
 
-    if (publish_image_stream_ && image_output_topic_ != image_topic_) {
-      auto out = *msg;
-      if (out.header.frame_id.empty()) {
-        out.header.frame_id = camera_frame_id_;
-      }
-      pub_image_->publish(out);
+    if (preview_enabled_.load() && pub_image_->get_subscription_count() > 0) {
+      std::lock_guard<std::mutex> lock(latest_frame_mutex_);
+      latest_frame_ = cv_ptr->image.clone();
+      latest_frame_stamp_ = rclcpp::Time(msg->header.stamp);
+      ++latest_frame_sequence_;
     }
 
     detectAndPublish(cv_ptr->image, rclcpp::Time(msg->header.stamp), msg->header.frame_id);
@@ -383,6 +417,62 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
     }
   }
 
+  void previewLoop() {
+    const auto period = std::chrono::duration<double>(1.0 / std::max(1.0, preview_rate_hz_));
+    auto next_publish = std::chrono::steady_clock::now();
+    while (capture_running_.load()) {
+      if (!preview_enabled_.load() || pub_image_->get_subscription_count() == 0) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        next_publish = std::chrono::steady_clock::now();
+        continue;
+      }
+
+      cv::Mat frame;
+      rclcpp::Time stamp{0, 0, RCL_ROS_TIME};
+      {
+        std::lock_guard<std::mutex> lock(latest_frame_mutex_);
+        if (!latest_frame_.empty()) {
+          frame = latest_frame_;
+          stamp = latest_frame_stamp_;
+        }
+      }
+      if (!frame.empty()) {
+        publishPreviewFrame(frame, stamp, camera_frame_id_);
+      }
+      next_publish += std::chrono::duration_cast<std::chrono::steady_clock::duration>(period);
+      std::this_thread::sleep_until(next_publish);
+    }
+  }
+
+  void publishPreviewFrame(
+      const cv::Mat &frame, const rclcpp::Time &stamp, const std::string &frame_id) {
+    cv::Mat preview;
+    const cv::Size output_size(
+        preview_width_ > 0 ? preview_width_ : frame.cols,
+        preview_height_ > 0 ? preview_height_ : frame.rows);
+    if (frame.size() == output_size) {
+      preview = frame;
+    } else {
+      cv::resize(frame, preview, output_size, 0.0, 0.0, cv::INTER_AREA);
+    }
+
+    cv::Mat bgr;
+    if (preview.channels() == 1) {
+      cv::cvtColor(preview, bgr, cv::COLOR_GRAY2BGR);
+    } else if (preview.channels() == 3) {
+      bgr = preview;
+    } else if (preview.channels() == 4) {
+      cv::cvtColor(preview, bgr, cv::COLOR_BGRA2BGR);
+    } else {
+      return;
+    }
+
+    std_msgs::msg::Header header;
+    header.stamp = stamp;
+    header.frame_id = frame_id.empty() ? camera_frame_id_ : frame_id;
+    pub_image_->publish(*cv_bridge::CvImage(header, "bgr8", bgr).toImageMsg());
+  }
+
   void processLatestFrame() {
     cv::Mat frame;
     rclcpp::Time stamp{0, 0, RCL_ROS_TIME};
@@ -403,9 +493,6 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
     }
     processed_frame_sequence_ = sequence;
 
-    if (publish_image_stream_) {
-      publishDeviceStream(frame, stamp, camera_frame_id_);
-    }
     detectAndPublish(frame, stamp, camera_frame_id_);
   }
 
@@ -760,6 +847,13 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
   std::string image_output_topic_;
   std::string camera_info_output_topic_;
   bool publish_image_stream_{true};
+  bool preview_start_enabled_{false};
+  double preview_rate_hz_{5.0};
+  int preview_width_{320};
+  int preview_height_{240};
+  std::string preview_start_service_;
+  std::string preview_stop_service_;
+  std::atomic<bool> preview_enabled_{false};
   std::string camera_frame_id_;
 
   std::string video_device_;
@@ -799,6 +893,7 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
   cv::VideoCapture cap_;
   std::atomic<bool> capture_running_{false};
   std::thread capture_thread_;
+  std::thread preview_thread_;
   std::mutex latest_frame_mutex_;
   cv::Mat latest_frame_;
   rclcpp::Time latest_frame_stamp_{0, 0, RCL_ROS_TIME};
@@ -847,6 +942,8 @@ class AprilTagCameraDetectorNode : public rclcpp::Node {
   rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr pub_tag_pose_;
   rclcpp::Publisher<geometry_msgs::msg::PolygonStamped>::SharedPtr pub_tag_corners_;
   rclcpp::Publisher<diagnostic_msgs::msg::DiagnosticArray>::SharedPtr pub_tag_metadata_;
+  rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr preview_start_server_;
+  rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr preview_stop_server_;
   rclcpp::TimerBase::SharedPtr capture_timer_;
   rclcpp::TimerBase::SharedPtr diagnostics_timer_;
 };
