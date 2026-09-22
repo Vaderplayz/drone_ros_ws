@@ -173,6 +173,13 @@ VerticalLidarMapper::VerticalLidarMapper(const rclcpp::NodeOptions & options)
       this,
       std::placeholders::_1,
       std::placeholders::_2));
+  clear_map_service_ = this->create_service<std_srvs::srv::Trigger>(
+    "~/clear_map",
+    std::bind(
+      &VerticalLidarMapper::handleClearMapRequest,
+      this,
+      std::placeholders::_1,
+      std::placeholders::_2));
 
   motion_odom_sub_ = this->create_subscription<nav_msgs::msg::Odometry>(
     motion_odom_topic_,
@@ -3320,6 +3327,40 @@ void VerticalLidarMapper::handleRebuildGlobalRequest(
     response->message = "Failed to rebuild global cloud: " + error_message;
     RCLCPP_WARN(this->get_logger(), "%s", response->message.c_str());
   }
+}
+
+void VerticalLidarMapper::handleClearMapRequest(
+  const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
+  std::shared_ptr<std_srvs::srv::Trigger::Response> response)
+{
+  (void)request;
+  const std::size_t removed_points = global_cloud_ ? global_cloud_->size() : 0U;
+  const std::size_t removed_keyframes = keyframes_.size();
+
+  scan_queue_.clear();
+  pending_deskew_scans_.clear();
+  raw_points_total_ = 0U;
+  global_cloud_ = std::make_shared<pcl::PointCloud<pcl::PointXYZ>>();
+  global_points_total_ = 0U;
+  keyframes_.clear();
+  trajectory_points_.clear();
+  last_keyframe_pose_.reset();
+  last_keyframe_stamp_.reset();
+  last_trajectory_point_.reset();
+  last_local_map_publish_stamp_.reset();
+  floor_reference_z_.reset();
+  floor_stabilization_initialized_ = false;
+  floor_stabilization_bias_m_ = 0.0;
+  scan_matching_correction_.setIdentity();
+  scan_matching_lock_valid_ = false;
+  last_scan_matching_attempt_stamp_.reset();
+  last_scan_matching_status_ = enable_scan_matching_ ? "warming_up" : "disabled";
+  next_keyframe_id_ = 1U;
+
+  response->success = true;
+  response->message = "Cleared 3D map: " + std::to_string(removed_points) +
+    " points and " + std::to_string(removed_keyframes) + " keyframes removed.";
+  RCLCPP_WARN(this->get_logger(), "%s", response->message.c_str());
 }
 
 void VerticalLidarMapper::publishStatus()

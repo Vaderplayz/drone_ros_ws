@@ -36,6 +36,7 @@ class DashboardTab(QWidget):
             ("Start 2D scan", "start_2d_mapping"),
             ("Start 3D scan", "start_3d_mapping"),
             ("Start Camera + Tags", "start_camera_tag_detection"),
+            ("Start Obstacle Avoidance", "start_obstacle_avoidance"),
         )
         for index, (label, action) in enumerate(pipeline_actions):
             button = QPushButton(label)

@@ -34,6 +34,11 @@ class MapCanvas(QWidget):
         self.view_pitch_deg = 32.0
         self.view_zoom = 1.0
         self.view_pan = QPointF(0.0, 0.0)
+        self.z_min_m = -10.0
+        self.z_max_m = 10.0
+        self.hide_floor = False
+        self.hide_ceiling = False
+        self.voxel_opacity = 1.0
         self._drag_position: QPointF | None = None
         self._drag_button = Qt.NoButton
         self.setMinimumSize(600, 480)
@@ -93,6 +98,36 @@ class MapCanvas(QWidget):
         self.octomap = np.empty((0, 3), dtype=np.float32)
         self.path = np.empty((0, 3), dtype=np.float32)
         self.scan = np.empty((0, 2), dtype=np.float32)
+        self.update()
+
+    def set_z_limits(self, minimum_m: float, maximum_m: float) -> None:
+        self.z_min_m = min(float(minimum_m), float(maximum_m))
+        self.z_max_m = max(float(minimum_m), float(maximum_m))
+        self.update()
+
+    def set_hide_floor(self, enabled: bool) -> None:
+        self.hide_floor = bool(enabled)
+        self.update()
+
+    def set_hide_ceiling(self, enabled: bool) -> None:
+        self.hide_ceiling = bool(enabled)
+        self.update()
+
+    def set_voxel_opacity(self, opacity: float) -> None:
+        self.voxel_opacity = max(0.05, min(1.0, float(opacity)))
+        self.update()
+
+    def set_3d_view(self, view: str) -> None:
+        views = {
+            "Perspective": (-42.0, 32.0),
+            "Top": (0.0, 0.0),
+            "Front": (0.0, 90.0),
+            "Side": (90.0, 90.0),
+        }
+        if view not in views:
+            return
+        self.view_yaw_deg, self.view_pitch_deg = views[view]
+        self.view_pan = QPointF(0.0, 0.0)
         self.update()
 
     def paintEvent(self, event: object) -> None:
@@ -255,7 +290,21 @@ class MapCanvas(QWidget):
             center = np.asarray(self.pose[:3], dtype=np.float32)
         else:
             center = np.median(self.octomap, axis=0).astype(np.float32)
-        relative = self.octomap - center
+        points = self.octomap
+        clipped = (points[:, 2] >= self.z_min_m) & (points[:, 2] <= self.z_max_m)
+        points = points[clipped]
+        if points.size and (self.hide_floor or self.hide_ceiling):
+            resolution = float(self.octomap_metadata.get("resolution", 0.12))
+            lower = float(np.percentile(points[:, 2], 2.0))
+            upper = float(np.percentile(points[:, 2], 98.0))
+            layer = max(0.08, resolution * 1.5)
+            keep = np.ones(len(points), dtype=bool)
+            if self.hide_floor:
+                keep &= points[:, 2] > lower + layer
+            if self.hide_ceiling:
+                keep &= points[:, 2] < upper - layer
+            points = points[keep]
+        relative = points - center
         inside = np.linalg.norm(relative[:, :2], axis=1) <= self.cloud_radius_m * 1.4
         relative = relative[inside]
         self._paint_3d_grid(painter, area, center)
@@ -276,6 +325,8 @@ class MapCanvas(QWidget):
                 bins = np.clip(((z - z_min) / z_span * 7.0).astype(np.int32), 0, 7)
                 colors = ("#ef5350", "#f28e2b", "#f2c94c", "#44c767", "#2fc6b5", "#4da3ff", "#625cff", "#c24df0")
                 voxel_pixels = max(1.5, min(9.0, float(self.octomap_metadata.get("resolution", 0.12)) * scale * 0.9))
+                painter.save()
+                painter.setOpacity(self.voxel_opacity)
                 for index, color in enumerate(colors):
                     selected = bins == index
                     if not np.any(selected):
@@ -288,6 +339,7 @@ class MapCanvas(QWidget):
                     )
                     painter.setPen(QPen(QColor(color), voxel_pixels, Qt.SolidLine, Qt.SquareCap))
                     painter.drawPoints(polygon)
+                painter.restore()
         if self.show_axes:
             axes = np.asarray([[0, 0, 0], [1.2, 0, 0], [0, 1.2, 0], [0, 0, 1.2]], dtype=np.float32)
             projected_axes, _ = self._project_relative(axes, area)
@@ -303,7 +355,8 @@ class MapCanvas(QWidget):
         painter.drawText(
             area.adjusted(8, 8, -8, -8),
             Qt.AlignLeft | Qt.AlignTop,
-            f"{label}: {len(relative)} occupied voxels | {resolution:.2f} m | source {source_points} cells/points",
+            f"{label}: {len(relative)} visible voxels | {resolution:.2f} m | "
+            f"Z {self.z_min_m:.1f}..{self.z_max_m:.1f} m | source {source_points} cells/points",
         )
 
     def center_on_drone(self) -> None:

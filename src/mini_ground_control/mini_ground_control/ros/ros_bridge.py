@@ -7,7 +7,7 @@ import time
 from typing import Any, Callable
 
 from diagnostic_msgs.msg import DiagnosticArray
-from geometry_msgs.msg import PolygonStamped, PoseStamped
+from geometry_msgs.msg import Point, PolygonStamped, PoseStamped, TwistStamped
 from mini_ground_control.models.health_state import HealthEntry
 from mini_ground_control.models.landing_state import LandingStateMachine
 from mini_ground_control.ros.px4_conversions import (
@@ -45,6 +45,11 @@ try:
     from visualization_msgs.msg import MarkerArray
 except ImportError:
     MarkerArray = None
+
+try:
+    from slam_toolbox.srv import Reset as SlamReset
+except ImportError:
+    SlamReset = None
 
 
 def _message_stamp(message: object) -> float:
@@ -116,8 +121,19 @@ class GroundControlNode(Node):
         self.commands = config.get("commands", {})
         self._mode_requests: queue.Queue[str] = queue.Queue(maxsize=8)
         self._waypoint_requests: queue.Queue[tuple[float, float, float, str]] = queue.Queue(maxsize=8)
+        self._avoidance_requests: queue.Queue[bool] = queue.Queue(maxsize=4)
         self._set_mode_client: Any = None
         self._setpoint_publisher: Any = None
+        self._avoidance_velocity_publisher: Any = None
+        self._goal_publisher: Any = None
+        self._latest_guarded_command: TwistStamped | None = None
+        self._last_guarded_command_receive = -math.inf
+        self._avoidance_enabled = bool(
+            self.commands.get("avoidance_enabled_by_default", True)
+        )
+        self._avoidance_command_timeout = float(
+            self.commands.get("avoidance_command_timeout_sec", 0.30)
+        )
         self._mode_call_inflight = False
         self._offboard_request_due: float | None = None
         self._offboard_streaming = False
@@ -185,6 +201,8 @@ class GroundControlNode(Node):
         self._sub(DiagnosticArray, "april_tag_metadata", self._tag_metadata, STATE_QOS)
         self._sub(String, "precision_landing_status", self._landing_status, STATE_QOS)
         self._sub(String, "recording_status", self._recording_status, STATE_QOS)
+        guarded_topic = str(self.commands.get("guarded_velocity_topic", "/planner_cmd_vel"))
+        self.create_subscription(TwistStamped, guarded_topic, self._guarded_velocity, STATE_QOS)
 
     def _setup_mavros_subscriptions(self) -> None:
         if MavrosState is None:
@@ -222,7 +240,11 @@ class GroundControlNode(Node):
     def _setup_services(self) -> None:
         for action, service_name in self.config.get("services", {}).items():
             if service_name:
-                self._service_clients[action] = self.create_client(Trigger, service_name)
+                service_type = SlamReset if action == "clear_2d_map" else Trigger
+                if service_type is None:
+                    self.signals.event.emit("ERROR", "slam_toolbox Reset service type unavailable")
+                    continue
+                self._service_clients[action] = self.create_client(service_type, service_name)
 
     def _setup_mavros_commands(self) -> None:
         if self.telemetry_source != "mavros" or SetMode is None:
@@ -230,6 +252,14 @@ class GroundControlNode(Node):
         mode_service = str(self.commands.get("mavros_set_mode_service", "/mavros/set_mode"))
         self._set_mode_client = self.create_client(SetMode, mode_service)
         self._setpoint_publisher = self.create_publisher(PoseStamped, self._setpoint_topic, STATE_QOS)
+        velocity_topic = str(
+            self.commands.get("avoidance_velocity_topic", "/mavros/setpoint_velocity/cmd_vel")
+        )
+        goal_topic = str(self.commands.get("avoidance_goal_topic", "/drone_goal"))
+        self._avoidance_velocity_publisher = self.create_publisher(
+            TwistStamped, velocity_topic, STATE_QOS
+        )
+        self._goal_publisher = self.create_publisher(Point, goal_topic, MAP_QOS)
         rate_hz = max(3.0, float(self.commands.get("setpoint_rate_hz", 10.0)))
         self.create_timer(1.0 / rate_hz, self._publish_setpoint)
 
@@ -255,6 +285,12 @@ class GroundControlNode(Node):
         except queue.Full:
             self.signals.command_result.emit("waypoint", False, "waypoint request queue full")
 
+    def request_avoidance(self, enabled: bool) -> None:
+        try:
+            self._avoidance_requests.put_nowait(bool(enabled))
+        except queue.Full:
+            self.signals.command_result.emit("avoidance", False, "request queue full")
+
     def _service_tick(self) -> None:
         try:
             action = self._service_requests.get_nowait()
@@ -268,12 +304,19 @@ class GroundControlNode(Node):
                 return
             self.signals.service_result.emit(action, False, "service unavailable")
             return
-        future = client.call_async(Trigger.Request())
+        request = SlamReset.Request() if action == "clear_2d_map" else Trigger.Request()
+        future = client.call_async(request)
 
         def complete(done: Any, requested_action: str = action) -> None:
             try:
                 response = done.result()
-                self.signals.service_result.emit(requested_action, bool(response.success), response.message)
+                if requested_action == "clear_2d_map":
+                    success = int(response.result) == int(SlamReset.Response.RESULT_SUCCESS)
+                    message = "2D SLAM map reset" if success else f"reset result={response.result}"
+                else:
+                    success = bool(response.success)
+                    message = response.message
+                self.signals.service_result.emit(requested_action, success, message)
             except Exception as exc:
                 self.signals.service_result.emit(requested_action, False, str(exc))
 
@@ -296,6 +339,13 @@ class GroundControlNode(Node):
         return modes.get(action, "").strip().upper()
 
     def _command_tick(self) -> None:
+        try:
+            avoidance = self._avoidance_requests.get_nowait()
+        except queue.Empty:
+            avoidance = None
+        if avoidance is not None:
+            self._set_avoidance_enabled(avoidance)
+
         try:
             waypoint = self._waypoint_requests.get_nowait()
         except queue.Empty:
@@ -334,13 +384,34 @@ class GroundControlNode(Node):
         ):
             self.signals.command_result.emit("OFFBOARD", False, "fresh finite local pose is required")
             return
-        if self.count_publishers(self._setpoint_topic) > 1:
+        active_topic = (
+            str(self.commands.get("avoidance_velocity_topic", "/mavros/setpoint_velocity/cmd_vel"))
+            if self._avoidance_enabled else self._setpoint_topic
+        )
+        if self.count_publishers(active_topic) > 1:
             self.signals.command_result.emit(
-                "OFFBOARD", False, f"another publisher already owns {self._setpoint_topic}"
+                "OFFBOARD", False, f"another publisher already owns {active_topic}"
             )
             return
+        if self._avoidance_enabled:
+            guarded_topic = str(
+                self.commands.get("guarded_velocity_topic", "/planner_cmd_vel")
+            )
+            required = {
+                "avoidance planner/guard": self.count_publishers(guarded_topic) > 0,
+                "horizontal LiDAR": self._monitor("horizontal_lidar").snapshot().online,
+                "spatial awareness": self._monitor("spatial_awareness_status").snapshot().online,
+            }
+            missing = [name for name, ready in required.items() if not ready]
+            if missing:
+                self.signals.command_result.emit(
+                    "OFFBOARD", False, "avoidance not ready: " + ", ".join(missing)
+                )
+                return
         yaw_rad = math.radians(pose.yaw_deg) if math.isfinite(pose.yaw_deg) else 0.0
         self._active_target = (*coordinates, yaw_rad, self._local_frame_id)
+        if self._avoidance_enabled:
+            self._publish_goal(*coordinates)
         self._offboard_streaming = True
         prestream = max(0.5, float(self.commands.get("offboard_prestream_sec", 1.0)))
         self._offboard_request_due = time.monotonic() + prestream
@@ -426,7 +497,14 @@ class GroundControlNode(Node):
             return
         yaw_rad = math.radians(pose.yaw_deg) if math.isfinite(pose.yaw_deg) else 0.0
         self._active_target = (x, y, z, yaw_rad, self._local_frame_id)
-        self.signals.command_result.emit("waypoint", True, f"holding local ENU ({x:.2f}, {y:.2f}, {z:.2f})")
+        if self._avoidance_enabled:
+            self._publish_goal(x, y, z)
+            detail = "guarded waypoint"
+        else:
+            detail = "position hold"
+        self.signals.command_result.emit(
+            "waypoint", True, f"{detail} local ENU ({x:.2f}, {y:.2f}, {z:.2f})"
+        )
 
     def _waypoint_in_local_frame(
         self, x: float, y: float, z: float, source_frame: str
@@ -447,7 +525,12 @@ class GroundControlNode(Node):
         return rotated[0] + translation.x, rotated[1] + translation.y, z
 
     def _publish_setpoint(self) -> None:
-        if not self._offboard_streaming or self._active_target is None or self._setpoint_publisher is None:
+        if not self._offboard_streaming or self._active_target is None:
+            return
+        if self._avoidance_enabled:
+            self._publish_avoidance_velocity()
+            return
+        if self._setpoint_publisher is None:
             return
         x, y, z, yaw, frame_id = self._active_target
         message = PoseStamped()
@@ -459,6 +542,50 @@ class GroundControlNode(Node):
         message.pose.orientation.z = math.sin(yaw * 0.5)
         message.pose.orientation.w = math.cos(yaw * 0.5)
         self._setpoint_publisher.publish(message)
+
+    def _guarded_velocity(self, message: TwistStamped) -> None:
+        self._latest_guarded_command = message
+        self._last_guarded_command_receive = time.monotonic()
+
+    def _publish_goal(self, x: float, y: float, z: float) -> None:
+        if self._goal_publisher is None:
+            return
+        goal = Point()
+        goal.x = float(x)
+        goal.y = float(y)
+        goal.z = float(z)
+        self._goal_publisher.publish(goal)
+
+    def _publish_avoidance_velocity(self) -> None:
+        if self._avoidance_velocity_publisher is None:
+            return
+        output = TwistStamped()
+        output.header.stamp = self.get_clock().now().to_msg()
+        output.header.frame_id = self._local_frame_id
+        age = time.monotonic() - self._last_guarded_command_receive
+        if self._latest_guarded_command is not None and age <= self._avoidance_command_timeout:
+            output.twist = self._latest_guarded_command.twist
+        self._avoidance_velocity_publisher.publish(output)
+
+    def _set_avoidance_enabled(self, enabled: bool) -> None:
+        if enabled == self._avoidance_enabled:
+            state = "already enabled" if enabled else "already disabled"
+            self.signals.command_result.emit("avoidance", True, state)
+            return
+        snapshot = self.store.snapshot()
+        pose = snapshot["flight"].pose
+        self._avoidance_enabled = enabled
+        self._latest_guarded_command = None
+        self._last_guarded_command_receive = -math.inf
+        if self._offboard_streaming and all(
+            math.isfinite(value) for value in (pose.x, pose.y, pose.z)
+        ):
+            yaw = math.radians(pose.yaw_deg) if math.isfinite(pose.yaw_deg) else 0.0
+            self._active_target = (pose.x, pose.y, pose.z, yaw, self._local_frame_id)
+            if enabled:
+                self._publish_goal(pose.x, pose.y, pose.z)
+        state = "enabled; holding current pose" if enabled else "disabled; direct position hold"
+        self.signals.command_result.emit("avoidance", True, state)
 
     def _mavros_state(self, message: Any) -> None:
         self._mark("px4", message)
@@ -877,6 +1004,12 @@ class RosBridgeThread(threading.Thread):
             self.signals.command_result.emit("waypoint", False, "ROS bridge not ready")
             return
         self.node.request_waypoint(x, y, z, source_frame)
+
+    def request_avoidance(self, enabled: bool) -> None:
+        if self.node is None:
+            self.signals.command_result.emit("avoidance", False, "ROS bridge not ready")
+            return
+        self.node.request_avoidance(enabled)
 
     def stop(self) -> None:
         if self.context.ok():

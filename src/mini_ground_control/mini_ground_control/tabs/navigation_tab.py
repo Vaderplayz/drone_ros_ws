@@ -6,6 +6,7 @@ from mini_ground_control.widgets.map_widget import MapCanvas
 from mini_ground_control.workers.gps_tile_manager import GpsTileManager
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
+    QCheckBox,
     QDoubleSpinBox,
     QGridLayout,
     QGroupBox,
@@ -28,6 +29,7 @@ def _coordinate_input() -> QDoubleSpinBox:
 
 class NavigationTab(QWidget):
     waypoint_requested = Signal(float, float, float, str)
+    avoidance_requested = Signal(bool)
 
     def __init__(self, config: dict) -> None:
         super().__init__()
@@ -41,6 +43,10 @@ class NavigationTab(QWidget):
         layout = QVBoxLayout(self)
         self.status = QLabel("Navigation locked: switch PX4 to OFFBOARD")
         self.status.setObjectName("valueLabel")
+        self.avoidance = QCheckBox("Obstacle avoidance")
+        self.avoidance.setChecked(
+            bool(config.get("commands", {}).get("avoidance_enabled_by_default", True))
+        )
         controls = QHBoxLayout()
 
         map_group = QGroupBox("Map waypoint")
@@ -72,11 +78,13 @@ class NavigationTab(QWidget):
         self.tile_manager = GpsTileManager(config, self)
         self.gps_opacity = float(navigation.get("gps_map_opacity", 0.5))
         layout.addWidget(self.status)
+        layout.addWidget(self.avoidance)
         layout.addLayout(controls)
         layout.addWidget(self.canvas, 1)
         self.canvas.world_clicked.connect(self._map_clicked)
         self.send_map.clicked.connect(self._send_map_waypoint)
         self.send_xyz.clicked.connect(self._send_xyz_waypoint)
+        self.avoidance.toggled.connect(self.avoidance_requested.emit)
         self.tile_manager.tiles_ready.connect(lambda tiles: self.canvas.set_gps_tiles(tiles, self.gps_opacity))
         self.tile_manager.status_changed.connect(self._gps_status)
         self._set_active(False)
@@ -120,7 +128,8 @@ class NavigationTab(QWidget):
             control.setEnabled(active)
         self.canvas.set_navigation_enabled(active)
         if active:
-            self.status.setText("OFFBOARD active: choose a bounded local waypoint")
+            mode = "guarded avoidance" if self.avoidance.isChecked() else "direct position hold"
+            self.status.setText(f"OFFBOARD active: {mode}")
         else:
             self.status.setText("Navigation locked: switch PX4 to OFFBOARD")
 

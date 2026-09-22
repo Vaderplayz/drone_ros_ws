@@ -77,7 +77,7 @@ set +e
 ros2 run obs_avoid "${PLANNER_NODE}" --ros-args \
   --params-file "${PLANNER_PARAMS_FILE}" \
   -p use_sim_time:="${USE_SIM_TIME}" \
-  -r /planner_cmd_vel:=/planner_cmd_vel_raw "$@"
+  -p command_topic:=/planner_cmd_vel_raw "$@"
 status="$?"
 set -e
 exit "${status}"

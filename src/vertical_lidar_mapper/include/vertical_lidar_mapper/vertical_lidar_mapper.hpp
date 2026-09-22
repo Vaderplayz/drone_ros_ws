@@ -199,6 +199,9 @@ private:
   void handleRebuildGlobalRequest(
     const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
     std::shared_ptr<std_srvs::srv::Trigger::Response> response);
+  void handleClearMapRequest(
+    const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
+    std::shared_ptr<std_srvs::srv::Trigger::Response> response);
   void tryAutosaveOnExit(const char * reason);
   bool saveGlobalCloudToPcd(std::string & output_path, std::string & error_message);
   bool save2DMapToPgm(
@@ -255,6 +258,7 @@ private:
   rclcpp::Publisher<diagnostic_msgs::msg::DiagnosticArray>::SharedPtr status_pub_;
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr save_pcd_service_;
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr rebuild_global_service_;
+  rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr clear_map_service_;
   rclcpp::TimerBase::SharedPtr deskew_queue_timer_;
   rclcpp::TimerBase::SharedPtr global_publish_timer_;
   rclcpp::TimerBase::SharedPtr status_timer_;

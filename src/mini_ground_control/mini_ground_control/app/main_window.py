@@ -7,6 +7,7 @@ import time
 from mini_ground_control.app.signals import BridgeSignals
 from mini_ground_control.app.styles import APP_STYLE
 from mini_ground_control.models.state_store import StateStore
+from mini_ground_control.models.map_export import export_occupancy_grid, export_voxel_cloud
 from mini_ground_control.ros.ros_bridge import RosBridgeThread
 from mini_ground_control.tabs.dashboard_tab import DashboardTab
 from mini_ground_control.tabs.landing_tab import LandingTab
@@ -102,6 +103,9 @@ class MainWindow(QMainWindow):
         self.dashboard.pipeline_requested.connect(self._request_pipeline)
         self.dashboard.mode_requested.connect(self._request_mode)
         self.navigation.waypoint_requested.connect(self.bridge.request_waypoint)
+        self.navigation.avoidance_requested.connect(self._request_avoidance)
+        self.mapping.export_requested.connect(self._request_map_export)
+        self.mapping.clear_requested.connect(self._request_map_clear)
 
     def _refresh(self) -> None:
         snapshot = self.store.snapshot()
@@ -159,6 +163,46 @@ class MainWindow(QMainWindow):
         self.logs.append_event("INFO", f"Pipeline request: {action}")
         self.bridge.request_service(action)
 
+    def _request_avoidance(self, enabled: bool) -> None:
+        state = "enabled" if enabled else "disabled"
+        self.logs.append_event("WARN" if enabled else "INFO", f"Obstacle avoidance {state}")
+        self.bridge.request_avoidance(enabled)
+
+    def _request_map_export(self, action: str) -> None:
+        self.logs.append_event("INFO", f"Map export request: {action}")
+        export_root = self.config.get("exports", {}).get("directory", "~/mapping_exports")
+        try:
+            if action == "export_2d_map":
+                if self.mapping.canvas.map_data is None:
+                    raise ValueError("no 2D map has been received")
+                directory = export_occupancy_grid(self.mapping.canvas.map_data, export_root)
+            elif action == "export_3d_map":
+                directory = export_voxel_cloud(
+                    self.mapping.canvas.octomap,
+                    self.mapping.canvas.octomap_metadata,
+                    export_root,
+                )
+            else:
+                raise ValueError(f"unsupported map export: {action}")
+        except (OSError, ValueError) as exc:
+            self.logs.append_event("ERROR", f"{action}: {exc}")
+            return
+        self.logs.append_event("INFO", f"{action}: saved on this laptop at {directory}")
+
+    def _request_map_clear(self, action: str) -> None:
+        map_name = "3D" if action == "clear_3d_map" else "2D"
+        answer = QMessageBox.warning(
+            self,
+            f"Clear {map_name} map",
+            f"Permanently clear the active {map_name} map and start it again from the current position?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if answer != QMessageBox.Yes:
+            return
+        self.logs.append_event("WARN", f"Map clear request: {action}")
+        self.bridge.request_service(action)
+
     def _request_mode(self, mode: str) -> None:
         if mode in {"OFFBOARD", "AUTO.LAND"} and bool(
             self.config.get("app", {}).get("confirm_critical_mode_changes", True)
@@ -185,6 +229,8 @@ class MainWindow(QMainWindow):
         self.logs.append_event(level, f"{action}: {message or ('success' if success else 'failed')}")
         if action.startswith("start_"):
             self.dashboard.set_action_result(action, success, message)
+        if success and action in {"clear_2d_map", "clear_3d_map"}:
+            self.mapping.canvas.clear_visualization()
 
     def _command_result(self, action: str, success: bool, message: str) -> None:
         level = "INFO" if success else "ERROR"

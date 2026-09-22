@@ -6,14 +6,31 @@ dwa_local_planner_skeleton:
     vz_max: 0.20
     ax_max: 0.30
     ay_max: 0.30
+    aw_max: 0.60
+    control_dt: 0.10
+    sim_dt: 0.15
+    horizon_sec: 1.50
+    nx_samples: 5
+    ny_samples: 5
+    nw_samples: 5
     safety_radius: 0.75
     collision_radius: 0.45
     max_use_range: 8.0
+    scan_stride: 3
     obstacle_cloud_range: 8.0
     input_timeout_sec: 0.35
+    odom_topic: /mavros/local_position/odom
+    scan_topic: /scan_slam
+    goal_topic: /drone_goal
+    command_topic: /planner_cmd_vel
+    world_frame: odom
+    goal_tolerance_xy_m: 0.20
+    goal_tolerance_z_m: 0.15
     allow_collision_radius_relaxation: false
     full_search_if_empty: false
     enable_wall_follow_fallback: false
     enable_bypass_assist: false
     enable_sharp_turn_assist: false
     enable_min_cruise_kick: false
+    use_map_goal_occupancy: false
+    enable_goal_obstacle_offset: false

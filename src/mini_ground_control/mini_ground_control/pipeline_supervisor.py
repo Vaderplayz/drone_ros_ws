@@ -42,6 +42,11 @@ class PipelineSupervisor(Node):
                 "camera_tag_detection",
                 "/ground_control/start_camera_tag_detection",
             ),
+            "start_obstacle_avoidance": (
+                "start_obstacle_avoidance.sh",
+                "obstacle_avoidance",
+                "/ground_control/start_obstacle_avoidance",
+            ),
         }
         for action, (_, _, default_service) in self._actions.items():
             parameter = f"{action}_service"
@@ -55,6 +60,24 @@ class PipelineSupervisor(Node):
         def launch(request: Trigger.Request, response: Trigger.Response) -> Trigger.Response:
             del request
             script_name, state_name, _ = self._actions[action]
+            if action == "start_obstacle_avoidance":
+                running_nodes = self._running_nodes()
+                components = {
+                    "DWA planner": "/dwa_local_planner_skeleton" in running_nodes,
+                    "spatial guard": "/spatial_command_guard" in running_nodes,
+                }
+                available = {name for name, running in components.items() if running}
+                if available == set(components):
+                    response.success = True
+                    response.message = "obstacle avoidance already running"
+                    return response
+                if available:
+                    response.success = False
+                    response.message = (
+                        "partial obstacle-avoidance stack is running; restart it: "
+                        + ", ".join(sorted(available))
+                    )
+                    return response
             if action == "start_camera_tag_detection":
                 running_nodes = self._running_nodes()
                 components = {

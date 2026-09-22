@@ -8,6 +8,7 @@ launchers over ROS without SSH:
 - `/ground_control/start_2d_mapping`
 - `/ground_control/start_3d_mapping`
 - `/ground_control/start_camera_tag_detection`
+- `/ground_control/start_obstacle_avoidance`
 
 The supervisor accepts no paths or shell text from clients. Each service maps to one script
 in this directory and returns the launcher PID and log path.
@@ -27,6 +28,12 @@ modify PX4 parameters.
 The real guarded planner is started separately with
 `src/obs_avoid/scripts/start_flight_mode.sh` only after spatial awareness is
 publishing. Mapping launchers remain flight-command free by default.
+
+The ground-control quick action starts the same conservative planner through
+`start_obstacle_avoidance.sh`. Navigation goals use `/drone_goal`; guarded
+commands flow through `/planner_cmd_vel_raw` and `/planner_cmd_vel`. Only the
+ground station forwards fresh guarded commands to MAVROS while OFFBOARD and
+obstacle avoidance are active. Stale planner output becomes a zero-velocity hold.
 
 Central entry points for the real-drone mapping stack:
 

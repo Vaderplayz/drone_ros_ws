@@ -53,6 +53,12 @@ services:
   start_2d_mapping: /ground_control/start_2d_mapping
   start_3d_mapping: /ground_control/start_3d_mapping
   start_camera_tag_detection: /ground_control/start_camera_tag_detection
+  start_obstacle_avoidance: /ground_control/start_obstacle_avoidance
+  clear_2d_map: /slam_toolbox/reset
+  clear_3d_map: /vertical_lidar_mapper/clear_map
+
+exports:
+  directory: ~/mapping_exports
 
 commands:
   mavros_set_mode_service: /mavros/set_mode
@@ -63,6 +69,11 @@ commands:
   precision_landing_cancel_mode: POSCTL
   precision_landing_abort_mode: POSCTL
   local_setpoint_topic: /mavros/setpoint_position/local
+  avoidance_velocity_topic: /mavros/setpoint_velocity/cmd_vel
+  avoidance_goal_topic: /drone_goal
+  guarded_velocity_topic: /planner_cmd_vel
+  avoidance_enabled_by_default: true
+  avoidance_command_timeout_sec: 0.30
   setpoint_rate_hz: 10.0
   offboard_prestream_sec: 1.0
   local_frame_id: odom

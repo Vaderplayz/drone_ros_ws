@@ -69,9 +69,9 @@ ros2 launch mini_ground_control pipeline_supervisor.launch.py \
 
 Mode buttons request `ALTCTL`, `POSCTL`, `AUTO.LAND`, or `OFFBOARD` through
 `/mavros/set_mode`. The app never arms the vehicle. Before requesting OFFBOARD it captures
-the current fresh local ENU pose, publishes that hold point at 10 Hz for one second, and
-continues publishing while OFFBOARD remains active. OFFBOARD is rejected when local pose is
-stale or another publisher already owns `/mavros/setpoint_position/local`.
+the current fresh local ENU pose and pre-streams either a position hold or a zero-velocity
+avoidance hold. OFFBOARD is rejected when required pose/sensor data is stale or another
+publisher owns the selected MAVROS setpoint topic.
 
 The landing controls first use the configured `/precision_landing/*` Trigger services. If
 those optional services have no server, the real profile falls back to PX4's native modes:
@@ -90,6 +90,22 @@ The Navigation tab unlocks only while MAVROS reports `OFFBOARD`. Select a waypoi
 occupancy grid with a separately entered local Z altitude, or enter local ENU X/Y/Z directly.
 Clicked map points are transformed from the occupancy-grid frame into the MAVROS local frame
 using TF. Configurable altitude and horizontal-step limits reject accidental outliers.
+
+With `Obstacle avoidance` checked, waypoints go to the conservative onboard DWA planner
+instead of directly to PX4. Start `Start Obstacle Avoidance` after mapping and spatial
+awareness are healthy. The ground station forwards only fresh commands that have passed the
+six-direction guard. Missing LiDAR, awareness, odometry, or planner output produces a
+zero-velocity hold, never a clear-space assumption. Unchecking avoidance first changes the
+active target to a direct position hold at the drone's current location.
+
+For the first real test, use a wide open area and one large wall or pole. Start LiDAR
+odometry, 2D mapping, 3D mapping/spatial awareness, and then obstacle avoidance. Keep the
+vehicle disarmed while confirming that `/scan_slam`, `/mapping/spatial_awareness/status`,
+`/planner_cmd_vel_raw`, and `/planner_cmd_vel` are updating. Arm in a normal position-hold
+mode, hover clear of the floor, enable OFFBOARD, and select a waypoint beyond the obstacle.
+Keep the pilot ready to switch back to `POSCTL`. This conservative profile does not use the
+legacy wall-follow, narrow-gap, sharp-turn, or minimum-cruise fallbacks: if no safe rollout
+exists it should hold instead of forcing a maneuver.
 
 With a valid GPS fix, the tab overlays currently visible OpenStreetMap tiles at 50% opacity.
 The loader identifies the application, uses bounded memory and HTTP disk caches, and displays
@@ -113,13 +129,27 @@ All topics, services, timeouts, coordinate-frame selection, blocked vertical-LiD
 render rates and display point limits are in `config/default.yaml`. High-rate subscriptions use
 best-effort depth 1. Commands and important state use reliable QoS.
 
-The mapping pause and clear controls affect only the GUI. They do not stop or erase onboard maps.
+`Clear current map` resets the selected map after confirmation. In 2D mode it calls
+`/slam_toolbox/reset`; in 3D mode it calls `/vertical_lidar_mapper/clear_map`. New
+measurements begin rebuilding the selected map immediately after the reset.
 
 ### Interactive 3D map
 
 Select `3D OctoMap` in the mapping tab. Left-drag orbits the view, right-drag pans,
 the mouse wheel zooms, and double-click resets the camera. `Center` resumes following
 the drone.
+
+Use the Z minimum/maximum sliders to cut the map vertically. `Hide floor` and
+`Hide ceiling` suppress the outer horizontal layers without changing onboard map
+data, while the opacity slider exposes occluded structure. Perspective, top, front,
+and side buttons provide repeatable inspection views.
+
+`Export 2D` writes the live `/map` as Nav2-compatible `.yaml` and `.pgm` files.
+`Export 3D` writes the voxel map currently received by the ground station as `.pcd`
+and `.ply`, with a JSON metadata sidecar. Both exports run in the ground-station
+process and are therefore saved on the host laptop, never on the drone Pi. Export
+results and paths appear in the Logs tab. The default host directory is
+`~/mapping_exports` and can be changed with `exports.directory` in the config.
 
 The display prefers occupied-cell markers from `/occupied_cells_vis_array`, such as
 those published by `octomap_server`. If that topic is absent or stale, the GUI builds

@@ -185,6 +185,14 @@ public:
     publish_rollout_path_ = declare_parameter<bool>("publish_rollout_path", true);
     rollout_path_frame_ = declare_parameter<std::string>("rollout_path_frame", "base_link");
     input_timeout_sec_ = declare_parameter<double>("input_timeout_sec", 0.35);
+    goal_tolerance_xy_m_ = declare_parameter<double>("goal_tolerance_xy_m", 0.20);
+    goal_tolerance_z_m_ = declare_parameter<double>("goal_tolerance_z_m", 0.15);
+    odom_topic_ = declare_parameter<std::string>(
+      "odom_topic", "/mavros/local_position/odom");
+    scan_topic_ = declare_parameter<std::string>("scan_topic", "/scan_horizontal");
+    goal_topic_ = declare_parameter<std::string>("goal_topic", "/drone_goal");
+    command_topic_ = declare_parameter<std::string>("command_topic", "/planner_cmd_vel");
+    world_frame_ = declare_parameter<std::string>("world_frame", "odom");
     allow_collision_radius_relaxation_ =
         declare_parameter<bool>("allow_collision_radius_relaxation", true);
     enable_wall_follow_fallback_ =
@@ -197,28 +205,28 @@ public:
     auto qos_goal   = rclcpp::QoS(10).reliable().transient_local();
 
     sub_odom_ = create_subscription<nav_msgs::msg::Odometry>(
-        "/mavros/local_position/odom", qos_sensor,
+        odom_topic_, qos_sensor,
         [this](nav_msgs::msg::Odometry::SharedPtr msg){
           odom_ = *msg;
           last_odom_receive_ = now();
         });
 
     sub_scan_ = create_subscription<sensor_msgs::msg::LaserScan>(
-        "/scan_horizontal", qos_sensor,
+        scan_topic_, qos_sensor,
         [this](sensor_msgs::msg::LaserScan::SharedPtr msg){
           scan_ = *msg;
           last_scan_receive_ = now();
         });
 
     sub_goal_ = create_subscription<geometry_msgs::msg::Point>(
-        "/drone_goal", qos_goal,
+        goal_topic_, qos_goal,
         [this](geometry_msgs::msg::Point::SharedPtr msg){ goal_ = *msg; });
     auto qos_map = rclcpp::QoS(1).reliable().transient_local();
     sub_map_ = create_subscription<nav_msgs::msg::OccupancyGrid>(
         map_topic_, qos_map,
         [this](nav_msgs::msg::OccupancyGrid::SharedPtr msg){ map_ = *msg; });
 
-    pub_cmd_ = create_publisher<geometry_msgs::msg::TwistStamped>("/planner_cmd_vel", 10);
+    pub_cmd_ = create_publisher<geometry_msgs::msg::TwistStamped>(command_topic_, 10);
     pub_rollout_path_ = create_publisher<nav_msgs::msg::Path>("/dwa/best_rollout_path", 10);
     pub_state_ = create_publisher<std_msgs::msg::String>("/dwa/state", 10);
 
@@ -229,7 +237,9 @@ public:
     last_cmd_time_ = now();
     last_state_pub_time_ = now();
     cmd_inited_ = false;
-    RCLCPP_INFO(get_logger(), "DWA skeleton started.");
+    RCLCPP_INFO(
+      get_logger(), "Conservative DWA started: scan=%s goal=%s command=%s",
+      scan_topic_.c_str(), goal_topic_.c_str(), command_topic_.c_str());
   }
 
 private:
@@ -271,6 +281,14 @@ private:
     const ConeClearance front = cone_clearance_info(scan, 0.0, 22.0);
     const ConeClearance left = cone_clearance_info(scan, M_PI_2, 30.0);
     const ConeClearance right = cone_clearance_info(scan, -M_PI_2, 30.0);
+
+    if (d_goal <= goal_tolerance_xy_m_ && std::fabs(ez) <= goal_tolerance_z_m_) {
+      publish_cmd(0.0, 0.0, 0.0, 0.0);
+      publish_debug_state(
+        "GOAL_REACHED", d_goal, front.dist, left.dist, right.dist, 0.0,
+        0.0, 0.0, 0.0, 0.0);
+      return;
+    }
 
     if (maybe_hold_for_occupied_goal(gx, gy, ez, d_goal, x0, y0, yaw0, front, left, right)) return;
 
@@ -1293,7 +1311,7 @@ private:
     if (publish_world_cmd_ && odom_) {
       const double yaw = yaw_from_odom(odom_.value());
       rot_body_to_world(yaw, vx_b, vy_b, vx_out, vy_out);
-      msg.header.frame_id = "map";
+      msg.header.frame_id = world_frame_;
     } else {
       msg.header.frame_id = "base_link";
     }
@@ -1429,6 +1447,13 @@ private:
   bool publish_rollout_path_{true};
   std::string rollout_path_frame_{"base_link"};
   double input_timeout_sec_{0.35};
+  double goal_tolerance_xy_m_{0.20};
+  double goal_tolerance_z_m_{0.15};
+  std::string odom_topic_{"/mavros/local_position/odom"};
+  std::string scan_topic_{"/scan_horizontal"};
+  std::string goal_topic_{"/drone_goal"};
+  std::string command_topic_{"/planner_cmd_vel"};
+  std::string world_frame_{"odom"};
   bool allow_collision_radius_relaxation_{true};
   bool enable_wall_follow_fallback_{true};
 

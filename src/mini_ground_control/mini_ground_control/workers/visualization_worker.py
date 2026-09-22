@@ -224,6 +224,7 @@ class VisualizationWorker(QThread):
                     "origin_y": float(message.info.origin.position.y),
                     "width": width,
                     "height": height,
+                    "occupancy": grid.copy(),
                 }
             )
             return
