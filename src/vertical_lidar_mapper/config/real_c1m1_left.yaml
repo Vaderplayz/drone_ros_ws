@@ -249,12 +249,12 @@ spatial_awareness:
     collision_center_x_m: 0.0
     collision_center_y_m: 0.0
     collision_center_z_offset_m: 0.0
-    drone_body_length_m: 0.45
-    drone_body_width_m: 0.35
-    drone_body_height_m: 0.22
+    drone_body_length_m: 0.5
+    drone_body_width_m: 0.5
+    drone_body_height_m: 0.35
     propeller_tip_to_tip_length_m: 0.75
     propeller_tip_to_tip_width_m: 0.75
-    self_filter_padding_m: 0.04
+    self_filter_padding_m: 0.1
 
     # Safety margins are also the WARNING thresholds. DANGER uses the smaller
     # margins below. Distances are measured from the physical collision box.
