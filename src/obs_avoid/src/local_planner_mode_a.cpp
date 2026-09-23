@@ -68,14 +68,14 @@ class DwaLocalPlanner : public rclcpp::Node {
 public:
   DwaLocalPlanner() : Node("dwa_local_planner_skeleton") {
     // -------- Parameters (keep simple first) --------
-    v_max_  = declare_parameter<double>("v_max", 2.5);
-    vy_max_ = declare_parameter<double>("vy_max", 2.0);
+    v_max_  = declare_parameter<double>("v_max", 1.0);
+    vy_max_ = declare_parameter<double>("vy_max", 1.0);
     w_max_  = declare_parameter<double>("w_max", 1.0);
     vz_max_ = declare_parameter<double>("vz_max", 1.0);
 
     ax_max_ = declare_parameter<double>("ax_max", 1.0);
     ay_max_ = declare_parameter<double>("ay_max", 1.0);
-    aw_max_ = declare_parameter<double>("aw_max", 2.2);
+    aw_max_ = declare_parameter<double>("aw_max", 0.5);
 
     control_dt_ = declare_parameter<double>("control_dt", 0.05);
     sim_dt_     = declare_parameter<double>("sim_dt", 0.10);
