@@ -739,8 +739,18 @@ start_px4_bridge() {
     ros2 run obs_avoid lidar_odom_px4_bridge --ros-args --params-file "${ODOM_PARAMS_FILE}" \
       -p health_csv_path:="${PX4_BRIDGE_HEALTH_CSV}" -p use_sim_time:="${USE_SIM_TIME}"
   local bridge_pid="${LAST_STARTED_PID}"
-  wait_for_message "${PX4_BRIDGE_DIAGNOSTICS_TOPIC}" 15 reliable \
-    "${bridge_pid}" "${PX4_BRIDGE_LOG}"
+  if wait_for_message "${PX4_BRIDGE_DIAGNOSTICS_TOPIC}" 15 reliable \
+    "${bridge_pid}" "${PX4_BRIDGE_LOG}" optional
+  then
+    log_started "PX4 bridge diagnostic heartbeat"
+  else
+    local diagnostic_wait_status=$?
+    if [[ "${diagnostic_wait_status}" -ne 12 ]] || ! kill -0 "${bridge_pid}" 2>/dev/null; then
+      return "${diagnostic_wait_status}"
+    fi
+    log_warning "PX4 bridge is alive but its diagnostic heartbeat was not observed"
+    log_warning "continuing because C1M1 scan and RF2O odometry are already verified"
+  fi
 
   if wait_for_message "${PX4_ODOMETRY_OUT_TOPIC}" "${PX4_BRIDGE_WAIT_SEC}" reliable \
     "${bridge_pid}" "${PX4_BRIDGE_LOG}" optional
