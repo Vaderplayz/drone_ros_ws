@@ -345,6 +345,9 @@ private:
   {
     std::uint8_t mask = 0U;
     for (const auto & name : names) {
+      if (name == "none") {
+        continue;
+      }
       bool found = false;
       for (const auto direction : awareness::kDirections) {
         if (name == awareness::directionName(direction)) {

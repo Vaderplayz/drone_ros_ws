@@ -14,6 +14,8 @@ PLANNER_PARAMS_FILE="${PLANNER_PARAMS_FILE:-${ROS_WS}/src/obs_avoid/config/local
 GUARD_PARAMS_FILE="${GUARD_PARAMS_FILE:-${ROS_WS}/src/obs_avoid/config/spatial_command_guard_real.yaml}"
 SPATIAL_STATUS_TOPIC="${SPATIAL_STATUS_TOPIC:-/mapping/spatial_awareness/status}"
 SPATIAL_READY_TIMEOUT_SEC="${SPATIAL_READY_TIMEOUT_SEC:-10}"
+START_HORIZONTAL_AWARENESS="${START_HORIZONTAL_AWARENESS:-1}"
+SPATIAL_PARAMS_FILE="${SPATIAL_PARAMS_FILE:-${ROS_WS}/src/vertical_lidar_mapper/config/real_horizontal_only.yaml}"
 USE_SIM_TIME="${USE_SIM_TIME:-false}"
 ALLOW_LEGACY_PLANNER="${ALLOW_LEGACY_PLANNER:-0}"
 
@@ -38,27 +40,46 @@ for file in "${ROS_SETUP}" "${PLANNER_PARAMS_FILE}" "${GUARD_PARAMS_FILE}"; do
     exit 1
   fi
 done
+if [[ "${START_HORIZONTAL_AWARENESS}" == "1" && ! -f "${SPATIAL_PARAMS_FILE}" ]]; then
+  echo "[error] required file not found: ${SPATIAL_PARAMS_FILE}" >&2
+  exit 1
+fi
 
 set +u
 source "${ROS_SETUP}"
 set -u
 
-if ! timeout "${SPATIAL_READY_TIMEOUT_SEC}" ros2 topic echo \
-  "${SPATIAL_STATUS_TOPIC}" --once >/dev/null 2>&1; then
-  echo "[error] no spatial-awareness diagnostic on ${SPATIAL_STATUS_TOPIC}." >&2
-  echo "        Start the mapping/spatial-awareness pipeline before the planner." >&2
-  exit 1
-fi
-
 GUARD_PID=""
+AWARENESS_PID=""
 cleanup() {
   set +e
   if [[ -n "${GUARD_PID}" ]] && kill -0 "${GUARD_PID}" 2>/dev/null; then
     kill "${GUARD_PID}" 2>/dev/null || true
     wait "${GUARD_PID}" 2>/dev/null || true
   fi
+  if [[ -n "${AWARENESS_PID}" ]] && kill -0 "${AWARENESS_PID}" 2>/dev/null; then
+    kill "${AWARENESS_PID}" 2>/dev/null || true
+    wait "${AWARENESS_PID}" 2>/dev/null || true
+  fi
 }
 trap cleanup EXIT INT TERM
+
+if ! timeout 2 ros2 topic echo "${SPATIAL_STATUS_TOPIC}" --once >/dev/null 2>&1; then
+  if [[ "${START_HORIZONTAL_AWARENESS}" != "1" ]]; then
+    echo "[error] no spatial-awareness diagnostic on ${SPATIAL_STATUS_TOPIC}." >&2
+    exit 1
+  fi
+  echo "[run] horizontal-only spatial awareness (top/bottom remain UNKNOWN)"
+  ros2 run vertical_lidar_mapper spatial_awareness_node --ros-args \
+    --params-file "${SPATIAL_PARAMS_FILE}" -p use_sim_time:="${USE_SIM_TIME}" &
+  AWARENESS_PID="$!"
+fi
+
+if ! timeout "${SPATIAL_READY_TIMEOUT_SEC}" ros2 topic echo \
+  "${SPATIAL_STATUS_TOPIC}" --once >/dev/null 2>&1; then
+  echo "[error] no spatial-awareness diagnostic on ${SPATIAL_STATUS_TOPIC}." >&2
+  exit 1
+fi
 
 echo "[run] spatial_command_guard_node: /planner_cmd_vel_raw -> /planner_cmd_vel"
 ros2 run obs_avoid spatial_command_guard_node --ros-args \

@@ -99,13 +99,19 @@ zero-velocity hold, never a clear-space assumption. Unchecking avoidance first c
 active target to a direct position hold at the drone's current location.
 
 For the first real test, use a wide open area and one large wall or pole. Start LiDAR
-odometry, 2D mapping, 3D mapping/spatial awareness, and then obstacle avoidance. Keep the
+odometry, 2D mapping, and then obstacle avoidance. Keep the
 vehicle disarmed while confirming that `/scan_slam`, `/mapping/spatial_awareness/status`,
 `/planner_cmd_vel_raw`, and `/planner_cmd_vel` are updating. Arm in a normal position-hold
 mode, hover clear of the floor, enable OFFBOARD, and select a waypoint beyond the obstacle.
 Keep the pilot ready to switch back to `POSCTL`. This conservative profile does not use the
 legacy wall-follow, narrow-gap, sharp-turn, or minimum-cruise fallbacks: if no safe rollout
 exists it should hold instead of forcing a maneuver.
+
+For the temporary single-C1M1 hardware profile, do not start 3D mapping. Start
+LiDAR odometry, 2D mapping, and obstacle avoidance. C1M1 supplies horizontal
+sensing; top and bottom intentionally remain `UNKNOWN`, so avoidance can route
+around walls and poles but cannot command altitude changes. The 3D start
+service remains disabled until the vertical LD19 profile is installed.
 
 With a valid GPS fix, the tab overlays currently visible OpenStreetMap tiles at 50% opacity.
 The loader identifies the application, uses bounded memory and HTTP disk caches, and displays

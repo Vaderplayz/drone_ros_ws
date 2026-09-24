@@ -12,6 +12,7 @@ ROS_SETUP="${ROS_SETUP:-${ROS_WS}/install/setup.bash}"
 FUSION_SCRIPT="${FUSION_SCRIPT:-${SCRIPT_DIR}/start_rf2o_px4_fusion.sh}"
 MAPPING_2D_SCRIPT="${MAPPING_2D_SCRIPT:-${SCRIPT_DIR}/start_2d_mapping_only.sh}"
 MAPPING_3D_SCRIPT="${MAPPING_3D_SCRIPT:-${SCRIPT_DIR}/start_real_3d_mapping_lidar2.sh}"
+ENABLE_3D_MAPPING="${ENABLE_3D_MAPPING:-0}"
 
 FUSION_SCAN_TOPIC="${FUSION_SCAN_TOPIC:-/scan_rf2o}"
 FUSION_ODOM_TOPIC="${FUSION_ODOM_TOPIC:-/lidar/odom}"
@@ -191,9 +192,12 @@ validate_environment() {
   local script command
   [[ -f /opt/ros/jazzy/setup.bash ]] || fail "missing /opt/ros/jazzy/setup.bash"
   [[ -f "${ROS_SETUP}" ]] || fail "workspace setup is missing: ${ROS_SETUP}"
-  for script in "${FUSION_SCRIPT}" "${MAPPING_2D_SCRIPT}" "${MAPPING_3D_SCRIPT}"; do
+  for script in "${FUSION_SCRIPT}" "${MAPPING_2D_SCRIPT}"; do
     [[ -x "${script}" ]] || fail "launcher is missing or not executable: ${script}"
   done
+  if [[ "${ENABLE_3D_MAPPING}" == "1" ]]; then
+    [[ -x "${MAPPING_3D_SCRIPT}" ]] || fail "launcher is missing or not executable: ${MAPPING_3D_SCRIPT}"
+  fi
   for command in ros2 timeout setsid flock grep tee; do
     command -v "${command}" >/dev/null 2>&1 || fail "missing command: ${command}"
   done
@@ -211,6 +215,9 @@ validate_environment() {
   if [[ "${ENABLE_SPATIAL_AWARENESS}" != "0" &&
     "${ENABLE_SPATIAL_AWARENESS}" != "1" ]]; then
     fail "ENABLE_SPATIAL_AWARENESS must be 0 or 1"
+  fi
+  if [[ "${ENABLE_3D_MAPPING}" != "0" && "${ENABLE_3D_MAPPING}" != "1" ]]; then
+    fail "ENABLE_3D_MAPPING must be 0 or 1"
   fi
   if [[ "${ENABLE_SUBMAP_SLAM}" != "0" && "${ENABLE_SUBMAP_SLAM}" != "1" ]]; then
     fail "ENABLE_SUBMAP_SLAM must be 0 or 1"
@@ -297,46 +304,48 @@ main() {
     log "Enhanced 2D submap mapper ready on ${SUBMAP_MAP_TOPIC}"
   fi
 
-  log "Starting 3D accumulation in ${MAPPING_3D_TARGET_FRAME}; RViz can transform it into ${MAP_FRAME}"
-  start_launcher "3D mapping" "${MAPPING_3D_SCRIPT}" \
-    PX4_ODOM_TOPIC="${PX4_ODOM_TOPIC}" \
-    TARGET_FRAME="${MAPPING_3D_TARGET_FRAME}" \
-    MAP_FRAME="${MAP_FRAME}" \
-    ODOM_FRAME="${ODOM_FRAME}" \
-    BASE_FRAME="${BASE_FRAME}" \
-    HORIZONTAL_SCAN_TOPIC="${HORIZONTAL_SCAN_TOPIC}" \
-    LOCAL_OBSTACLE_CLOUD_TOPIC="${LOCAL_OBSTACLE_CLOUD_TOPIC}" \
-    ENABLE_SPATIAL_AWARENESS="${ENABLE_SPATIAL_AWARENESS}" \
-    GLOBAL_CLOUD_TOPIC="${GLOBAL_CLOUD_TOPIC}" \
-    STRUCTURAL_CLOUD_TOPIC="${STRUCTURAL_CLOUD_TOPIC}" \
-    ENABLE_STRUCTURAL_CLOUD="${MAPPING_3D_ENABLE_STRUCTURAL_CLOUD}" \
-    ENABLE_MAP_REBASE="${MAPPING_3D_ENABLE_MAP_REBASE}" \
-    ENABLE_RELATIVE_POSE_GATE="${MAPPING_3D_ENABLE_RELATIVE_POSE_GATE}" \
-    ENABLE_SCAN_MATCHING="${MAPPING_3D_ENABLE_SCAN_MATCHING}" \
-    SCAN_MATCHING_DROP_ON_FAILURE="${MAPPING_3D_SCAN_MATCHING_DROP_ON_FAILURE}" \
-    REQUIRE_2D_MAP="${MAPPING_3D_REQUIRE_2D_MAP}" \
-    AUTO_SAVE_3D_MAP_ON_EXIT=1
-  MAPPING_3D_PID="${LAST_STARTED_PID}"
-  wait_for_message "${GLOBAL_CLOUD_TOPIC}" "${MAPPING_3D_WAIT_SEC}" reliable "${MAPPING_3D_PID}"
-  if [[ "${MAPPING_3D_ENABLE_STRUCTURAL_CLOUD}" == "true" ]]; then
-    wait_for_message "${STRUCTURAL_CLOUD_TOPIC}" "${MAPPING_3D_WAIT_SEC}" reliable "${MAPPING_3D_PID}"
-  fi
-  if [[ "${ENABLE_SPATIAL_AWARENESS}" == "1" ]]; then
-    wait_for_message "${LOCAL_OBSTACLE_CLOUD_TOPIC}" "${MAPPING_3D_WAIT_SEC}" best_effort "${MAPPING_3D_PID}"
+  if [[ "${ENABLE_3D_MAPPING}" == "1" ]]; then
+    log "Starting optional 3D accumulation in ${MAPPING_3D_TARGET_FRAME}"
+    start_launcher "3D mapping" "${MAPPING_3D_SCRIPT}" \
+      PX4_ODOM_TOPIC="${PX4_ODOM_TOPIC}" \
+      TARGET_FRAME="${MAPPING_3D_TARGET_FRAME}" \
+      MAP_FRAME="${MAP_FRAME}" \
+      ODOM_FRAME="${ODOM_FRAME}" \
+      BASE_FRAME="${BASE_FRAME}" \
+      HORIZONTAL_SCAN_TOPIC="${HORIZONTAL_SCAN_TOPIC}" \
+      LOCAL_OBSTACLE_CLOUD_TOPIC="${LOCAL_OBSTACLE_CLOUD_TOPIC}" \
+      ENABLE_SPATIAL_AWARENESS="${ENABLE_SPATIAL_AWARENESS}" \
+      GLOBAL_CLOUD_TOPIC="${GLOBAL_CLOUD_TOPIC}" \
+      STRUCTURAL_CLOUD_TOPIC="${STRUCTURAL_CLOUD_TOPIC}" \
+      ENABLE_STRUCTURAL_CLOUD="${MAPPING_3D_ENABLE_STRUCTURAL_CLOUD}" \
+      ENABLE_MAP_REBASE="${MAPPING_3D_ENABLE_MAP_REBASE}" \
+      ENABLE_RELATIVE_POSE_GATE="${MAPPING_3D_ENABLE_RELATIVE_POSE_GATE}" \
+      ENABLE_SCAN_MATCHING="${MAPPING_3D_ENABLE_SCAN_MATCHING}" \
+      SCAN_MATCHING_DROP_ON_FAILURE="${MAPPING_3D_SCAN_MATCHING_DROP_ON_FAILURE}" \
+      REQUIRE_2D_MAP="${MAPPING_3D_REQUIRE_2D_MAP}" \
+      AUTO_SAVE_3D_MAP_ON_EXIT=1
+    MAPPING_3D_PID="${LAST_STARTED_PID}"
+    wait_for_message "${GLOBAL_CLOUD_TOPIC}" "${MAPPING_3D_WAIT_SEC}" reliable "${MAPPING_3D_PID}"
+  else
+    log "3D mapping disabled (ENABLE_3D_MAPPING=0); C1M1 remains horizontal-only"
   fi
 
-  if [[ "${ENABLE_SUBMAP_SLAM}" == "1" ]]; then
-    log "ALL READY: fusion + 2D SLAM + enhanced submap SLAM + odom-frame 3D mapping + structural room cloud + local spatial awareness"
+  if [[ "${ENABLE_SUBMAP_SLAM}" == "1" && "${ENABLE_3D_MAPPING}" == "0" ]]; then
+    log "ALL READY: C1M1 RF2O + 2D SLAM + enhanced submap SLAM"
+  elif [[ "${ENABLE_SUBMAP_SLAM}" == "1" ]]; then
+    log "ALL READY: C1M1 RF2O + 2D SLAM + enhanced submap SLAM + optional 3D mapping"
   else
-    log "ALL READY: fusion + 2D SLAM + odom-frame 3D mapping + structural room cloud + local spatial awareness"
+    log "ALL READY: C1M1 RF2O + 2D SLAM"
   fi
-  log "Ctrl+C saves 3D PCD/GLB first, then 2D YAML/PGM/PNG"
+  log "Ctrl+C saves the active mapping outputs"
   log "Runtime logs: ${LOG_DIR} and each child launcher's runtime_logs directory"
 
   while true; do
     child_alive "${FUSION_PID}" || { SHUTDOWN_REASON="fusion launcher exited"; return 1; }
     child_alive "${MAPPING_2D_PID}" || { SHUTDOWN_REASON="2D mapping launcher exited"; return 1; }
-    child_alive "${MAPPING_3D_PID}" || { SHUTDOWN_REASON="3D mapping launcher exited"; return 1; }
+    if [[ "${ENABLE_3D_MAPPING}" == "1" ]]; then
+      child_alive "${MAPPING_3D_PID}" || { SHUTDOWN_REASON="3D mapping launcher exited"; return 1; }
+    fi
     sleep 2
   done
 }

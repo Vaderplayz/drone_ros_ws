@@ -9,9 +9,10 @@ ROS_WS="${ROS_WS:-${ROS_WS_DEFAULT}}"
 ROS_SETUP="${ROS_SETUP:-${ROS_WS}/install/setup.bash}"
 USE_SIM_TIME="${USE_SIM_TIME:-false}"
 
-RPLIDAR_SERIAL_PORT="${RPLIDAR_SERIAL_PORT:-/dev/ttyUSB0}"
-RPLIDAR_BAUDRATE="${RPLIDAR_BAUDRATE:-115200}"
-RPLIDAR_FRAME_ID="${RPLIDAR_FRAME_ID:-laser_frame}"
+C1M1_SERIAL_PORT="${C1M1_SERIAL_PORT:-${RPLIDAR_SERIAL_PORT:-/dev/ttyUSB0}}"
+C1M1_BAUDRATE="${C1M1_BAUDRATE:-${RPLIDAR_BAUDRATE:-460800}}"
+C1M1_FRAME_ID="${C1M1_FRAME_ID:-${RPLIDAR_FRAME_ID:-lidar_horiz_link}}"
+C1M1_SCAN_MODE="${C1M1_SCAN_MODE:-Standard}"
 RPLIDAR_SCAN_WAIT_SEC="${RPLIDAR_SCAN_WAIT_SEC:-60}"
 
 SCAN_TOPIC="${SCAN_TOPIC:-/scan}"
@@ -33,11 +34,13 @@ PX4_BRIDGE_WAIT_SEC="${PX4_BRIDGE_WAIT_SEC:-60}"
 
 ODOM_PARENT_FRAME="${ODOM_PARENT_FRAME:-odom}"
 BASE_FRAME="${BASE_FRAME:-base_footprint}"
-LIDAR_FRAME="${LIDAR_FRAME:-${RPLIDAR_FRAME_ID}}"
-# Measured from the FC origin: 3 cm forward and 7 cm above.
-LIDAR_X="${LIDAR_X:-0.03}"
+LIDAR_FRAME="${LIDAR_FRAME:-${C1M1_FRAME_ID}}"
+# C1M1 is the sole horizontal sensor. It remains about 28 cm forward and
+# 3.5 cm below the FC. Its physical forward mark faces aft; sllidar_ros2 maps
+# that mark to scan-frame -X, so scan-frame +X already points drone-forward.
+LIDAR_X="${LIDAR_X:-0.28}"
 LIDAR_Y="${LIDAR_Y:-0.0}"
-LIDAR_Z="${LIDAR_Z:-0.07}"
+LIDAR_Z="${LIDAR_Z:--0.035}"
 LIDAR_ROLL="${LIDAR_ROLL:-0.0}"
 LIDAR_PITCH="${LIDAR_PITCH:-0.0}"
 LIDAR_YAW="${LIDAR_YAW:-0.0}"
@@ -50,7 +53,7 @@ RECORD_DIAGNOSTIC_BAG="${RECORD_DIAGNOSTIC_BAG:-0}"
 CLEAN_STALE_PIPELINE="${CLEAN_STALE_PIPELINE:-1}"
 PROCESS_STOP_TIMEOUT_SEC="${PROCESS_STOP_TIMEOUT_SEC:-5}"
 
-RF2O_PARAMS_FILE="${RF2O_PARAMS_FILE:-${ROS_WS}/src/obs_avoid/config/rf2o_real_a1m8.yaml}"
+RF2O_PARAMS_FILE="${RF2O_PARAMS_FILE:-${ROS_WS}/src/obs_avoid/config/rf2o_real_c1m1.yaml}"
 ODOM_PARAMS_FILE="${ODOM_PARAMS_FILE:-${ROS_WS}/src/obs_avoid/config/lidar_odom_px4_bridge.yaml}"
 
 RUN_STAMP="$(date +%Y%m%d_%H%M%S)"
@@ -294,6 +297,8 @@ find_legacy_pipeline_processes() {
         name="rf2o_laser_odometry_node" ;;
       */install/odom_flatten/lib/odom_flatten/px4_odom_flatten_node)
         name="px4_odom_flatten_node" ;;
+      */install/sllidar_ros2/lib/sllidar_ros2/sllidar_node)
+        name="c1m1_horizontal_driver" ;;
       */lib/tf2_ros/static_transform_publisher)
         if [[ "${arguments}" == *"--frame-id ${BASE_FRAME} "* &&
           "${arguments}" == *"--child-frame-id ${LIDAR_FRAME} "* ]]; then
@@ -319,6 +324,8 @@ find_legacy_pipeline_processes() {
           name="rf2o_laser_odometry_node" ;;
         *'/ros2 run odom_flatten px4_odom_flatten_node '*)
           name="px4_odom_flatten_node" ;;
+        *'/ros2 run sllidar_ros2 sllidar_node '*)
+          name="c1m1_horizontal_driver" ;;
         *'/ros2 bag record '*'runtime_logs/rf2o_px4_'*)
           name="diagnostic_bag" ;;
       esac
@@ -630,16 +637,17 @@ start_rplidar() {
     log_error "${SCAN_TOPIC} publisher_count=${existing_publishers}, expected 0 or 1"
     return 1
   fi
-  if pgrep -af '[r]plidar_composition|[r]plidar_node' >/dev/null 2>&1; then
-    log_error "RPLIDAR process exists but ${SCAN_TOPIC} has no publisher; stop that process manually"
-    pgrep -af '[r]plidar_composition|[r]plidar_node' || true
+  if pgrep -af '[s]llidar_node|[r]plidar_composition|[r]plidar_node' >/dev/null 2>&1; then
+    log_error "LiDAR process exists but ${SCAN_TOPIC} has no publisher; stop that process manually"
+    pgrep -af '[s]llidar_node|[r]plidar_composition|[r]plidar_node' || true
     return 1
   fi
-  start_process rplidar "${RPLIDAR_LOG}" \
-    ros2 run rplidar_ros rplidar_composition --ros-args \
-      -p channel_type:=serial -p serial_port:="${RPLIDAR_SERIAL_PORT}" \
-      -p serial_baudrate:="${RPLIDAR_BAUDRATE}" -p frame_id:="${RPLIDAR_FRAME_ID}" \
-      -p inverted:=false -p angle_compensate:=true -p topic_name:="${SCAN_TOPIC#/}" \
+  start_process c1m1_horizontal "${RPLIDAR_LOG}" \
+    ros2 run sllidar_ros2 sllidar_node --ros-args \
+      -r scan:="${SCAN_TOPIC}" \
+      -p channel_type:=serial -p serial_port:="${C1M1_SERIAL_PORT}" \
+      -p serial_baudrate:="${C1M1_BAUDRATE}" -p frame_id:="${C1M1_FRAME_ID}" \
+      -p inverted:=false -p angle_compensate:=true -p scan_mode:="${C1M1_SCAN_MODE}" \
       -p use_sim_time:="${USE_SIM_TIME}"
   pid="${LAST_STARTED_PID}"
   wait_for_message "${SCAN_TOPIC}" "${RPLIDAR_SCAN_WAIT_SEC}" best_effort "${pid}" "${RPLIDAR_LOG}"
@@ -767,8 +775,8 @@ write_snapshot() {
   {
     printf 'timestamp=%s\nworkspace=%s\nuse_sim_time=%s\n' \
       "$(timestamp)" "${ROS_WS}" "${USE_SIM_TIME}"
-    printf 'rplidar_port=%s\ndeskew_enabled=%s\ndeskew_stamp_policy=%s\n' \
-      "${RPLIDAR_SERIAL_PORT}" "${ENABLE_SCAN_DESKEW}" "${DESKEW_STAMP_POLICY}"
+    printf 'horizontal_lidar=c1m1\nlidar_port=%s\nlidar_baudrate=%s\ndeskew_enabled=%s\ndeskew_stamp_policy=%s\n' \
+      "${C1M1_SERIAL_PORT}" "${C1M1_BAUDRATE}" "${ENABLE_SCAN_DESKEW}" "${DESKEW_STAMP_POLICY}"
     for topic in "${SCAN_TOPIC}" "${CANONICAL_SCAN_TOPIC}" "${RF2O_RAW_ODOM_TOPIC}" \
       "${LIDAR_ODOM_TOPIC}" "${PX4_ODOMETRY_OUT_TOPIC}"; do
       printf '\n-- %s --\n' "${topic}"
@@ -818,9 +826,9 @@ main() {
     log_error "RF2O or odometry configuration is missing"
     exit 1
   fi
-  if [[ ! -e "${RPLIDAR_SERIAL_PORT}" || ! -r "${RPLIDAR_SERIAL_PORT}" ||
-    ! -w "${RPLIDAR_SERIAL_PORT}" ]]; then
-    log_error "${RPLIDAR_SERIAL_PORT} is absent or not readable/writable by $(id -un)"
+  if [[ ! -e "${C1M1_SERIAL_PORT}" || ! -r "${C1M1_SERIAL_PORT}" ||
+    ! -w "${C1M1_SERIAL_PORT}" ]]; then
+    log_error "${C1M1_SERIAL_PORT} is absent or not readable/writable by $(id -un)"
     exit 1
   fi
 
@@ -828,6 +836,11 @@ main() {
   source /opt/ros/jazzy/setup.bash
   source "${ROS_SETUP}"
   set -u
+
+  if ! ros2 pkg prefix sllidar_ros2 >/dev/null 2>&1; then
+    log_error "sllidar_ros2 is required for the horizontal C1M1 but is not installed/built"
+    exit 1
+  fi
 
   for command in ros2 timeout pgrep setsid flock python3 awk ps readlink tr; do
     if ! command -v "${command}" >/dev/null 2>&1; then
@@ -837,7 +850,7 @@ main() {
   done
 
   log "Independent RF2O/PX4 odometry startup"
-  log "Workspace=${ROS_WS}; LiDAR=${RPLIDAR_SERIAL_PORT}; use_sim_time=${USE_SIM_TIME}"
+  log "Workspace=${ROS_WS}; horizontal C1M1=${C1M1_SERIAL_PORT}@${C1M1_BAUDRATE}; use_sim_time=${USE_SIM_TIME}"
   log "This launcher will not manage MAVROS, the flight controller, camera, or AprilTag nodes"
 
   acquire_launcher_lock

@@ -20,9 +20,13 @@ RPLIDAR_START_RETRIES=2
 REUSE_EXISTING_RPLIDAR="${REUSE_EXISTING_RPLIDAR:-1}"
 RPLIDAR_SCAN_WAIT_SEC="${RPLIDAR_SCAN_WAIT_SEC:-60}"
 RPLIDAR_RETRY_DELAY_SEC="${RPLIDAR_RETRY_DELAY_SEC:-2}"
-RPLIDAR_SERIAL_PORT="${RPLIDAR_SERIAL_PORT:-/dev/ttyUSB0}"
-RPLIDAR_BAUDRATE="${RPLIDAR_BAUDRATE:-115200}"
-RPLIDAR_FRAME_ID="${RPLIDAR_FRAME_ID:-laser_frame}"
+C1M1_SERIAL_PORT="${C1M1_SERIAL_PORT:-${RPLIDAR_SERIAL_PORT:-/dev/ttyUSB0}}"
+C1M1_BAUDRATE="${C1M1_BAUDRATE:-${RPLIDAR_BAUDRATE:-460800}}"
+C1M1_FRAME_ID="${C1M1_FRAME_ID:-${RPLIDAR_FRAME_ID:-lidar_horiz_link}}"
+C1M1_SCAN_MODE="${C1M1_SCAN_MODE:-Standard}"
+RPLIDAR_SERIAL_PORT="${C1M1_SERIAL_PORT}"
+RPLIDAR_BAUDRATE="${C1M1_BAUDRATE}"
+RPLIDAR_FRAME_ID="${C1M1_FRAME_ID}"
 RPLIDAR_INVERTED="${RPLIDAR_INVERTED:-false}"
 RPLIDAR_ANGLE_COMPENSATE="${RPLIDAR_ANGLE_COMPENSATE:-true}"
 
@@ -47,10 +51,11 @@ ODOM_PARENT_FRAME="${ODOM_PARENT_FRAME:-odom}"
 ODOM_CHILD_FRAME="${ODOM_CHILD_FRAME:-base_footprint}"
 BASE_FRAME="${BASE_FRAME:-base_footprint}"
 LIDAR_FRAME="${LIDAR_FRAME:-${RPLIDAR_FRAME_ID}}"
-# Measured from the FC origin: 3 cm forward and 7 cm above.
-LIDAR_X="${LIDAR_X:-0.03}"
+# C1M1 physical forward mark faces aft. The sllidar scan frame +X therefore
+# faces drone-forward, so the correct default yaw is zero.
+LIDAR_X="${LIDAR_X:-0.28}"
 LIDAR_Y="${LIDAR_Y:-0.0}"
-LIDAR_Z="${LIDAR_Z:-0.07}"
+LIDAR_Z="${LIDAR_Z:--0.035}"
 LIDAR_ROLL="${LIDAR_ROLL:-0.0}"
 LIDAR_PITCH="${LIDAR_PITCH:-0.0}"
 LIDAR_YAW="${LIDAR_YAW:-0.0}"
@@ -64,7 +69,7 @@ SUBMAP_PARAMS_FILE="${SUBMAP_PARAMS_FILE:-${ROS_WS}/src/submap_slam_2d/config/re
 PLANNER_PARAMS_FILE="${PLANNER_PARAMS_FILE:-${ROS_WS}/src/obs_avoid/config/local_planner_mode_a_real_safe.yaml}"
 GUARD_PARAMS_FILE="${GUARD_PARAMS_FILE:-${ROS_WS}/src/obs_avoid/config/spatial_command_guard_real.yaml}"
 LIDAR_MONITOR_PARAMS_FILE="${LIDAR_MONITOR_PARAMS_FILE:-${ROS_WS}/src/obs_avoid/config/lidar_odom_px4_bridge.yaml}"
-RF2O_PARAMS_FILE="${RF2O_PARAMS_FILE:-${ROS_WS}/src/obs_avoid/config/rf2o_real_a1m8.yaml}"
+RF2O_PARAMS_FILE="${RF2O_PARAMS_FILE:-${ROS_WS}/src/obs_avoid/config/rf2o_real_c1m1.yaml}"
 PRECLAND_MODE="${PRECLAND_MODE:-}"
 SETPOINT_HZ="${SETPOINT_HZ:-20.0}"
 OFFBOARD_WARMUP_SEC="${OFFBOARD_WARMUP_SEC:-2.0}"
@@ -232,7 +237,7 @@ require_publisher_count() {
 
 discover_existing_rplidar() {
   local -a processes=()
-  mapfile -t processes < <(pgrep -af '[r]plidar_composition|[r]plidar_node' 2>/dev/null || true)
+  mapfile -t processes < <(pgrep -af '[s]llidar_node|[r]plidar_composition|[r]plidar_node' 2>/dev/null || true)
   if (( ${#processes[@]} > 1 )); then
     log "ERROR multiple existing RPLIDAR processes detected:"
     printf '%s\n' "${processes[@]}"
@@ -469,14 +474,15 @@ start_rplidar() {
     set_component_state RPLIDAR STARTING "attempt=${attempt}/${RPLIDAR_START_RETRIES}"
     set_component_state RAW_SCAN STARTING "deadline=${RPLIDAR_SCAN_WAIT_SEC}s"
     start_process "rplidar_attempt_${attempt}" "${RPLIDAR_LOG}" \
-      ros2 run rplidar_ros rplidar_composition --ros-args \
+      ros2 run sllidar_ros2 sllidar_node --ros-args \
+      -r scan:="${SCAN_TOPIC}" \
       -p channel_type:=serial \
       -p serial_port:="${RPLIDAR_SERIAL_PORT}" \
       -p serial_baudrate:="${RPLIDAR_BAUDRATE}" \
       -p frame_id:="${RPLIDAR_FRAME_ID}" \
       -p inverted:="${RPLIDAR_INVERTED}" \
       -p angle_compensate:="${RPLIDAR_ANGLE_COMPENSATE}" \
-      -p topic_name:="${SCAN_TOPIC#/}" \
+      -p scan_mode:="${C1M1_SCAN_MODE}" \
       -p use_sim_time:="${USE_SIM_TIME}"
     pid="${LAST_STARTED_PID}"
 
@@ -1201,6 +1207,10 @@ main() {
   source /opt/ros/jazzy/setup.bash
   source "${ROS_SETUP}"
   set -u
+  if ! ros2 pkg prefix sllidar_ros2 >/dev/null 2>&1; then
+    log "ERROR sllidar_ros2 is required for the horizontal C1M1 but is not installed/built"
+    exit 1
+  fi
   if [[ "${ENABLE_SUBMAP_SLAM}" == "1" ]]; then
     if [[ ! -f "${SUBMAP_PARAMS_FILE}" ]] || \
       ! ros2 pkg prefix submap_slam_2d >/dev/null 2>&1; then

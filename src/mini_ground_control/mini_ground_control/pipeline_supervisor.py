@@ -21,6 +21,8 @@ class PipelineSupervisor(Node):
         self.log_root = self.workspace / "runtime_logs" / "ground_control_pipeline"
         self.log_root.mkdir(parents=True, exist_ok=True)
         self._children: dict[str, subprocess.Popen[bytes]] = {}
+        self.declare_parameter("enable_3d_mapping", False)
+        self.enable_3d_mapping = bool(self.get_parameter("enable_3d_mapping").value)
         self._actions = {
             "start_lidar_odometry": (
                 "start_rf2o_px4_fusion.sh",
@@ -60,6 +62,10 @@ class PipelineSupervisor(Node):
         def launch(request: Trigger.Request, response: Trigger.Response) -> Trigger.Response:
             del request
             script_name, state_name, _ = self._actions[action]
+            if action == "start_3d_mapping" and not self.enable_3d_mapping:
+                response.success = False
+                response.message = "3D mapping disabled until the vertical LD19 LiDAR is installed"
+                return response
             if action == "start_obstacle_avoidance":
                 running_nodes = self._running_nodes()
                 components = {

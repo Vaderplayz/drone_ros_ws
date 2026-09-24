@@ -13,6 +13,17 @@ launchers over ROS without SSH:
 The supervisor accepts no paths or shell text from clients. Each service maps to one script
 in this directory and returns the launcher PID and log path.
 
+Current hardware profile: C1M1 is the only installed LiDAR and supplies
+horizontal RF2O, 2D SLAM, and horizontal obstacle avoidance. Its physical
+forward mark faces the drone rear. Since `sllidar_ros2` maps that mark to
+scan-frame `-X`, `lidar_horiz_link` uses zero yaw and scan-frame `+X` points
+drone-forward. The 3D service is disabled by default until the vertical LD19
+profile is installed.
+
+The Pi workspace must retain and build `sllidar_ros2`. Startup now fails with
+a clear error when that C1M1 driver is unavailable instead of falling back to
+the legacy A1M1 driver.
+
 The camera action reuses the real AprilTag launcher without starting another MAVROS,
 system monitor, or supervisor. If both AprilTag nodes already exist, the action reports
 that the pipeline is running; a partial stack is rejected to avoid two processes
@@ -21,7 +32,7 @@ contending for `/dev/video0`.
 ## Obstacle-avoidance readiness
 
 `check_obstacle_avoidance_readiness.sh` is a read-only onboard audit for the
-two LiDAR streams, odometry, local/global clouds, six-direction awareness, and
+horizontal LiDAR, odometry, local cloud, directional awareness, and
 the guarded command path. It does not arm, change mode, publish setpoints, or
 modify PX4 parameters.
 
@@ -43,14 +54,13 @@ cd /home/pi5drone/drone_ros_ws
 ./src/master_scripts/start_all_mapping.sh
 ```
 
-The combined launcher starts RF2O/PX4 fusion, waits for the conditioned scan,
+The combined launcher starts C1M1 RF2O/PX4 fusion, waits for the conditioned scan,
 health-gated LiDAR odometry, local PX4 odometry, TF, and the PX4 bridge
 diagnostic heartbeat, then starts both slam_toolbox and the enhanced submap 2D
 mapper. It waits for `/map`, `/submap_slam/diagnostics`, and
-`/submap_slam/map` before starting vertical-lidar 3D mapping and local spatial
-awareness. MAVROS and the boot AprilTag pipeline remain externally managed. On
-Ctrl+C it stops 3D first so PCD/GLB can use the live map, saves 2D
-YAML/PGM/PNG next, and stops fusion last.
+`/submap_slam/map`. Vertical-lidar 3D mapping is disabled by default while LD19
+is absent. MAVROS and the boot AprilTag pipeline remain externally managed. On
+Ctrl+C it saves 2D YAML/PGM/PNG and then stops fusion.
 
 The enhanced mapper is enabled by default for both
 `start_2d_mapping_only.sh` and `start_all_mapping.sh`. The compatibility path
@@ -71,12 +81,10 @@ The spatial-awareness layer publishes `/mapping/local_obstacle_cloud` in
 diagnostics on `/mapping/spatial_awareness/status`. A stale or absent LiDAR
 produces `UNKNOWN`, never clear space.
 
-LiDAR 2 is mounted 28 cm forward and 3.5 cm below the FC. Its top points
-drone-forward and its physical forward mark points drone-up. Because
-`sllidar_ros2` maps the physical mark to LaserScan local `-X`, the static TF is
-`xyz=(0.28, 0, -0.035)`, `rpy=(0, +90 deg, 0)`. The launcher validates the
-active transform before starting the mapper, including when it reuses a
-transform published elsewhere. LiDAR 1 is 3 cm forward and 7 cm above the FC.
+C1M1 is mounted approximately 28 cm forward and 3.5 cm below the FC. It is
+horizontal, with its physical forward mark facing aft. The active static TF is
+therefore `xyz=(0.28, 0, -0.035)`, `rpy=(0, 0, 0)` under the C1M1 driver frame
+convention. The removed A1M1 is not started by the real profile.
 
 For diagnostics, `/mapping/global_cloud` is intentionally republished at 3 Hz.
 The actual integration throughput is

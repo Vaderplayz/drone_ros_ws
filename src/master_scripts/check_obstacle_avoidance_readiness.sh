@@ -9,7 +9,6 @@ ROS_WS="${ROS_WS:-${ROS_WS_DEFAULT}}"
 ROS_SETUP="${ROS_SETUP:-${ROS_WS}/install/setup.bash}"
 SAMPLE_SEC="${SAMPLE_SEC:-5}"
 HORIZONTAL_SCAN_TOPIC="${HORIZONTAL_SCAN_TOPIC:-/scan_slam}"
-VERTICAL_SCAN_TOPIC="${VERTICAL_SCAN_TOPIC:-/scan_vertical}"
 
 if [[ ! -f "${ROS_SETUP}" ]]; then
   echo "[FAIL] ROS setup missing: ${ROS_SETUP}" >&2
@@ -52,7 +51,6 @@ fi
 declare -a required_topics=(
   /mavros/local_position/odom
   "${HORIZONTAL_SCAN_TOPIC}"
-  "${VERTICAL_SCAN_TOPIC}"
   /mapping/local_obstacle_cloud
   /mapping/spatial_awareness/status
 )
@@ -63,6 +61,12 @@ for topic in "${required_topics[@]}"; do
     fail "no message on ${topic} within ${SAMPLE_SEC}s"
   fi
 done
+
+if topic_has_message /scan_vertical; then
+  pass "optional vertical LiDAR is available"
+else
+  warn "vertical LiDAR absent: top/bottom must remain UNKNOWN and vertical commands are blocked"
+fi
 
 if topic_has_message /mapping/global_cloud; then
   pass "global room cloud is publishing"

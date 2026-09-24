@@ -20,6 +20,7 @@ dwa_local_planner_skeleton:
     obstacle_cloud_range: 8.0
     input_timeout_sec: 0.35
     odom_topic: /mavros/local_position/odom
+    # C1M1 horizontal scan, canonicalized/deskewed by the 2D pipeline.
     scan_topic: /scan_slam
     goal_topic: /drone_goal
     command_topic: /planner_cmd_vel
