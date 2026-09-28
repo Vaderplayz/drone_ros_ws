@@ -19,14 +19,18 @@ ls -l /dev/ttyUSB* /dev/serial/by-id/* 2>/dev/null
 udevadm info --query=property --name=/dev/ttyUSB1 | grep -E 'ID_(VENDOR_ID|MODEL_ID|SERIAL_SHORT|PATH)='
 ```
 
-Create a stable `/dev/ldlidar_vertical` link for the selected adapter. The
-helper uses its serial number when available, otherwise its physical USB port;
-it deliberately does not use the manual's world-writable `chmod 777` rule.
+Create stable names for both sensors so USB enumeration order cannot exchange
+their roles:
 
 ```bash
 cd /home/pi5drone/drone_ros_ws
-sudo ./src/master_scripts/configure_ld19_vertical_device.sh /dev/ttyUSB1
+sudo ./src/master_scripts/configure_c1m1_horizontal_device.sh /dev/ttyUSB<C1>
+sudo ./src/master_scripts/configure_ld19_vertical_device.sh /dev/ttyUSB<LD19>
 ```
+
+Create a stable `/dev/ldlidar_vertical` link for the selected adapter. The
+helper uses its serial number when available, otherwise its physical USB port;
+it deliberately does not use the manual's world-writable `chmod 777` rule.
 
 Unplug/replug LD19 and verify `ls -l /dev/ldlidar_vertical`.
 
