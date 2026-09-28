@@ -10,6 +10,7 @@ from diagnostic_msgs.msg import DiagnosticArray
 from geometry_msgs.msg import Point, PolygonStamped, PoseStamped, TwistStamped
 from mini_ground_control.models.health_state import HealthEntry
 from mini_ground_control.models.landing_state import LandingStateMachine
+from mini_ground_control.models.navigation import advance_position_setpoint
 from mini_ground_control.ros.px4_conversions import (
     finite_or_nan,
     ned_heading_to_enu_degrees,
@@ -120,7 +121,9 @@ class GroundControlNode(Node):
         self._landing_machine = LandingStateMachine()
         self.commands = config.get("commands", {})
         self._mode_requests: queue.Queue[str] = queue.Queue(maxsize=8)
-        self._waypoint_requests: queue.Queue[tuple[float, float, float, str]] = queue.Queue(maxsize=8)
+        self._waypoint_requests: queue.Queue[
+            tuple[float, float, float, str, float, float]
+        ] = queue.Queue(maxsize=8)
         self._avoidance_requests: queue.Queue[bool] = queue.Queue(maxsize=4)
         self._set_mode_client: Any = None
         self._setpoint_publisher: Any = None
@@ -138,6 +141,14 @@ class GroundControlNode(Node):
         self._offboard_request_due: float | None = None
         self._offboard_streaming = False
         self._active_target: tuple[float, float, float, float, str] | None = None
+        self._streamed_target: tuple[float, float, float, float, str] | None = None
+        self._last_direct_setpoint_time = time.monotonic()
+        self._direct_horizontal_speed = float(
+            self.commands.get("direct_horizontal_speed_mps", 0.30)
+        )
+        self._direct_vertical_speed = float(
+            self.commands.get("direct_vertical_speed_mps", 0.20)
+        )
         self._actual_mode = "UNKNOWN"
         self._local_frame_id = str(self.commands.get("local_frame_id", "odom"))
         self._setpoint_topic = str(self.commands.get("local_setpoint_topic", "/mavros/setpoint_position/local"))
@@ -279,9 +290,26 @@ class GroundControlNode(Node):
         except queue.Full:
             self.signals.command_result.emit("mode", False, "mode request queue full")
 
-    def request_waypoint(self, x: float, y: float, z: float, source_frame: str = "") -> None:
+    def request_waypoint(
+        self,
+        x: float,
+        y: float,
+        z: float,
+        source_frame: str = "",
+        horizontal_speed_mps: float = 0.30,
+        vertical_speed_mps: float = 0.20,
+    ) -> None:
         try:
-            self._waypoint_requests.put_nowait((float(x), float(y), float(z), source_frame))
+            self._waypoint_requests.put_nowait(
+                (
+                    float(x),
+                    float(y),
+                    float(z),
+                    source_frame,
+                    float(horizontal_speed_mps),
+                    float(vertical_speed_mps),
+                )
+            )
         except queue.Full:
             self.signals.command_result.emit("waypoint", False, "waypoint request queue full")
 
@@ -410,6 +438,8 @@ class GroundControlNode(Node):
                 return
         yaw_rad = math.radians(pose.yaw_deg) if math.isfinite(pose.yaw_deg) else 0.0
         self._active_target = (*coordinates, yaw_rad, self._local_frame_id)
+        self._streamed_target = self._active_target
+        self._last_direct_setpoint_time = time.monotonic()
         if self._avoidance_enabled:
             self._publish_goal(*coordinates)
         self._offboard_streaming = True
@@ -456,16 +486,26 @@ class GroundControlNode(Node):
             if requested_mode == "OFFBOARD" and not success:
                 self._offboard_streaming = False
                 self._active_target = None
+                self._streamed_target = None
             if requested_mode != "OFFBOARD" and success:
                 self._offboard_streaming = False
                 self._active_target = None
+                self._streamed_target = None
             if service_action:
                 message = f"native PX4 {requested_mode}: {message}"
             emit_result(success, message)
 
         future.add_done_callback(complete)
 
-    def _accept_waypoint(self, x: float, y: float, z: float, source_frame: str) -> None:
+    def _accept_waypoint(
+        self,
+        x: float,
+        y: float,
+        z: float,
+        source_frame: str,
+        horizontal_speed_mps: float,
+        vertical_speed_mps: float,
+    ) -> None:
         snapshot = self.store.snapshot()
         pose = snapshot["flight"].pose
         if self._actual_mode != "OFFBOARD" or not self._offboard_streaming:
@@ -501,7 +541,31 @@ class GroundControlNode(Node):
             self._publish_goal(x, y, z)
             detail = "guarded waypoint"
         else:
-            detail = "position hold"
+            minimum_speed = float(self.commands.get("direct_min_speed_mps", 0.05))
+            maximum_horizontal = float(
+                self.commands.get("direct_max_horizontal_speed_mps", 1.0)
+            )
+            maximum_vertical = float(
+                self.commands.get("direct_max_vertical_speed_mps", 0.5)
+            )
+            self._direct_horizontal_speed = min(
+                maximum_horizontal, max(minimum_speed, horizontal_speed_mps)
+            )
+            self._direct_vertical_speed = min(
+                maximum_vertical, max(minimum_speed, vertical_speed_mps)
+            )
+            self._streamed_target = (
+                pose.x,
+                pose.y,
+                pose.z,
+                yaw_rad,
+                self._local_frame_id,
+            )
+            self._last_direct_setpoint_time = time.monotonic()
+            detail = (
+                f"direct position trajectory at {self._direct_horizontal_speed:.2f} m/s XY, "
+                f"{self._direct_vertical_speed:.2f} m/s Z"
+            )
         self.signals.command_result.emit(
             "waypoint", True, f"{detail} local ENU ({x:.2f}, {y:.2f}, {z:.2f})"
         )
@@ -532,7 +596,21 @@ class GroundControlNode(Node):
             return
         if self._setpoint_publisher is None:
             return
-        x, y, z, yaw, frame_id = self._active_target
+        target_x, target_y, target_z, yaw, frame_id = self._active_target
+        now = time.monotonic()
+        dt_sec = min(0.25, max(0.0, now - self._last_direct_setpoint_time))
+        self._last_direct_setpoint_time = now
+        if self._streamed_target is None:
+            self._streamed_target = self._active_target
+        current_x, current_y, current_z, _, _ = self._streamed_target
+        x, y, z = advance_position_setpoint(
+            (current_x, current_y, current_z),
+            (target_x, target_y, target_z),
+            self._direct_horizontal_speed,
+            self._direct_vertical_speed,
+            dt_sec,
+        )
+        self._streamed_target = (x, y, z, yaw, frame_id)
         message = PoseStamped()
         message.header.stamp = self.get_clock().now().to_msg()
         message.header.frame_id = frame_id
@@ -582,6 +660,8 @@ class GroundControlNode(Node):
         ):
             yaw = math.radians(pose.yaw_deg) if math.isfinite(pose.yaw_deg) else 0.0
             self._active_target = (pose.x, pose.y, pose.z, yaw, self._local_frame_id)
+            self._streamed_target = self._active_target
+            self._last_direct_setpoint_time = time.monotonic()
             if enabled:
                 self._publish_goal(pose.x, pose.y, pose.z)
         state = "enabled; holding current pose" if enabled else "disabled; direct position hold"
@@ -601,10 +681,12 @@ class GroundControlNode(Node):
         if not message.connected:
             self._offboard_streaming = False
             self._active_target = None
+            self._streamed_target = None
             self._offboard_request_due = None
         elif previous_actual_mode == "OFFBOARD" and self._actual_mode != "OFFBOARD":
             self._offboard_streaming = False
             self._active_target = None
+            self._streamed_target = None
         if message.mode != self._previous_mode:
             self.signals.event.emit("INFO", f"Flight mode: {message.mode or 'UNKNOWN'}")
             self._previous_mode = message.mode
@@ -999,11 +1081,26 @@ class RosBridgeThread(threading.Thread):
             return
         self.node.request_mode(mode)
 
-    def request_waypoint(self, x: float, y: float, z: float, source_frame: str = "") -> None:
+    def request_waypoint(
+        self,
+        x: float,
+        y: float,
+        z: float,
+        source_frame: str = "",
+        horizontal_speed_mps: float = 0.30,
+        vertical_speed_mps: float = 0.20,
+    ) -> None:
         if self.node is None:
             self.signals.command_result.emit("waypoint", False, "ROS bridge not ready")
             return
-        self.node.request_waypoint(x, y, z, source_frame)
+        self.node.request_waypoint(
+            x,
+            y,
+            z,
+            source_frame,
+            horizontal_speed_mps,
+            vertical_speed_mps,
+        )
 
     def request_avoidance(self, enabled: bool) -> None:
         if self.node is None:

@@ -9,6 +9,35 @@ MAX_MERCATOR_LATITUDE_DEG = 85.05112878
 TILE_SIZE_PX = 256
 
 
+def advance_position_setpoint(
+    current: tuple[float, float, float],
+    target: tuple[float, float, float],
+    horizontal_speed_mps: float,
+    vertical_speed_mps: float,
+    dt_sec: float,
+) -> tuple[float, float, float]:
+    """Advance a position setpoint without exceeding independent XY/Z rates."""
+    if dt_sec <= 0.0:
+        return current
+
+    x, y, z = current
+    target_x, target_y, target_z = target
+    dx = target_x - x
+    dy = target_y - y
+    horizontal_distance = math.hypot(dx, dy)
+    horizontal_step = min(horizontal_distance, max(0.0, horizontal_speed_mps) * dt_sec)
+    if horizontal_distance > 1e-9:
+        scale = horizontal_step / horizontal_distance
+        x += dx * scale
+        y += dy * scale
+
+    dz = target_z - z
+    vertical_step = min(abs(dz), max(0.0, vertical_speed_mps) * dt_sec)
+    if abs(dz) > 1e-9:
+        z += math.copysign(vertical_step, dz)
+    return x, y, z
+
+
 @dataclass(frozen=True)
 class GeoReference:
     latitude_deg: float

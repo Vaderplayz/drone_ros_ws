@@ -1,40 +1,37 @@
 # Real Lidar2 3D Mapping
 
-This runs the new vertical C1M1 RPLIDAR as an observer-only 3D mapping layer.
+This runs the LD19 as an observer-only vertical 3D mapping layer.
 It does not manage lidar1, MAVROS, AprilTag, or flight control, and it does not
 arm, change PX4 mode, or publish setpoints. It can run without RF2O and 2D SLAM
 when MAVROS/AprilTag odometry is already available.
 
 ## Hardware Defaults
 
-- lidar2 port: `/dev/ttyUSB1`
-- lidar2 baudrate: `460800`
+- lidar2 port: `/dev/ldlidar_vertical`
+- lidar2 baudrate: `230400`
 - lidar2 scan topic: `/scan_vertical`
 - lidar2 frame: `lidar_vert_link`
-- lidar2 scan mode: `Standard`
-- lidar2 driver: `sllidar_ros2` with the newer C1-compatible Slamtec SDK
+- lidar2 driver: vendored official `ldlidar_stl_ros2`
 - mapper outputs: `/vertical_points_deskewed`, `/vertical_cloud`,
   `/vertical_map`, `/mapping/global_cloud`, `/mapping/status`
 
-The legacy `rplidar_ros` copy in this workspace uses SDK `1.12.0` and remains
-available for lidar1. Lidar2 deliberately uses `sllidar_ros2`; the launcher
-will stop with a clear error if that package has not been built in the overlay.
+The launcher stops with a clear error if `ldlidar_stl_ros2` has not been built
+in the overlay.
 
 Check the driver before startup:
 
 ```bash
-ros2 pkg prefix sllidar_ros2
+ros2 pkg prefix ldlidar_stl_ros2
 ```
 
 The default static TF assumes ROS body axes `x-forward`, `y-left`, `z-up`.
-LiDAR 2 is mounted at the front: its top points forward and its physical
-forward mark points up. Slamtec's `sllidar_ros2` conversion maps that mark to
-LaserScan local `-X`. Therefore local `+X` points down, local `+Y` points left,
-and local `+Z` points forward:
+LiDAR 2 is mounted at the front: its top points forward and its physical front
+mark points up. The LDROBOT driver maps that mark to LaserScan local `+X`, so
+the static transform is:
 
 ```bash
-LIDAR2_ROLL=0.0
-LIDAR2_PITCH=1.57079632679
+LIDAR2_ROLL=3.14159265359
+LIDAR2_PITCH=-1.57079632679
 LIDAR2_YAW=0.0
 LIDAR2_X=0.28
 LIDAR2_Y=0.0
@@ -96,7 +93,7 @@ ros2 run tf2_ros tf2_echo base_footprint lidar_vert_link
 ```
 
 The translation must be approximately `[0.28, 0.0, -0.035]`, and the reported
-pitch must be approximately `+1.571` rad. Ctrl+C saves PCD
+rotation must be equivalent to `rpy=(pi, -pi/2, 0)`. Ctrl+C saves PCD
 and trajectory files under `maps/vertical_3d`; map-dependent 2D and GLB exports
 are intentionally disabled in this mode.
 
@@ -132,8 +129,9 @@ Experimental enable_scan_matching=true:
 The planar TF remains the prediction input for 2D SLAM. The vertical mapper
 does not use that flattened transform for altitude, roll, or pitch; it buffers
 the full MAVROS odometry message and interpolates every beam with quaternion
-SLERP. The C1 driver timestamp is treated as scan start, so beam `i` uses
-`header.stamp + i * time_increment`.
+SLERP. The LD19 driver timestamp is treated as scan end. LD19 samples clockwise
+while its ROS range array is reversed into increasing counter-clockwise angle,
+so beam timing uses descending array order.
 
 TF ownership in the master-script flow is:
 
@@ -232,11 +230,11 @@ states, and nearest obstacle markers. See
 `vertical_lidar_mapper/docs/spatial_awareness_validation.md` for the room and
 doorway acceptance test.
 
-The real C1 profile currently favors stability over detail: `voxel_leaf=0.10`,
-`global_voxel_leaf_size=0.05`, keyframes at `0.05 m` or `0.04 rad` motion (or
-after `0.20 s`), and a one-million-point global cap. It rejects integration
-during fast yaw and applies conservative map-vs-odom pose gates. Floor
-exclusion is off so the vertical sweep retains the floor and other low points.
+The real LD19 profile favors stability over detail: `voxel_leaf=0.10`,
+`global_voxel_leaf_size=0.08`, keyframes at `0.03 m` or `0.025 rad` motion (or
+after `0.10 s`), and a 400,000-point global cap. It rejects integration during
+fast motion. Floor exclusion is off so the vertical sweep retains the floor
+and other low points.
 
 The vertical mapper does not use parameters named `voxel_leaf_size`,
 `voxel_size`, `min_z`, `max_z`, `downsample`, `scan_stride`, or

@@ -313,6 +313,7 @@ private:
   std::string integration_mode_{"keyframe"};
   std::string motion_odom_frame_{"odom"};
   std::string scan_stamp_reference_{"start"};
+  std::string scan_acquisition_order_{"ascending_angle"};
   std::string scan_matching_map_frame_{"vertical_map"};
 
   double voxel_leaf_{0.15};

@@ -107,11 +107,9 @@ Keep the pilot ready to switch back to `POSCTL`. This conservative profile does 
 legacy wall-follow, narrow-gap, sharp-turn, or minimum-cruise fallbacks: if no safe rollout
 exists it should hold instead of forcing a maneuver.
 
-For the temporary single-C1M1 hardware profile, do not start 3D mapping. Start
-LiDAR odometry, 2D mapping, and obstacle avoidance. C1M1 supplies horizontal
-sensing; top and bottom intentionally remain `UNKNOWN`, so avoidance can route
-around walls and poles but cannot command altitude changes. The 3D start
-service remains disabled until the vertical LD19 profile is installed.
+The 3D quick action starts the installed LD19 vertical profile. C1M1 remains
+the horizontal odometry/2D sensor; LD19 contributes top/bottom and lateral
+vertical-slice observations without changing any flight-controller settings.
 
 With a valid GPS fix, the tab overlays currently visible OpenStreetMap tiles at 50% opacity.
 The loader identifies the application, uses bounded memory and HTTP disk caches, and displays

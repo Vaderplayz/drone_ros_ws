@@ -49,6 +49,10 @@ source "${ROS_SETUP}"
 source "${WORKSPACE_SETUP}"
 set -u
 export DRONE_ROS_WS="${WORKSPACE}"
+# Fast DDS multicast discovery can become stale after switching Wi-Fi networks.
+# Keep subnet discovery, and explicitly probe the drone's stable hotspot address.
+export ROS_AUTOMATIC_DISCOVERY_RANGE="${ROS_AUTOMATIC_DISCOVERY_RANGE:-SUBNET}"
+export ROS_STATIC_PEERS="${ROS_STATIC_PEERS:-${MINI_GC_ROS_STATIC_PEERS:-10.42.0.129}}"
 cd "${WORKSPACE}"
 printf '[%s] starting Mini Ground Control from %s\n' "$(date --iso-8601=seconds)" "${WORKSPACE}"
 exec "${PYTHON_BIN}" -m mini_ground_control.main "$@"

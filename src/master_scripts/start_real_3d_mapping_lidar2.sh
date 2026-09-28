@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Real-drone lidar2 vertical 3D mapping.
-# Starts only the second RPLIDAR and vertical_lidar_mapper. It does not touch
+# Real-drone LD19 vertical 3D mapping.
+# Starts only the LD19 and vertical_lidar_mapper. It does not touch
 # lidar1, RF2O, MAVROS, AprilTag, planner, arming, mode, or setpoint topics.
 # shellcheck disable=SC1090,SC1091
 
@@ -11,15 +11,16 @@ ROS_WS="${ROS_WS:-${ROS_WS_DEFAULT}}"
 ROS_SETUP="${ROS_SETUP:-${ROS_WS}/install/setup.bash}"
 USE_SIM_TIME="${USE_SIM_TIME:-false}"
 
-LIDAR2_SERIAL_PORT="${LIDAR2_SERIAL_PORT:-/dev/ttyUSB1}"
-LIDAR2_BAUDRATE="${LIDAR2_BAUDRATE:-460800}"
+LIDAR2_SERIAL_PORT="${LIDAR2_SERIAL_PORT:-/dev/ldlidar_vertical}"
+LIDAR2_BAUDRATE="${LIDAR2_BAUDRATE:-230400}"
 LIDAR2_FRAME_ID="${LIDAR2_FRAME_ID:-lidar_vert_link}"
 LIDAR2_SCAN_TOPIC="${LIDAR2_SCAN_TOPIC:-/scan_vertical}"
-LIDAR2_NODE_NAME="${LIDAR2_NODE_NAME:-sllidar2_vertical}"
+LIDAR2_NODE_NAME="${LIDAR2_NODE_NAME:-ld19_vertical}"
 LIDAR2_SCAN_WAIT_SEC="${LIDAR2_SCAN_WAIT_SEC:-60}"
-LIDAR2_INVERTED="${LIDAR2_INVERTED:-false}"
-LIDAR2_ANGLE_COMPENSATE="${LIDAR2_ANGLE_COMPENSATE:-true}"
-LIDAR2_SCAN_MODE="${LIDAR2_SCAN_MODE:-Standard}"
+LIDAR2_LASER_SCAN_DIR="${LIDAR2_LASER_SCAN_DIR:-true}"
+LIDAR2_ENABLE_ANGLE_CROP="${LIDAR2_ENABLE_ANGLE_CROP:-false}"
+LIDAR2_ANGLE_CROP_MIN="${LIDAR2_ANGLE_CROP_MIN:-135.0}"
+LIDAR2_ANGLE_CROP_MAX="${LIDAR2_ANGLE_CROP_MAX:-225.0}"
 
 ODOM_FRAME="${ODOM_FRAME:-odom}"
 BASE_FRAME="${BASE_FRAME:-base_footprint}"
@@ -30,20 +31,21 @@ REQUIRE_2D_MAP="${REQUIRE_2D_MAP:-0}"
 WAIT_TIMEOUT_SEC="${WAIT_TIMEOUT_SEC:-90}"
 POINTCLOUD_WAIT_SEC="${POINTCLOUD_WAIT_SEC:-90}"
 
-# Front-mount convention (ROS base: x-forward, y-left, z-up):
-# - sllidar_ros2 maps the C1M1 physical forward mark to LaserScan local -X.
+# LD19 front-up convention (ROS base: x-forward, y-left, z-up):
+# - The LDROBOT driver converts the native clockwise scan into ROS CCW, so
+#   LaserScan +X is the physical front mark.
+# - Physical front (+X) points drone-up (+Z).
 # - LiDAR top (+Z) points drone-forward (+X).
-# - The physical forward mark (-X) points drone-up (+Z).
-# Thus LaserScan +X points down, +Y points left, and +Z points forward.
+# - LiDAR +Y therefore points drone-right (-Y).
 START_LIDAR2_STATIC_TF="${START_LIDAR2_STATIC_TF:-1}"
 LIDAR2_X="${LIDAR2_X:-0.28}"
 LIDAR2_Y="${LIDAR2_Y:-0.0}"
 LIDAR2_Z="${LIDAR2_Z:--0.035}"
-LIDAR2_ROLL="${LIDAR2_ROLL:-0.0}"
-LIDAR2_PITCH="${LIDAR2_PITCH:-1.57079632679}"
+LIDAR2_ROLL="${LIDAR2_ROLL:-3.14159265359}"
+LIDAR2_PITCH="${LIDAR2_PITCH:--1.57079632679}"
 LIDAR2_YAW="${LIDAR2_YAW:-0.0}"
 
-MAPPER_PARAMS_FILE="${MAPPER_PARAMS_FILE:-${ROS_WS}/src/vertical_lidar_mapper/config/real_c1m1_left.yaml}"
+MAPPER_PARAMS_FILE="${MAPPER_PARAMS_FILE:-${ROS_WS}/src/vertical_lidar_mapper/config/real_ld19_vertical.yaml}"
 VERTICAL_CLOUD_TOPIC="${VERTICAL_CLOUD_TOPIC:-/vertical_cloud}"
 DESKEWED_CLOUD_TOPIC="${DESKEWED_CLOUD_TOPIC:-/vertical_points_deskewed}"
 VERTICAL_MAP_TOPIC="${VERTICAL_MAP_TOPIC:-/vertical_map}"
@@ -77,7 +79,7 @@ PROCESS_STOP_TIMEOUT_SEC="${PROCESS_STOP_TIMEOUT_SEC:-5}"
 RUN_STAMP="$(date +%Y%m%d_%H%M%S)"
 LOG_DIR="${ROS_WS}/runtime_logs/lidar2_3d_${RUN_STAMP}"
 MASTER_LOG="${LOG_DIR}/master.log"
-LIDAR2_LOG="${LOG_DIR}/sllidar2.log"
+LIDAR2_LOG="${LOG_DIR}/ld19_vertical.log"
 STATIC_TF_LOG="${LOG_DIR}/lidar2_static_tf.log"
 MAPPER_LOG="${LOG_DIR}/vertical_lidar_mapper.log"
 SPATIAL_AWARENESS_LOG="${LOG_DIR}/spatial_awareness.log"
@@ -312,6 +314,8 @@ validate_settings() {
     *) log_error "REQUIRE_2D_MAP must be 0 or 1, got '${REQUIRE_2D_MAP}'"; return 1 ;;
   esac
   for boolean_value in \
+    "${LIDAR2_LASER_SCAN_DIR}" \
+    "${LIDAR2_ENABLE_ANGLE_CROP}" \
     "${ENABLE_FLOOR_STABILIZATION}" \
     "${ENABLE_FLOOR_TILT_CORRECTION}" \
     "${ENABLE_MAP_REBASE}" \
@@ -322,7 +326,7 @@ validate_settings() {
     case "${boolean_value}" in
       true|false) ;;
       *)
-        log_error "mapper feature flags must be true or false, got '${boolean_value}'"
+        log_error "boolean settings must be true or false, got '${boolean_value}'"
         return 1
         ;;
     esac
@@ -346,12 +350,17 @@ validate_settings() {
     fi
   done
   for number in "${LIDAR2_X}" "${LIDAR2_Y}" "${LIDAR2_Z}" \
-    "${LIDAR2_ROLL}" "${LIDAR2_PITCH}" "${LIDAR2_YAW}"; do
+    "${LIDAR2_ROLL}" "${LIDAR2_PITCH}" "${LIDAR2_YAW}" \
+    "${LIDAR2_ANGLE_CROP_MIN}" "${LIDAR2_ANGLE_CROP_MAX}"; do
     if [[ ! "${number}" =~ ^-?([0-9]+([.][0-9]*)?|[.][0-9]+)$ ]]; then
       log_error "lidar2 pose values must be numeric, got '${number}'"
       return 1
     fi
   done
+  if [[ ! "${LIDAR2_BAUDRATE}" =~ ^[0-9]+$ ]] || (( LIDAR2_BAUDRATE <= 0 )); then
+    log_error "LIDAR2_BAUDRATE must be a positive integer"
+    return 1
+  fi
   if [[ ! -f "${MAPPER_PARAMS_FILE}" ]]; then
     log_error "mapper params file not found: ${MAPPER_PARAMS_FILE}"
     return 1
@@ -443,8 +452,8 @@ wait_for_2d_map_if_required() {
 }
 
 lidar_process_using_lidar2_port() {
-  pgrep -af '[s]llidar_node|[r]plidar_composition|[r]plidar_node' 2>/dev/null | \
-    grep -F "serial_port:=${LIDAR2_SERIAL_PORT}" || true
+  pgrep -af '[l]dlidar_stl_ros2_node|[s]llidar_node|[r]plidar_composition|[r]plidar_node' 2>/dev/null | \
+    grep -E "(port_name|serial_port):=${LIDAR2_SERIAL_PORT}" || true
 }
 
 start_lidar2_driver() {
@@ -473,17 +482,18 @@ start_lidar2_driver() {
     return 1
   fi
 
-  start_process sllidar2 "${LIDAR2_LOG}" \
-    ros2 run sllidar_ros2 sllidar_node --ros-args \
+  start_process ld19_vertical "${LIDAR2_LOG}" \
+    ros2 run ldlidar_stl_ros2 ldlidar_stl_ros2_node --ros-args \
       -r __node:="${LIDAR2_NODE_NAME}" \
-      -r scan:="${LIDAR2_SCAN_TOPIC}" \
-      -p channel_type:=serial \
-      -p serial_port:="${LIDAR2_SERIAL_PORT}" \
-      -p serial_baudrate:="${LIDAR2_BAUDRATE}" \
+      -p product_name:=LDLiDAR_LD19 \
+      -p topic_name:="${LIDAR2_SCAN_TOPIC}" \
+      -p port_name:="${LIDAR2_SERIAL_PORT}" \
+      -p port_baudrate:="${LIDAR2_BAUDRATE}" \
       -p frame_id:="${LIDAR2_FRAME_ID}" \
-      -p inverted:="${LIDAR2_INVERTED}" \
-      -p angle_compensate:="${LIDAR2_ANGLE_COMPENSATE}" \
-      -p scan_mode:="${LIDAR2_SCAN_MODE}" \
+      -p laser_scan_dir:="${LIDAR2_LASER_SCAN_DIR}" \
+      -p enable_angle_crop_func:="${LIDAR2_ENABLE_ANGLE_CROP}" \
+      -p angle_crop_min:="${LIDAR2_ANGLE_CROP_MIN}" \
+      -p angle_crop_max:="${LIDAR2_ANGLE_CROP_MAX}" \
       -p use_sim_time:="${USE_SIM_TIME}"
   pid="${LAST_STARTED_PID}"
   wait_for_message "${LIDAR2_SCAN_TOPIC}" "${LIDAR2_SCAN_WAIT_SEC}" best_effort "${pid}" "${LIDAR2_LOG}"
@@ -742,8 +752,8 @@ main() {
       exit 1
     fi
   done
-  if ! ros2 pkg prefix sllidar_ros2 >/dev/null 2>&1; then
-    log_error "sllidar_ros2 is unavailable; install/build Slamtec's C1-compatible ROS 2 driver"
+  if ! ros2 pkg prefix ldlidar_stl_ros2 >/dev/null 2>&1; then
+    log_error "ldlidar_stl_ros2 is unavailable; build the vendored LD19 driver package"
     exit 1
   fi
   if ! ros2 pkg prefix vertical_lidar_mapper >/dev/null 2>&1; then

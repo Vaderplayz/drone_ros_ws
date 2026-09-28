@@ -1,0 +1,275 @@
+# Real-drone profile for an LDROBOT LD19 mounted as the vertical LiDAR.
+#
+# Expected TF:
+#   map -> odom -> base_footprint -> lidar_vert_link
+#
+# The startup script overrides use_sim_time, scan_topic, target_frame,
+# base_frame, motion_odom_topic, and pcd_export_dir from its environment.
+vertical_lidar_mapper:
+  ros__parameters:
+    use_sim_time: false
+
+    scan_topic: "/scan_vertical"
+    cloud_topic: "/vertical_cloud"
+    deskewed_cloud_topic: "/vertical_points_deskewed"
+    map_topic: "/vertical_map"
+    global_map_topic: "/mapping/global_cloud"
+    status_topic: "/mapping/status"
+
+    target_frame: "odom"
+    base_frame: "base_footprint"
+    lidar_frame_override: "lidar_vert_link"
+
+    # Stability-first room profile. Integrate often enough to fill walls, but
+    # keep the global cloud coarse and bounded for a Raspberry Pi 5.
+    voxel_leaf: 0.10
+    max_points: 500000
+    keep_seconds: 30.0
+    local_map_publish_hz: 2.0
+
+    integration_mode: "keyframe"
+    keyframe_min_translation_m: 0.03
+    keyframe_min_yaw_rad: 0.025
+    keyframe_max_interval_sec: 0.10
+    max_keyframes: 10000
+
+    global_voxel_leaf_size: 0.08
+    max_global_points: 400000
+    global_publish_hz: 3.0
+    global_revoxelize_every_n_scans: 10
+    # Remove persistent isolated returns periodically, not in every scan
+    # callback. Dense wall/floor observations survive this neighborhood gate.
+    enable_global_radius_outlier_filter: true
+    global_outlier_radius_m: 0.20
+    global_outlier_min_neighbors: 3
+    global_outlier_min_points: 1000
+    global_outlier_filter_every_n_revoxelizations: 3
+
+    # The LD19 advertises a 0.02 m minimum. A 0.12 m software minimum removes
+    # near-field housing/cable returns while retaining close obstacles.
+    min_range: 0.12
+    max_range: 12.0
+    exclude_floor_points: false
+    floor_z_max: 0.10
+    # The front mount exposes both halves of the vertical scan. Use a
+    # confidence-checked floor band as a nonblocking Z anchor while full
+    # MAVROS Z/roll/pitch deskew remains active.
+    enable_floor_stabilization: true
+    floor_stabilization_percentile: 0.10
+    floor_stabilization_band_m: 0.08
+    floor_stabilization_min_points: 20
+    floor_stabilization_min_xy_span_m: 0.50
+    # Rigidly level a trustworthy scan slice using its observed floor line.
+    # The same rotation is applied to its wall returns, preserving the corner.
+    enable_floor_tilt_correction: true
+    floor_tilt_correction_min_rad: 0.0087
+    floor_stabilization_max_tilt_rad: 0.1745
+    # Match the physical floor to the z=0 plane used by the 2D occupancy map.
+    floor_stabilization_target_z_m: 0.0
+    # Reject sudden altitude corrections and sloped low-return strips. When a
+    # floor estimate is unavailable, retain the odometry-height scan instead
+    # of creating a blind direction in the accumulated cloud.
+    # The first confidence-checked estimate may initialize a larger offset if
+    # mapping starts while the drone is already held above its odom origin.
+    floor_stabilization_max_correction_m: 1.50
+    floor_stabilization_max_step_m: 0.15
+    require_floor_for_global_integration: false
+    # Keep the odometry-height scan when no reliable floor observation exists.
+    # Floor visibility depends on yaw and must not create angular blind sectors.
+    drop_scan_on_floor_stabilization_failure: false
+
+    tf_timeout: 0.25
+    tf_filter_queue_size: 150
+    tf_lookup_window_size: 250
+    tilt_compensation: false
+
+    # The official LD19 ROS 2 driver stamps a completed revolution when it is
+    # published. Treat that header as scan end when assigning per-beam poses.
+    # Retain full MAVROS x/y/z/roll/pitch/yaw deskew.
+    enable_full_pose_deskew: true
+    require_full_pose_deskew: true
+    scan_stamp_reference: "end"
+    # LD19 samples clockwise. The driver reverses the range array to expose
+    # ROS-standard increasing CCW angles, so acquisition time runs from the
+    # highest array index toward index zero.
+    scan_acquisition_order: "descending_angle"
+    motion_odom_frame: "odom"
+    pose_buffer_duration_sec: 5.0
+    pose_interpolation_max_gap_sec: 0.10
+    deskew_min_valid_ratio: 0.95
+    # The scan arrives just before MAVROS has published poses for its final
+    # beams. Hold it briefly instead of rejecting those beams immediately.
+    deskew_wait_for_pose_timeout_sec: 0.35
+    deskew_queue_poll_hz: 100.0
+    deskew_pending_queue_size: 30
+    deskew_max_scans_per_cycle: 2
+
+    drop_scan_on_excess_motion: true
+    max_integration_yaw_rate: 0.70
+    max_integration_vertical_speed: 0.40
+    max_integration_tilt_rate: 0.45
+    max_motion_odom_age_sec: 0.20
+    motion_odom_topic: "/mavros/local_position/odom"
+
+    # Experimental only. A single vertical 2D scan is planar-degenerate and
+    # can falsely converge in ICP, so the real profile relies on odometry until
+    # registration uses an observable multi-scan source submap.
+    enable_scan_matching: false
+    scan_matching_map_frame: "vertical_map"
+    scan_matching_drop_on_failure: true
+    scan_matching_max_rate_hz: 4.0
+    scan_matching_submap_radius_m: 4.0
+    scan_matching_submap_half_height_m: 3.0
+    scan_matching_voxel_leaf_size_m: 0.12
+    scan_matching_max_correspondence_distance_m: 0.45
+    scan_matching_max_iterations: 20
+    scan_matching_max_submap_points: 12000
+    scan_matching_min_source_points: 80
+    scan_matching_min_submap_points: 400
+    scan_matching_min_correspondences: 50
+    scan_matching_min_overlap_ratio: 0.30
+    scan_matching_max_rmse_m: 0.18
+    scan_matching_max_translation_correction_m: 0.30
+    scan_matching_max_yaw_correction_rad: 0.30
+    scan_matching_max_z_correction_m: 0.10
+    scan_matching_max_tilt_correction_rad: 0.10
+    scan_matching_min_height_above_floor_m: 0.15
+    scan_matching_warmup_keyframes: 8
+
+    enable_relative_pose_gate: false
+    relative_pose_map_frame: "map"
+    relative_pose_odom_frame: "odom"
+    relative_pose_translation_error_threshold: 0.08
+    relative_pose_yaw_error_threshold: 0.06
+    relative_pose_min_motion_xy: 0.03
+    relative_pose_max_map_step_xy: 0.25
+    relative_pose_max_map_yaw_step: 0.15
+
+    # The real profile first builds an internally aligned cloud in odom.
+    # Applying map->odom deltas to stored points would distort that 3D submap.
+    enable_map_rebase: false
+    map_rebase_map_frame: "map"
+    map_rebase_odom_frame: "odom"
+    map_rebase_translation_threshold: 0.08
+    map_rebase_yaw_threshold: 0.04
+    map_rebase_cooldown_scans: 6
+    rebuild_on_map_correction: false
+    rebuild_correction_translation_threshold_m: 0.08
+    rebuild_correction_yaw_threshold_rad: 0.04
+    rebuild_freeze_scans_after_correction: 6
+
+    pcd_export_dir: "/home/pi5drone/drone_ros_ws/maps/vertical_3d"
+    pcd_export_prefix: "lidar2_vertical_global_map"
+    pcd_export_binary: true
+    autosave_on_exit: true
+    export_map2d_on_save: true
+    export_slam_map2d_on_save: true
+    export_trajectory_on_save: true
+    export_structural_mesh_on_save: true
+    map2d_export_prefix: "lidar2_vertical_map2d"
+    slam_map_topic: "/map"
+    slam_map2d_export_prefix: "slam2d_map"
+    trajectory_export_prefix: "lidar2_vertical_trajectory"
+    structural_mesh_export_prefix: "lidar2_structural_environment"
+    map2d_resolution: 0.10
+    map2d_padding_m: 1.0
+    trajectory_min_step: 0.03
+
+    # Compact visual model generated only during save. Free-space rectangles
+    # form the floor; occupied/free boundaries form height-aware wall runs.
+    structural_mesh_occupied_threshold: 65
+    structural_mesh_free_threshold: 19
+    structural_mesh_auto_height: true
+    structural_mesh_include_ceiling: true
+    structural_mesh_use_obstacle_heights: false
+    structural_mesh_default_floor_z: 0.0
+    structural_mesh_default_ceiling_z: 2.5
+    structural_mesh_floor_quantile: 0.02
+    structural_mesh_ceiling_quantile: 0.98
+    structural_mesh_min_room_height: 1.8
+    structural_mesh_max_room_height: 4.0
+    structural_mesh_min_obstacle_height: 0.25
+    structural_mesh_obstacle_height_padding: 0.05
+    structural_mesh_height_quantization: 0.10
+    structural_mesh_height_search_radius_cells: 1
+    structural_mesh_max_grid_cells: 2000000
+    structural_mesh_max_height_samples: 200000
+    structural_mesh_max_quads: 250000
+
+    # Bounded room visualization derived from known /map cells. This is kept
+    # separate from /mapping/global_cloud so synthetic surfaces are never used
+    # by obstacle processing or saved as raw LiDAR evidence.
+    enable_structural_cloud: true
+    structural_cloud_topic: "/mapping/structural_cloud"
+    structural_cloud_publish_hz: 1.0
+    structural_cloud_resolution_m: 0.15
+    structural_cloud_vertical_resolution_m: 0.15
+    structural_cloud_max_points: 200000
+
+    debug: false
+
+spatial_awareness:
+  ros__parameters:
+    use_sim_time: false
+
+    # The vertical mapper publishes full-pose deskewed scans in odom on
+    # /vertical_cloud. The horizontal scan is optional and may disappear
+    # without stopping this node.
+    horizontal_scan_topic: "/scan_slam"
+    vertical_scan_topic: "/scan_vertical"
+    vertical_cloud_topic: "/vertical_cloud"
+    odom_topic: "/mavros/local_position/odom"
+    horizontal_scan_stamp_reference: "end"
+    fixed_frame: "odom"
+    base_frame: "base_footprint"
+
+    local_cloud_topic: "/mapping/local_obstacle_cloud"
+    marker_topic: "/mapping/spatial_awareness/markers"
+    diagnostics_topic: "/mapping/spatial_awareness/status"
+
+    # Recent observations remain in odom internally, then are transformed to
+    # the current base_footprint pose. All queues and clouds have hard caps.
+    local_radius_m: 5.0
+    rolling_window_sec: 0.8
+    sensor_stale_timeout_sec: 0.6
+    odom_stale_timeout_sec: 0.35
+    pending_message_timeout_sec: 0.5
+    odom_interpolation_max_gap_sec: 0.12
+    odom_nearest_sample_tolerance_sec: 0.06
+    input_processing_hz: 50.0
+    local_cloud_publish_hz: 10.0
+    diagnostics_publish_hz: 2.0
+    local_voxel_size_m: 0.05
+    min_obstacle_range_m: 0.08
+    max_obstacle_range_m: 12.0
+    max_pending_messages: 8
+    max_messages_per_cycle: 4
+    max_observations: 32
+    max_points_per_observation: 5000
+    max_buffered_points: 80000
+    max_local_points: 30000
+    marker_lifetime_sec: 0.35
+
+    # Measure these values on the aircraft before flight testing. The physical
+    # X/Y collision span is the larger of the body and propeller-tip spans.
+    collision_center_x_m: 0.0
+    collision_center_y_m: 0.0
+    collision_center_z_offset_m: 0.0
+    drone_body_length_m: 0.5
+    drone_body_width_m: 0.5
+    drone_body_height_m: 0.35
+    propeller_tip_to_tip_length_m: 0.75
+    propeller_tip_to_tip_width_m: 0.75
+    self_filter_padding_m: 0.1
+
+    # Safety margins are also the WARNING thresholds. DANGER uses the smaller
+    # margins below. Distances are measured from the physical collision box.
+    horizontal_safety_margin_m: 0.40
+    vertical_safety_margin_m: 0.30
+    horizontal_danger_margin_m: 0.15
+    vertical_danger_margin_m: 0.12
+
+    # Lidar1 covers the horizontal plane. With the measured lidar2 mounting,
+    # its vertical scan plane covers left/right and top/bottom.
+    horizontal_sensor_directions: ["front", "rear", "left", "right"]
+    vertical_sensor_directions: ["left", "right", "top", "bottom"]

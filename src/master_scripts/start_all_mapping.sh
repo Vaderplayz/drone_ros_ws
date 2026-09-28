@@ -12,7 +12,7 @@ ROS_SETUP="${ROS_SETUP:-${ROS_WS}/install/setup.bash}"
 FUSION_SCRIPT="${FUSION_SCRIPT:-${SCRIPT_DIR}/start_rf2o_px4_fusion.sh}"
 MAPPING_2D_SCRIPT="${MAPPING_2D_SCRIPT:-${SCRIPT_DIR}/start_2d_mapping_only.sh}"
 MAPPING_3D_SCRIPT="${MAPPING_3D_SCRIPT:-${SCRIPT_DIR}/start_real_3d_mapping_lidar2.sh}"
-ENABLE_3D_MAPPING="${ENABLE_3D_MAPPING:-0}"
+ENABLE_3D_MAPPING="${ENABLE_3D_MAPPING:-1}"
 
 FUSION_SCAN_TOPIC="${FUSION_SCAN_TOPIC:-/scan_rf2o}"
 FUSION_ODOM_TOPIC="${FUSION_ODOM_TOPIC:-/lidar/odom}"
@@ -327,7 +327,7 @@ main() {
     MAPPING_3D_PID="${LAST_STARTED_PID}"
     wait_for_message "${GLOBAL_CLOUD_TOPIC}" "${MAPPING_3D_WAIT_SEC}" reliable "${MAPPING_3D_PID}"
   else
-    log "3D mapping disabled (ENABLE_3D_MAPPING=0); C1M1 remains horizontal-only"
+    log "3D mapping disabled by ENABLE_3D_MAPPING=0; C1M1 remains horizontal-only"
   fi
 
   if [[ "${ENABLE_SUBMAP_SLAM}" == "1" && "${ENABLE_3D_MAPPING}" == "0" ]]; then

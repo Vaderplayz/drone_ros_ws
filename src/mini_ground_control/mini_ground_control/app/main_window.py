@@ -102,6 +102,7 @@ class MainWindow(QMainWindow):
         self.landing.service_requested.connect(self._request_landing_service)
         self.dashboard.pipeline_requested.connect(self._request_pipeline)
         self.dashboard.mode_requested.connect(self._request_mode)
+        self.navigation.mode_requested.connect(self._request_mode)
         self.navigation.waypoint_requested.connect(self.bridge.request_waypoint)
         self.navigation.avoidance_requested.connect(self._request_avoidance)
         self.mapping.export_requested.connect(self._request_map_export)
@@ -207,11 +208,16 @@ class MainWindow(QMainWindow):
         if mode in {"OFFBOARD", "AUTO.LAND"} and bool(
             self.config.get("app", {}).get("confirm_critical_mode_changes", True)
         ):
-            detail = (
-                "Hold the current local position, pre-stream setpoints, and request OFFBOARD?"
-                if mode == "OFFBOARD"
-                else "Request PX4 AUTO.LAND now?"
-            )
+            takeoff_height = self.navigation.pending_takeoff_height
+            if mode == "OFFBOARD" and takeoff_height is not None:
+                detail = (
+                    "Pre-stream the current ground pose, request OFFBOARD, then climb "
+                    f"{takeoff_height:.2f} m while holding X/Y?"
+                )
+            elif mode == "OFFBOARD":
+                detail = "Hold the current local position, pre-stream setpoints, and request OFFBOARD?"
+            else:
+                detail = "Request PX4 AUTO.LAND now?"
             answer = QMessageBox.question(
                 self,
                 f"Request {mode}",
@@ -220,6 +226,8 @@ class MainWindow(QMainWindow):
                 QMessageBox.No,
             )
             if answer != QMessageBox.Yes:
+                if mode == "OFFBOARD":
+                    self.navigation.cancel_pending_takeoff()
                 return
         self.logs.append_event("WARN" if mode in {"OFFBOARD", "AUTO.LAND"} else "INFO", f"Mode request: {mode}")
         self.bridge.request_mode(mode)
@@ -236,6 +244,14 @@ class MainWindow(QMainWindow):
         level = "INFO" if success else "ERROR"
         self.logs.append_event(level, f"{action}: {message}")
         self.dashboard.set_action_result(action, success, message)
+        if (
+            action == "OFFBOARD"
+            and not success
+            and self.navigation.pending_takeoff_height is not None
+        ):
+            self.navigation.cancel_pending_takeoff(
+                f"Offboard takeoff cancelled: {message}"
+            )
         if action == "waypoint":
             self.navigation.set_result(success, message)
 

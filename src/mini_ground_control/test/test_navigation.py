@@ -3,11 +3,23 @@ import math
 from mini_ground_control.models.navigation import (
     GeoReference,
     TILE_SIZE_PX,
+    advance_position_setpoint,
     local_to_world_pixel,
     slippy_pixels_per_meter,
     slippy_world_pixel,
     tile_local_bounds,
 )
+
+
+def test_position_setpoint_rate_limits_xy_and_z_independently() -> None:
+    result = advance_position_setpoint((0.0, 0.0, 1.0), (3.0, 4.0, 2.0), 0.5, 0.2, 0.1)
+    assert math.isclose(math.hypot(result[0], result[1]), 0.05)
+    assert math.isclose(result[2], 1.02)
+
+
+def test_position_setpoint_does_not_overshoot_goal() -> None:
+    result = advance_position_setpoint((0.0, 0.0, 0.0), (0.01, -0.02, -0.03), 1.0, 1.0, 1.0)
+    assert result == (0.01, -0.02, -0.03)
 
 
 def test_local_enu_matches_slippy_map_axes() -> None:

@@ -54,7 +54,7 @@ class AprilTagPrecisionLandingNode : public rclcpp::Node {
     fixed_target_ned_z_ = declare_parameter<double>("fixed_target_ned_z", 0.0);
     fixed_target_frame_ = declare_parameter<std::string>("fixed_target_frame", "map");
 
-    camera_offset_x_ = declare_parameter<double>("camera_offset_x", 0.10);
+    camera_offset_x_ = declare_parameter<double>("camera_offset_x", 0.0);
     camera_offset_y_ = declare_parameter<double>("camera_offset_y", 0.0);
     camera_offset_z_ = declare_parameter<double>("camera_offset_z", -0.06);
     camera_roll_ = declare_parameter<double>("camera_roll", 0.0);

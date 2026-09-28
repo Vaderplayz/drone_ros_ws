@@ -251,12 +251,13 @@ VerticalLidarMapper::VerticalLidarMapper(const rclcpp::NodeOptions & options)
     max_keyframes_);
   RCLCPP_INFO(
     this->get_logger(),
-    "Full-pose deskew: %s (required=%s odom_topic='%s' odom_frame='%s' stamp_reference='%s' pose_gap<=%.3fs wait_timeout=%.3fs queue=%d poll=%.1fHz output='%s').",
+    "Full-pose deskew: %s (required=%s odom_topic='%s' odom_frame='%s' stamp_reference='%s' acquisition_order='%s' pose_gap<=%.3fs wait_timeout=%.3fs queue=%d poll=%.1fHz output='%s').",
     enable_full_pose_deskew_ ? "enabled" : "disabled",
     require_full_pose_deskew_ ? "true" : "false",
     motion_odom_topic_.c_str(),
     motion_odom_frame_.c_str(),
     scan_stamp_reference_.c_str(),
+    scan_acquisition_order_.c_str(),
     pose_interpolation_max_gap_sec_,
     deskew_wait_for_pose_timeout_sec_,
     deskew_pending_queue_size_,
@@ -420,6 +421,8 @@ void VerticalLidarMapper::loadParameters()
   deskew_pending_queue_size_ = this->declare_parameter<int>("deskew_pending_queue_size", 30);
   deskew_max_scans_per_cycle_ = this->declare_parameter<int>("deskew_max_scans_per_cycle", 2);
   scan_stamp_reference_ = this->declare_parameter<std::string>("scan_stamp_reference", "start");
+  scan_acquisition_order_ = this->declare_parameter<std::string>(
+    "scan_acquisition_order", "ascending_angle");
   debug_ = this->declare_parameter<bool>("debug", false);
   exclude_floor_points_ = this->declare_parameter<bool>("exclude_floor_points", false);
   floor_z_max_ = this->declare_parameter<double>("floor_z_max", 0.15);
@@ -799,6 +802,14 @@ void VerticalLidarMapper::loadParameters()
   if (scan_stamp_reference_ != "start" && scan_stamp_reference_ != "end") {
     scan_stamp_reference_ = "start";
     RCLCPP_WARN(this->get_logger(), "Parameter 'scan_stamp_reference' invalid, defaulting to 'start'.");
+  }
+  if (scan_acquisition_order_ != "ascending_angle" &&
+    scan_acquisition_order_ != "descending_angle")
+  {
+    scan_acquisition_order_ = "ascending_angle";
+    RCLCPP_WARN(
+      this->get_logger(),
+      "Parameter 'scan_acquisition_order' invalid, defaulting to 'ascending_angle'.");
   }
 
   if (!std::isfinite(floor_z_max_)) {
@@ -1482,7 +1493,9 @@ bool VerticalLidarMapper::buildDeskewedLocalCloud(
     }
     ++valid_input_points;
 
-    double offset_sec = static_cast<double>(index) * beam_increment;
+    const std::size_t temporal_index = scan_acquisition_order_ == "descending_angle" ?
+      beam_count - 1U - index : index;
+    double offset_sec = static_cast<double>(temporal_index) * beam_increment;
     if (scan_stamp_reference_ == "end") {
       offset_sec -= scan_duration;
     }
@@ -3464,6 +3477,8 @@ void VerticalLidarMapper::publishStatus()
   add_kv("target_frame", target_frame_);
   add_kv("global_cloud_frame", globalCloudFrame());
   add_kv("integration_mode", integration_mode_);
+  add_kv("scan_stamp_reference", scan_stamp_reference_);
+  add_kv("scan_acquisition_order", scan_acquisition_order_);
   add_kv("loop_closure_dedup_only", loop_closure_dedup_only_ ? "true" : "false");
   add_kv("vertical_scan_input_rate_hz", to_string_with_precision(input_rate_hz, 2));
   add_kv("accepted_scan_rate_hz", to_string_with_precision(accepted_rate_hz, 2));

@@ -72,10 +72,21 @@ commands:
   avoidance_velocity_topic: /mavros/setpoint_velocity/cmd_vel
   avoidance_goal_topic: /drone_goal
   guarded_velocity_topic: /planner_cmd_vel
-  avoidance_enabled_by_default: true
+  # Keep first-flight Navigation tests on the direct PX4 position path.
+  # Obstacle avoidance must be enabled explicitly after its own validation.
+  avoidance_enabled_by_default: false
   avoidance_command_timeout_sec: 0.30
   setpoint_rate_hz: 10.0
   offboard_prestream_sec: 1.0
+  direct_horizontal_speed_mps: 0.30
+  direct_vertical_speed_mps: 0.20
+  direct_min_speed_mps: 0.05
+  direct_max_horizontal_speed_mps: 1.00
+  direct_max_vertical_speed_mps: 0.50
+  offboard_takeoff_height_m: 0.80
+  offboard_takeoff_min_height_m: 0.30
+  offboard_takeoff_max_height_m: 2.00
+  offboard_takeoff_max_start_altitude_m: 0.35
   local_frame_id: odom
   maximum_horizontal_step_m: 25.0
   minimum_altitude_m: -2.0

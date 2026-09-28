@@ -15,7 +15,7 @@ GUARD_PARAMS_FILE="${GUARD_PARAMS_FILE:-${ROS_WS}/src/obs_avoid/config/spatial_c
 SPATIAL_STATUS_TOPIC="${SPATIAL_STATUS_TOPIC:-/mapping/spatial_awareness/status}"
 SPATIAL_READY_TIMEOUT_SEC="${SPATIAL_READY_TIMEOUT_SEC:-10}"
 START_HORIZONTAL_AWARENESS="${START_HORIZONTAL_AWARENESS:-1}"
-SPATIAL_PARAMS_FILE="${SPATIAL_PARAMS_FILE:-${ROS_WS}/src/vertical_lidar_mapper/config/real_horizontal_only.yaml}"
+SPATIAL_PARAMS_FILE="${SPATIAL_PARAMS_FILE:-${ROS_WS}/src/vertical_lidar_mapper/config/real_ld19_vertical.yaml}"
 USE_SIM_TIME="${USE_SIM_TIME:-false}"
 ALLOW_LEGACY_PLANNER="${ALLOW_LEGACY_PLANNER:-0}"
 
@@ -69,7 +69,7 @@ if ! timeout 2 ros2 topic echo "${SPATIAL_STATUS_TOPIC}" --once >/dev/null 2>&1;
     echo "[error] no spatial-awareness diagnostic on ${SPATIAL_STATUS_TOPIC}." >&2
     exit 1
   fi
-  echo "[run] horizontal-only spatial awareness (top/bottom remain UNKNOWN)"
+  echo "[run] dual-LiDAR spatial awareness (missing/stale sensors remain UNKNOWN)"
   ros2 run vertical_lidar_mapper spatial_awareness_node --ros-args \
     --params-file "${SPATIAL_PARAMS_FILE}" -p use_sim_time:="${USE_SIM_TIME}" &
   AWARENESS_PID="$!"

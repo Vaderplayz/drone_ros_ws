@@ -94,7 +94,7 @@ apriltag_precision_landing:
     input_timeout_sec: 0.30
 
     # Camera optical origin measured from the FC origin; orientation unchanged.
-    camera_offset_x: 0.10
+    camera_offset_x: 0.0
     camera_offset_y: 0.0
     camera_offset_z: -0.06
     # This tuned transform is applied directly from drone_frame -> camera_optical_frame.
