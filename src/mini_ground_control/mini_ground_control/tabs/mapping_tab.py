@@ -25,7 +25,7 @@ class MappingTab(QWidget):
         layout = QVBoxLayout(self)
         controls = QHBoxLayout()
         self.mode = QComboBox()
-        self.mode.addItems(["2D map", "3D OctoMap"])
+        self.mode.addItems(["2D map", "3D OctoMap", "Side by side", "3D + 2D overlay"])
         self.center = QPushButton("Center")
         self.follow = QCheckBox("Follow drone")
         self.follow.setChecked(True)
@@ -92,6 +92,7 @@ class MappingTab(QWidget):
         layout.addWidget(self.status)
         layout.addWidget(self.canvas, 1)
         self.mode.currentTextChanged.connect(self.canvas.set_mode)
+        self.mode.currentTextChanged.connect(self._mode_changed)
         self.center.clicked.connect(self._center)
         self.reset.clicked.connect(self._reset)
         self.follow.toggled.connect(self._follow)
@@ -107,6 +108,14 @@ class MappingTab(QWidget):
         self.opacity.valueChanged.connect(self._opacity)
         self.export_2d.clicked.connect(lambda: self.export_requested.emit("export_2d_map"))
         self.export_3d.clicked.connect(lambda: self.export_requested.emit("export_3d_map"))
+
+    def _mode_changed(self, mode: str) -> None:
+        combined = mode == "Side by side"
+        self.clear.setEnabled(not combined)
+        self.clear.setToolTip(
+            "Select either the 2D or 3D map before clearing"
+            if combined else "Clear the map shown in the current view"
+        )
 
     def _z_limits(self) -> None:
         minimum = self.z_min.value() / 100.0

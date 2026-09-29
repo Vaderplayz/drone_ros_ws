@@ -67,6 +67,11 @@ ros2 launch mini_ground_control pipeline_supervisor.launch.py \
   workspace:=$HOME/drone_ros_ws
 ```
 
+Each launcher publishes bounded progress updates on `/ground_control/pipeline_status`.
+The Logs tab shows startup output, elapsed time, and a five-second heartbeat. A launcher
+that remains alive without producing output for 15 seconds is marked `STALE`; this reports
+silence and does not terminate the pipeline.
+
 Mode buttons request `ALTCTL`, `POSCTL`, `AUTO.LAND`, or `OFFBOARD` through
 `/mavros/set_mode`. The app never arms the vehicle. Before requesting OFFBOARD it captures
 the current fresh local ENU pose and pre-streams either a position hold or a zero-velocity
@@ -90,6 +95,8 @@ The Navigation tab unlocks only while MAVROS reports `OFFBOARD`. Select a waypoi
 occupancy grid with a separately entered local Z altitude, or enter local ENU X/Y/Z directly.
 Clicked map points are transformed from the occupancy-grid frame into the MAVROS local frame
 using TF. Configurable altitude and horizontal-step limits reject accidental outliers.
+The active goal is red and the recent vehicle path is green. Both fade out five seconds
+after their most recent update so old navigation information cannot look current.
 
 With `Obstacle avoidance` checked, waypoints go to the conservative onboard DWA planner
 instead of directly to PX4. Start `Start Obstacle Avoidance` after mapping and spatial
@@ -142,6 +149,11 @@ measurements begin rebuilding the selected map immediately after the reset.
 Select `3D OctoMap` in the mapping tab. Left-drag orbits the view, right-drag pans,
 the mouse wheel zooms, and double-click resets the camera. `Center` resumes following
 the drone.
+
+`Side by side` displays the live occupancy grid and OctoMap together. `3D + 2D overlay`
+draws occupied 2D cells at Z=0 over the 3D voxels. The overlay reports both frame IDs;
+when they differ, it is an approximate visual comparison until the map-to-odom transform
+is applied upstream.
 
 Use the Z minimum/maximum sliders to cut the map vertically. `Hide floor` and
 `Hide ceiling` suppress the outer horizontal layers without changing onboard map

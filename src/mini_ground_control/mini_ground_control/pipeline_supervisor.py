@@ -1,14 +1,18 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 from pathlib import Path
+import re
 import subprocess
+import time
 from typing import Callable
 
 import rclpy
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
+from std_msgs.msg import String
 from std_srvs.srv import Trigger
 
 
@@ -21,6 +25,14 @@ class PipelineSupervisor(Node):
         self.log_root = self.workspace / "runtime_logs" / "ground_control_pipeline"
         self.log_root.mkdir(parents=True, exist_ok=True)
         self._children: dict[str, subprocess.Popen[bytes]] = {}
+        self._child_logs: dict[str, Path] = {}
+        self._log_offsets: dict[str, int] = {}
+        self._started_at: dict[str, float] = {}
+        self._last_output_at: dict[str, float] = {}
+        self._last_heartbeat_at: dict[str, float] = {}
+        self.declare_parameter("pipeline_status_topic", "/ground_control/pipeline_status")
+        status_topic = str(self.get_parameter("pipeline_status_topic").value)
+        self._status_publisher = self.create_publisher(String, status_topic, 20)
         self.declare_parameter("enable_3d_mapping", True)
         self.enable_3d_mapping = bool(self.get_parameter("enable_3d_mapping").value)
         self._actions = {
@@ -76,6 +88,7 @@ class PipelineSupervisor(Node):
                 if available == set(components):
                     response.success = True
                     response.message = "obstacle avoidance already running"
+                    self._publish_status(action, "READY", response.message, 0)
                     return response
                 if available:
                     response.success = False
@@ -105,6 +118,7 @@ class PipelineSupervisor(Node):
                 if available == set(components):
                     response.success = True
                     response.message = "camera and AprilTag detection already running"
+                    self._publish_status(action, "READY", response.message, 0)
                     return response
                 if available:
                     response.success = False
@@ -118,6 +132,7 @@ class PipelineSupervisor(Node):
             if running_pid is not None or (child is not None and child.poll() is None):
                 response.success = True
                 response.message = f"already running (pid={running_pid or child.pid})"
+                self._publish_status(action, "READY", response.message, running_pid or child.pid)
                 return response
             script = self.workspace / "src" / "master_scripts" / script_name
             if not script.is_file() or not os.access(script, os.X_OK):
@@ -145,9 +160,16 @@ class PipelineSupervisor(Node):
                 response.message = str(exc)
                 return response
             self._children[action] = child
+            now = time.monotonic()
+            self._child_logs[action] = log_path
+            self._log_offsets[action] = 0
+            self._started_at[action] = now
+            self._last_output_at[action] = now
+            self._last_heartbeat_at[action] = 0.0
             response.success = True
             response.message = f"started pid={child.pid}; log={log_path}"
             self.get_logger().info(f"{action}: {response.message}")
+            self._publish_status(action, "STARTING", response.message, child.pid)
             return response
 
         return launch
@@ -192,10 +214,85 @@ class PipelineSupervisor(Node):
 
     def _reap(self) -> None:
         for action, child in tuple(self._children.items()):
+            self._publish_log_progress(action, child)
             result = child.poll()
             if result is not None:
                 self.get_logger().info(f"{action} launcher exited with code {result}")
+                state = "COMPLETED" if result == 0 else "FAILED"
+                self._publish_status(action, state, f"launcher exited with code {result}", child.pid)
                 del self._children[action]
+                self._child_logs.pop(action, None)
+                self._log_offsets.pop(action, None)
+                self._started_at.pop(action, None)
+                self._last_output_at.pop(action, None)
+                self._last_heartbeat_at.pop(action, None)
+
+    def _publish_log_progress(self, action: str, child: subprocess.Popen[bytes]) -> None:
+        log_path = self._child_logs.get(action)
+        if log_path is None:
+            return
+        now = time.monotonic()
+        offset = self._log_offsets.get(action, 0)
+        lines: list[str] = []
+        try:
+            with log_path.open("rb") as stream:
+                stream.seek(offset)
+                chunk = stream.read(65536)
+                self._log_offsets[action] = stream.tell()
+            if chunk:
+                text = chunk.decode("utf-8", errors="replace")
+                lines = [
+                    re.sub(r"\x1b\[[0-9;]*m", "", line).strip()
+                    for line in text.splitlines()
+                    if line.strip()
+                ]
+        except OSError as exc:
+            self._publish_status(action, "WARNING", f"cannot read launcher log: {exc}", child.pid)
+            return
+
+        if lines:
+            self._last_output_at[action] = now
+            meaningful = [
+                line for line in lines
+                if any(token in line.upper() for token in ("START", "WAIT", "READY", "WARN", "ERROR", "FAIL"))
+            ]
+            message = (meaningful or lines)[-1][-500:]
+            upper = message.upper()
+            state = "FAILED" if "ERROR" in upper or "FAILED" in upper else "RUNNING"
+            if "WAIT" in upper:
+                state = "WAITING"
+            elif "READY" in upper:
+                state = "READY"
+            self._publish_status(action, state, message, child.pid)
+            return
+
+        silence = now - self._last_output_at.get(action, now)
+        heartbeat_age = now - self._last_heartbeat_at.get(action, 0.0)
+        if heartbeat_age >= 5.0:
+            state = "STALE" if silence >= 15.0 else "WAITING"
+            self._publish_status(
+                action,
+                state,
+                f"launcher alive; no new log output for {silence:.0f}s",
+                child.pid,
+            )
+
+    def _publish_status(self, action: str, state: str, message: str, pid: int) -> None:
+        now = time.monotonic()
+        started = self._started_at.get(action, now)
+        last_output = self._last_output_at.get(action, now)
+        payload = {
+            "action": action,
+            "state": state,
+            "message": message,
+            "pid": int(pid),
+            "elapsed_sec": round(max(0.0, now - started), 1),
+            "silence_sec": round(max(0.0, now - last_output), 1),
+        }
+        output = String()
+        output.data = json.dumps(payload, separators=(",", ":"))
+        self._status_publisher.publish(output)
+        self._last_heartbeat_at[action] = now
 
 
 def main() -> None:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import time
 
 import numpy as np
 from PySide6.QtCore import QPointF, QRectF, Qt, Signal
@@ -11,13 +12,14 @@ from PySide6.QtWidgets import QWidget
 class MapCanvas(QWidget):
     world_clicked = Signal(float, float)
 
-    def __init__(self, cloud_radius_m: float = 18.0) -> None:
+    def __init__(self, cloud_radius_m: float = 18.0, navigation_fade_sec: float = 5.0) -> None:
         super().__init__()
         self.mode = "2D map"
         self.map_data: dict | None = None
         self.octomap = np.empty((0, 3), dtype=np.float32)
         self.octomap_metadata: dict = {"resolution": 0.12, "source_points": 0}
         self.path = np.empty((0, 3), dtype=np.float32)
+        self.map_occupied_points = np.empty((0, 3), dtype=np.float32)
         self.scan = np.empty((0, 2), dtype=np.float32)
         self.pose = (0.0, 0.0, 0.0, 0.0)
         self.cloud_radius_m = max(2.0, float(cloud_radius_m))
@@ -28,6 +30,10 @@ class MapCanvas(QWidget):
         self.paused = False
         self.navigation_enabled = False
         self.waypoint: tuple[float, float, float] | None = None
+        self.navigation_fade_sec = max(0.1, float(navigation_fade_sec))
+        self._path_updated_at = -math.inf
+        self._waypoint_updated_at = -math.inf
+        self._navigation_trail: list[tuple[float, float, float]] = []
         self.gps_tiles: list[tuple[object, tuple[float, float, float, float]]] = []
         self.gps_tile_opacity = 0.5
         self.view_yaw_deg = -42.0
@@ -53,6 +59,24 @@ class MapCanvas(QWidget):
     def set_map(self, data: dict) -> None:
         if not self.paused:
             self.map_data = data
+            occupancy = np.asarray(data.get("occupancy", []))
+            occupied = np.argwhere(occupancy >= 50)
+            if occupied.shape[0] > 20000:
+                step = int(math.ceil(occupied.shape[0] / 20000.0))
+                occupied = occupied[::step]
+            if occupied.size:
+                resolution = float(data["resolution"])
+                rows = occupied[:, 0].astype(np.float32)
+                columns = occupied[:, 1].astype(np.float32)
+                self.map_occupied_points = np.column_stack(
+                    (
+                        float(data["origin_x"]) + (columns + 0.5) * resolution,
+                        float(data["origin_y"]) + (rows + 0.5) * resolution,
+                        np.zeros(len(occupied), dtype=np.float32),
+                    )
+                ).astype(np.float32)
+            else:
+                self.map_occupied_points = np.empty((0, 3), dtype=np.float32)
             self.update()
 
     def set_octomap(self, points: np.ndarray, metadata: dict | None = None) -> None:
@@ -68,6 +92,7 @@ class MapCanvas(QWidget):
     def set_path(self, points: np.ndarray) -> None:
         if not self.paused:
             self.path = points
+            self._path_updated_at = time.monotonic()
             self.update()
 
     def set_scan(self, points: np.ndarray) -> None:
@@ -77,10 +102,13 @@ class MapCanvas(QWidget):
 
     def set_navigation_enabled(self, enabled: bool) -> None:
         self.navigation_enabled = enabled
+        if not enabled:
+            self._navigation_trail.clear()
         self.setCursor(Qt.CrossCursor if enabled else Qt.ArrowCursor)
 
     def set_waypoint(self, x: float, y: float, z: float) -> None:
         self.waypoint = (x, y, z)
+        self._waypoint_updated_at = time.monotonic()
         self.update()
 
     def set_gps_tiles(self, tiles: list, opacity: float = 0.5) -> None:
@@ -90,13 +118,25 @@ class MapCanvas(QWidget):
 
     def set_pose(self, x: float, y: float, z: float, yaw_deg: float) -> None:
         self.pose = (x, y, z, yaw_deg)
+        if self.navigation_enabled and math.isfinite(x) and math.isfinite(y):
+            now = time.monotonic()
+            if (
+                not self._navigation_trail
+                or now - self._navigation_trail[-1][2] >= 0.1
+                or math.hypot(x - self._navigation_trail[-1][0], y - self._navigation_trail[-1][1]) >= 0.02
+            ):
+                self._navigation_trail.append((x, y, now))
+            cutoff = now - self.navigation_fade_sec
+            self._navigation_trail = [sample for sample in self._navigation_trail if sample[2] >= cutoff]
         if self.follow_drone:
             self.update()
 
     def clear_visualization(self) -> None:
         self.map_data = None
         self.octomap = np.empty((0, 3), dtype=np.float32)
+        self.map_occupied_points = np.empty((0, 3), dtype=np.float32)
         self.path = np.empty((0, 3), dtype=np.float32)
+        self._navigation_trail.clear()
         self.scan = np.empty((0, 2), dtype=np.float32)
         self.update()
 
@@ -138,8 +178,15 @@ class MapCanvas(QWidget):
         area = QRectF(self.rect()).adjusted(12, 12, -12, -12)
         if self.mode.startswith("2D"):
             self._paint_map(painter, area)
+        elif self.mode.startswith("Side"):
+            gap = 8.0
+            width = (area.width() - gap) * 0.5
+            left = QRectF(area.left(), area.top(), width, area.height())
+            right = QRectF(left.right() + gap, area.top(), width, area.height())
+            self._paint_map(painter, left)
+            self._paint_octomap(painter, right)
         else:
-            self._paint_octomap(painter, area)
+            self._paint_octomap(painter, area, overlay_map=self.mode.startswith("3D + 2D"))
 
     def _paint_grid(self, painter: QPainter, area: QRectF) -> None:
         painter.setPen(QPen(QColor("#272b30"), 1))
@@ -212,10 +259,33 @@ class MapCanvas(QWidget):
         if self.map_data is not None:
             painter.drawImage(draw_rect, self.map_data["image"])
             self._paint_gps_tiles(painter, draw_rect)
-        if self.show_trajectory and self.path.size and self.map_data is not None:
+        path_opacity = self._navigation_opacity(self._path_updated_at)
+        if (
+            not self.navigation_enabled
+            and self.show_trajectory
+            and self.path.size
+            and self.map_data is not None
+            and path_opacity > 0.0
+        ):
             points = [self._world_to_map(float(x), float(y), draw_rect) for x, y, _ in self.path]
+            painter.save()
+            painter.setOpacity(path_opacity)
             painter.setPen(QPen(QColor("#44c767"), 2))
             painter.drawPolyline(QPolygonF([point for point in points if point is not None]))
+            painter.restore()
+        if self.navigation_enabled and self.show_trajectory and len(self._navigation_trail) >= 2:
+            now = time.monotonic()
+            painter.save()
+            for previous, current in zip(self._navigation_trail, self._navigation_trail[1:]):
+                start = self._world_to_map(previous[0], previous[1], draw_rect)
+                end = self._world_to_map(current[0], current[1], draw_rect)
+                if start is None or end is None:
+                    continue
+                age = now - current[2]
+                painter.setOpacity(max(0.0, min(1.0, 1.0 - age / self.navigation_fade_sec)))
+                painter.setPen(QPen(QColor("#44c767"), 3))
+                painter.drawLine(start, end)
+            painter.restore()
         drone = self._world_to_map(self.pose[0], self.pose[1], draw_rect)
         if drone is not None:
             if self.show_scan and self.scan.size:
@@ -231,13 +301,17 @@ class MapCanvas(QWidget):
                 painter.setPen(QPen(QColor("#4da3ff"), 2))
                 painter.drawPoints(QPolygonF(scan_points))
             self._draw_drone(painter, drone, self.pose[3])
-        if self.waypoint is not None:
+        waypoint_opacity = self._navigation_opacity(self._waypoint_updated_at)
+        if self.waypoint is not None and waypoint_opacity > 0.0:
             target = self._world_to_map(self.waypoint[0], self.waypoint[1], draw_rect)
             if target is not None:
-                painter.setPen(QPen(QColor("#f2c94c"), 2))
+                painter.save()
+                painter.setOpacity(waypoint_opacity)
+                painter.setPen(QPen(QColor("#ef5350"), 3))
                 painter.drawEllipse(target, 7, 7)
                 painter.drawLine(target + QPointF(-11, 0), target + QPointF(11, 0))
                 painter.drawLine(target + QPointF(0, -11), target + QPointF(0, 11))
+                painter.restore()
         painter.setPen(QColor("#e8eaed"))
         title = "Occupancy map" if self.map_data is not None else "Waiting for occupancy map"
         painter.drawText(area.adjusted(8, 8, -8, -8), Qt.AlignLeft | Qt.AlignTop, title)
@@ -280,7 +354,7 @@ class MapCanvas(QWidget):
                     QPointF(float(projected[1, 0]), float(projected[1, 1])),
                 )
 
-    def _paint_octomap(self, painter: QPainter, area: QRectF) -> None:
+    def _paint_octomap(self, painter: QPainter, area: QRectF, overlay_map: bool = False) -> None:
         if not self.octomap.size:
             painter.setPen(QColor("#e8eaed"))
             painter.drawText(area, Qt.AlignCenter, "Waiting for global cloud to build OctoMap")
@@ -308,6 +382,8 @@ class MapCanvas(QWidget):
         inside = np.linalg.norm(relative[:, :2], axis=1) <= self.cloud_radius_m * 1.4
         relative = relative[inside]
         self._paint_3d_grid(painter, area, center)
+        if overlay_map:
+            self._paint_map_overlay_3d(painter, area, center)
         if relative.size:
             projected, scale = self._project_relative(relative, area)
             visible = (
@@ -358,6 +434,47 @@ class MapCanvas(QWidget):
             f"{label}: {len(relative)} visible voxels | {resolution:.2f} m | "
             f"Z {self.z_min_m:.1f}..{self.z_max_m:.1f} m | source {source_points} cells/points",
         )
+        if overlay_map and self.map_data is not None:
+            map_frame = str(self.map_data.get("frame_id", "map"))
+            cloud_frame = str(self.octomap_metadata.get("frame_id", "odom"))
+            painter.setPen(QColor("#f2c94c") if map_frame != cloud_frame else QColor("#44c767"))
+            suffix = " (frame transform required for exact alignment)" if map_frame != cloud_frame else ""
+            painter.drawText(
+                area.adjusted(8, 28, -8, -8),
+                Qt.AlignLeft | Qt.AlignTop,
+                f"2D overlay: {map_frame} on {cloud_frame}{suffix}",
+            )
+
+    def _paint_map_overlay_3d(self, painter: QPainter, area: QRectF, center: np.ndarray) -> None:
+        if not self.map_occupied_points.size:
+            return
+        relative = self.map_occupied_points - center
+        inside = np.linalg.norm(relative[:, :2], axis=1) <= self.cloud_radius_m * 1.4
+        relative = relative[inside]
+        if not relative.size:
+            return
+        projected, scale = self._project_relative(relative, area)
+        visible = (
+            (projected[:, 0] >= area.left())
+            & (projected[:, 0] <= area.right())
+            & (projected[:, 1] >= area.top())
+            & (projected[:, 1] <= area.bottom())
+        )
+        projected = projected[visible]
+        if not projected.size:
+            return
+        pixels = max(1.0, min(7.0, float(self.map_data["resolution"]) * scale))
+        painter.save()
+        painter.setOpacity(0.55)
+        painter.setPen(QPen(QColor("#f5f7fa"), pixels, Qt.SolidLine, Qt.SquareCap))
+        painter.drawPoints(QPolygonF([QPointF(float(x), float(y)) for x, y in projected]))
+        painter.restore()
+
+    def _navigation_opacity(self, updated_at: float) -> float:
+        if not self.navigation_enabled:
+            return 1.0
+        age = time.monotonic() - updated_at
+        return max(0.0, min(1.0, 1.0 - age / self.navigation_fade_sec))
 
     def center_on_drone(self) -> None:
         self.follow_drone = True
@@ -378,7 +495,7 @@ class MapCanvas(QWidget):
                 self.world_clicked.emit(*world)
                 event.accept()
                 return
-        if not self.mode.startswith("3D"):
+        if self.mode.startswith("2D"):
             return super().mousePressEvent(event)
         self._drag_position = event.position()
         self._drag_button = event.button()
@@ -386,7 +503,7 @@ class MapCanvas(QWidget):
         event.accept()
 
     def mouseMoveEvent(self, event: object) -> None:
-        if self._drag_position is None or not self.mode.startswith("3D"):
+        if self._drag_position is None or self.mode.startswith("2D"):
             return super().mouseMoveEvent(event)
         position = event.position()
         delta = position - self._drag_position
@@ -406,14 +523,14 @@ class MapCanvas(QWidget):
         event.accept()
 
     def mouseDoubleClickEvent(self, event: object) -> None:
-        if self.mode.startswith("3D"):
+        if not self.mode.startswith("2D"):
             self.reset_3d_view()
             event.accept()
             return
         super().mouseDoubleClickEvent(event)
 
     def wheelEvent(self, event: object) -> None:
-        if not self.mode.startswith("3D"):
+        if self.mode.startswith("2D"):
             return super().wheelEvent(event)
         steps = event.angleDelta().y() / 120.0
         self.view_zoom = max(0.2, min(8.0, self.view_zoom * math.pow(1.15, steps)))

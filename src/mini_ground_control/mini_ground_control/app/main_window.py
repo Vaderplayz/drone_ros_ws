@@ -88,6 +88,7 @@ class MainWindow(QMainWindow):
     def _connect_signals(self) -> None:
         self.signals.event.connect(self.logs.append_event)
         self.signals.service_result.connect(self._service_result)
+        self.signals.pipeline_progress.connect(self._pipeline_progress)
         self.signals.command_result.connect(self._command_result)
         self.signals.map_pose_changed.connect(self.navigation.set_map_pose)
         self.signals.landing_changed.connect(self.landing.set_landing)
@@ -239,6 +240,9 @@ class MainWindow(QMainWindow):
             self.dashboard.set_action_result(action, success, message)
         if success and action in {"clear_2d_map", "clear_3d_map"}:
             self.mapping.canvas.clear_visualization()
+
+    def _pipeline_progress(self, action: str, state: str, message: str) -> None:
+        self.dashboard.set_pipeline_progress(action, state, message)
 
     def _command_result(self, action: str, success: bool, message: str) -> None:
         level = "INFO" if success else "ERROR"

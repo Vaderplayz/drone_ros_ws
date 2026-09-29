@@ -6,6 +6,7 @@ class BridgeSignals(QObject):
     health_changed = Signal(object)
     landing_changed = Signal(object)
     service_result = Signal(str, bool, str)
+    pipeline_progress = Signal(str, str, str)
     command_result = Signal(str, bool, str)
     map_pose_changed = Signal(float, float, float, float)
     shutdown_requested = Signal()

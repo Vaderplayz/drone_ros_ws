@@ -139,7 +139,10 @@ class NavigationTab(QWidget):
         speed_layout.addWidget(self.takeoff_height, 2, 1)
         controls.addWidget(speed_group)
         controls.addStretch(1)
-        self.canvas = MapCanvas(float(config.get("visualization", {}).get("point_cloud_radius_m", 18.0)))
+        self.canvas = MapCanvas(
+            float(config.get("visualization", {}).get("point_cloud_radius_m", 18.0)),
+            float(navigation.get("overlay_fade_sec", 5.0)),
+        )
         self.canvas.set_mode("2D map")
         self.tile_manager = GpsTileManager(config, self)
         self.gps_opacity = float(navigation.get("gps_map_opacity", 0.5))

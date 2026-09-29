@@ -65,6 +65,9 @@ class DashboardTab(QWidget):
         state = "OK" if success else "FAILED"
         self.quick_status.setText(f"{action}: {state} - {message}")
 
+    def set_pipeline_progress(self, action: str, state: str, message: str) -> None:
+        self.quick_status.setText(f"{action}: {state} - {message}")
+
     def update_state(self, snapshot: dict) -> None:
         pose = snapshot["flight"].pose
         self.attitude.set_attitude(pose.roll_deg, pose.pitch_deg)

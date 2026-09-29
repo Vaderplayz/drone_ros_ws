@@ -42,6 +42,7 @@ topics:
   april_tag_metadata: /precision_landing/tag_detection
   precision_landing_status: /precision_landing/state
   recording_status: /rosbag/status
+  pipeline_status: /ground_control/pipeline_status
 
 services:
   activate_precision_landing: /precision_landing/activate
@@ -93,6 +94,7 @@ commands:
   maximum_altitude_m: 20.0
 
 navigation:
+  overlay_fade_sec: 5.0
   gps_map_enabled: true
   gps_map_opacity: 0.50
   gps_tile_url: https://tile.openstreetmap.org/{z}/{x}/{y}.png
@@ -138,6 +140,7 @@ visualization:
 
 health_items:
   horizontal_lidar: horizontal_lidar
+  vertical_lidar: vertical_lidar
   camera: camera
   imu: attitude
   local_position: local_position

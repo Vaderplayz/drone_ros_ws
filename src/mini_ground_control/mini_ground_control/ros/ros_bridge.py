@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import json
 import queue
 import threading
 import time
@@ -212,6 +213,7 @@ class GroundControlNode(Node):
         self._sub(DiagnosticArray, "april_tag_metadata", self._tag_metadata, STATE_QOS)
         self._sub(String, "precision_landing_status", self._landing_status, STATE_QOS)
         self._sub(String, "recording_status", self._recording_status, STATE_QOS)
+        self._sub(String, "pipeline_status", self._pipeline_status, STATE_QOS)
         guarded_topic = str(self.commands.get("guarded_velocity_topic", "/planner_cmd_vel"))
         self.create_subscription(TwistStamped, guarded_topic, self._guarded_velocity, STATE_QOS)
 
@@ -973,6 +975,24 @@ class GroundControlNode(Node):
 
     def _recording_status(self, message: String) -> None:
         self._monitor("recording").mark()
+
+    def _pipeline_status(self, message: String) -> None:
+        try:
+            payload = json.loads(message.data)
+            action = str(payload.get("action", "pipeline"))
+            state = str(payload.get("state", "RUNNING")).upper()
+            detail = str(payload.get("message", ""))
+            elapsed = float(payload.get("elapsed_sec", 0.0))
+            silence = float(payload.get("silence_sec", 0.0))
+        except (TypeError, ValueError, json.JSONDecodeError):
+            self.signals.event.emit("WARN", f"Invalid pipeline status: {message.data[:200]}")
+            return
+        summary = f"{state} {elapsed:.0f}s: {detail}"
+        if state == "STALE":
+            summary += f" (silent {silence:.0f}s)"
+        level = "ERROR" if state == "FAILED" else "WARN" if state in {"STALE", "WARNING"} else "INFO"
+        self.signals.event.emit(level, f"{action}: {summary}")
+        self.signals.pipeline_progress.emit(action, state, summary)
 
     def _health_tick(self) -> None:
         ros_now = self.get_clock().now().nanoseconds * 1e-9
